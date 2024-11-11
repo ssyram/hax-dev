@@ -118,7 +118,7 @@ let hardcoded_coq_headers =
    Require Import Coq.Floats.Floats.\n\
    From RecordUpdate Require Import RecordSet.\n\
    Import RecordSetNotations.\n\n\
-   From Core Require Import Core.\n"
+   (* From Core Require Import Core. *)\n"
 
 let dummy_lib =
   "Class t_Sized (T : Type) := { }.\n\
@@ -138,8 +138,11 @@ let dummy_lib =
    Definition t_String := string.\n\
    Definition ToString_f_to_string (x : string) := x.\n\
    Instance Sized_any : forall {t_A}, t_Sized t_A := {}.\n\
-   Instance Clone_any : forall {t_A}, t_Clone t_A := {t_Clone_f_clone := fun x \
-   => x}.\n"
+   Class t_Clone (T : Type) := { Clone_f_clone : T -> T }.\n\
+   Instance Clone_any : forall {t_A}, t_Clone t_A := {Clone_f_clone := fun x \
+   => x}.\n\
+   Definition t_Slice (T : Type) := list T.\n\
+   Definition unsize {T : Type} : list T -> t_Slice T := id.\n"
 
 module BasePrinter = Generic_printer.Make (InputLanguage)
 
@@ -437,7 +440,7 @@ struct
       method impl_ident ~goal ~name:_ = goal#p
 
       method impl_item ~ii_span:_ ~ii_generics:_ ~ii_v ~ii_ident ~ii_attrs:_ =
-        string (String.chop_prefix_exn ~prefix:"impl_" (U.Concrete_ident_view.to_definition_name ii_ident#v)) ^^ space ^^ string ":=" ^^ space ^^ ii_v#p ^^ semi
+        ii_ident#p ^^ space ^^ string ":=" ^^ space ^^ ii_v#p ^^ semi
 
       method impl_item'_IIFn ~body ~params =
         if List.length params == 0 then body#p
@@ -525,8 +528,7 @@ struct
         if Attrs.is_erased super.attrs then empty
         else
           CoqNotation.instance
-            (name#p ^^ string "_"
-            ^^ string (Int.to_string ([%hash: item] super)))
+            (name#p ^^ string "_" ^^ string (Int.to_string ([%hash: item] super)))
             generics#p []
             (name#p ^^ concat_map_with ~pre:space (fun x -> parens x#p) args)
             (braces
@@ -543,12 +545,10 @@ struct
 
       method item'_Trait ~super:_ ~name ~generics ~items ~safety:_ =
         let _, params, constraints = generics#v in
-        CoqNotation.class_ name#p (concat_map_with ~pre:space
-             (fun x -> parens x#p)
-             params
-          ^^ concat_map_with ~pre:space
-               (fun x -> x#p)
-               constraints) [] !^"Type"
+        CoqNotation.class_ name#p
+          (concat_map_with ~pre:space (fun x -> parens x#p) params
+          ^^ concat_map_with ~pre:space (fun x -> x#p) constraints)
+          [] !^"Type"
           (braces
              (nest 2 (concat_map_with ~pre:(break 1) (fun x -> x#p) items)
              ^^ break 1))
