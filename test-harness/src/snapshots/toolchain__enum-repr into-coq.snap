@@ -42,7 +42,12 @@ Import RecordSetNotations.
 From Core Require Import Core.
 
 
-(* NotImplementedYet *)
+
+Definition discriminant_EnumWithRepr_ExplicitDiscr1 : t_u16 :=
+  (1 : t_u16).
+
+Definition discriminant_EnumWithRepr_ExplicitDiscr2 : t_u16 :=
+  (5 : t_u16).
 
 Inductive t_EnumWithRepr : Type :=
 | EnumWithRepr_ExplicitDiscr1

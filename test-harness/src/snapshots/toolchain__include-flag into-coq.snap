@@ -41,7 +41,6 @@ Import RecordSetNotations.
 From Core Require Import Core.
 
 
-(* NotImplementedYet *)
 
 Record t_Foo : Type :=
   {
