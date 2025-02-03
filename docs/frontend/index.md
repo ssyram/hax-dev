@@ -14,7 +14,7 @@ The Rust compiler has several intermediate representations (IR), exposing variou
   - **MIR**: Mid-level Intermediate Representation, a simplified Rust AST, in which borrow checking takes place;
   - **LLVM**: interfaces with LLVM.
 
-![](./rustc-diagram.svg){: .center style="width:min(100%, 500px)"}
+![](./rustc-diagram.excalidraw.png){: .center style="width:min(100%, 500px)"}
 
 ## Querying The Rust Compiler is Hard
 
@@ -37,6 +37,6 @@ Running `cargo hax json` invokes hax' frontend and queries for JSON.
 
 The motivation behind hax' frontend is that interacting with the Rust compiler (rustc) can be difficult. Rustc works with its internal optimized representations and with a system of interactive queries.
 
-![](./workflow-diagram.svg)
+![](./workflow-diagram.excalidraw.png)
 
 The hax frontend. Its [rustdoc](https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html) documentation can be found [here](./docs/hax_frontend_exporter/index.html).
