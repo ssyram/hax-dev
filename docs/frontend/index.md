@@ -4,11 +4,9 @@ The frontend of hax is the part of the toolchain that takes care of extracting a
 
 ## A Brief Tour of The Rust Compiler
 
-<!-- Looking up informations about rust code via the rust compiler (rustc) is difficult. Rustc is a complexe beast that works with a system of interactive queries. -->
+The Rust compiler transforms raw source code from the user into various representations, all the way to machine code when that's what the user requests.
 
-The Rust compiler transform raw source code from the user into various representations, all the way to machine code when that's what the user requests.
-
-The Rust compiler has several intermediate representations (IR), exposing various view on Rust programs, each suited for different jobs: parsing, typing, borrow checking, etc. As illustrated below by the diagram, the following main IR are:
+The Rust compiler has several intermediate representations (IR), exposing various views on Rust programs, each suited for different jobs: parsing, typing, borrow checking, etc. As illustrated below by the diagram, the following main IR are:
 
   - **Parse AST**: an untyped abstract syntax tree (AST) just after parsing;
   - **HIR**: Higher-level Intermediate Representation, an AST close to Rust surface language after name resolution and macro expansion;
