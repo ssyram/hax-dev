@@ -14,6 +14,8 @@ To achieve this, the user follows these steps:
  2. Run the command `cargo hax into -i '-** +mycrate::mymod::f' fstar`.
  3. Execute F\*. If F\* fails to prove the specified properties, the user revisits step (1) to refine the annotations and proof hints.
 
+For a practical guide on using Hax, please refer to the [manual](../manual/index.md).
+
 ![](./user-flow.excalidraw.png)
 
 ## High-Level Architecture of Hax {#high-level-arch}
