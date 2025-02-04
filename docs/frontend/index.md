@@ -4,7 +4,9 @@ hax is a tool designed to facilitate the formal verification of Rust programs. I
 
 ## User flow
 
-This document focuses on a specific user flow: extracting F* code.
+This document focuses on a specific user flow: extracting F\* code. The process
+described here applies similarly to all other backends, including F*, Rocq,
+SSProve, ProVerif, and EasyCrypt.
 
 The goal is for the user to prove a property on a Rust function, `f`, using the F\* formal language. The function `f` is defined in the module `mymod`, within the crate `mycrate`.
 
