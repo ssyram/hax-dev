@@ -85,6 +85,7 @@ ensuring that `driver-hax-frontend-exporter` behaves exactly like `rustc` in
 all other cases.
 
 During compilation, `rustc` produces several artifacts:
+
 - **`*.rmeta` files**: metadata files containing type information, function
   signatures, constants, and more.
 - **`*.rlib` files**: static library artifacts with compiled Rust code and
@@ -94,6 +95,7 @@ During compilation, `rustc` produces several artifacts:
   `cargo build`, including errors, warnings, and status updates.
 
 Our custom export logic extends this by generating additional artifacts:
+
 - **`*.haxmeta` files**: similar to Rust's `*.rmeta` files, but contains full
   enriched abstract syntax trees.
 - **Diagnostic messages**: sent to standard output and used to communicate
