@@ -72,8 +72,9 @@ diagram):
 3. **`driver-hax-frontend-exporter`**: a [custom `rustc`
    driver](https://jyn.dev/rustc-driver/#paths). Instead of compiling Rust into
    a binary, `driver-hax-frontend-exporter` exports ASTs as JSON.
-4. **`hax-frontend-exporter`**: a library that mirrors Rust's internal ASTs,
-   enriches them, and provides bridges to its own AST representation.
+4. **`hax-frontend-exporter`**: a library that mirrors Rust's internal ASTs as
+   its own enriched AST representation. This library also provides bridges from
+   Rust's ASTs to its enriched ASTs.
 
 ![](./workflow-diagram.excalidraw.png)
 
