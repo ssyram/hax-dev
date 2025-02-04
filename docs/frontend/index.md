@@ -104,6 +104,14 @@ continues further along the hax toolchain, either by outputting JSON directly or
 by calling the engine to generate files for targets such as F\*, ProVerif, or
 Roqc.
 
+`cargo-hax`, `driver-hax-frontend-exporter`, and `hax-frontend-exporter`
+together form what we refer to as "the frontend". The engine is represented by
+the binary `hax-engine`, which includes the backends. The frontend is
+implemented in Rust, while the engine is implemented in OCaml. Communication
+between all components occurs through **stdout**, **stderr**, or **stdin**,
+using JSON messages defined in the Rust crate
+[`hax-types`](https://hax.cryspen.com/frontend/docs/hax_types/index.html).
+
 <!-- 
 ## A Brief Tour of The Rust Compiler
 
