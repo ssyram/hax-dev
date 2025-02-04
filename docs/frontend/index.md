@@ -70,7 +70,7 @@ diagram):
 1. **`cargo-hax`**: a binary that provides a [custom
    command](https://doc.rust-lang.org/book/ch14-05-extending-cargo.html) `hax`
    to `cargo`.
-2. **`cargo build`**: the `build` subcommand of `cargo`. It is sensitive to the
+2. **`cargo check`**: the `check` subcommand of `cargo`. It is sensitive to the
    environment variable `RUSTC_WORKSPACE_WRAPPER`: when set, `cargo` will call
    the program specified by `$RUSTC_WORKSPACE_WRAPPER` instead of `rustc`.
 3. **`driver-hax-frontend-exporter`**: a [custom `rustc`
@@ -82,8 +82,8 @@ diagram):
 
 ![](./workflow-diagram.excalidraw.png)
 
-When `cargo build` compiles a crate, it invokes `rustc` multiple times, but only
-some of these calls are relevant to us. Additionally, `cargo build` may also
+When `cargo check` compiles a crate, it invokes `rustc` multiple times, but only
+some of these calls are relevant to us. Additionally, `cargo check` may also
 build dependencies. As a result, we inject our custom export logic selectively,
 ensuring that `driver-hax-frontend-exporter` behaves exactly like `rustc` in
 all other cases.
@@ -94,9 +94,8 @@ During compilation, `rustc` produces several artifacts:
   signatures, constants, and more.
 - **`*.rlib` files**: static library artifacts with compiled Rust code and
   metadata.
-- **Executable binaries**: the output for binary crates.
 - **Diagnostic messages**: messages on standard output for communication with
-  `cargo build`, including errors, warnings, and status updates.
+  `cargo check`, including errors, warnings, and status updates.
 
 Our custom export logic extends this by generating additional artifacts:
 
@@ -105,7 +104,7 @@ Our custom export logic extends this by generating additional artifacts:
 - **Diagnostic messages**: sent to standard output and used to communicate
   specifically with `cargo hax`.
 
-After calling `cargo build`, `cargo hax` parses the `*.haxmeta` files and
+After calling `cargo check`, `cargo hax` parses the `*.haxmeta` files and
 continues further along the hax toolchain, either by outputting JSON directly or
 by calling the engine to generate files for targets such as F\*, ProVerif, or
 Roqc.
