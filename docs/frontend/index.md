@@ -35,8 +35,9 @@ each numbered step directly corresponding to its labeled section in the diagram:
    as F*, Roq, PV, or other formats.
 4. The Rust helper crate, **hax-lib**, provides Hax-specific helpers and macros
    to annotate a Rust program with properties, invariants, or proof hints.
-5. The **annotated core library** models the Rust `core` library, enriched with
-   logical properties to assist in formal verification.
+5. The **annotated standard library** is a work in progress partial model for the
+   Rust base libraries (`core`, `std`, `alloc`), enriched with logical
+   properties to assist in formal verification.
 
 ![](./high-level-arch.excalidraw.png){:.center}
 
@@ -44,8 +45,8 @@ In the diagram, the dotted lines indicate dependencies between Rust or F\*
 artifacts, flowing from left to right.
 
 The user begins by exporting a crate (referred to as the "Input crate" in the
-top left of the diagram). This crate depends on both the Rust `core` library and
-`hax-lib`. The `core` dependency is added automatically by Rust, while the
+top left of the diagram). This crate depends on both the Rust `std` library and
+`hax-lib`. The `std` dependency is added automatically by Rust, while the
 `hax-lib` dependency is introduced by hax.
 
 The input crate passes through the hax toolchain as follows:
@@ -55,9 +56,9 @@ The input crate passes through the hax toolchain as follows:
   simplifying it.  
 - Finally, the **F\*** backend generates the corresponding F\* files (➌).
 
-Since the input crate depends on both `core` and `hax-lib`, the generated F\*
+Since the input crate depends on both `std` and `hax-lib`, the generated F\*
 modules maintain these dependencies. To handle this, Hax translates `hax-lib` to
-F\* (➍) and also translates our model of the `core` library (➎) into F\*.
+F\* (➍) and also translates our model of the `std` library (➎) into F\*.
 
 
 ## Ast Extraction Workflow
