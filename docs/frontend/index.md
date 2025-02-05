@@ -101,9 +101,14 @@ During compilation, `rustc` produces several artifacts:
 Our custom export logic extends this by generating additional artifacts:
 
 - **`*.haxmeta` files**: similar to Rust's `*.rmeta` files, but contains full
-  enriched abstract syntax trees.
+  enriched abstract syntax trees. The `haxmeta` files contains a binary
+  serialization of the
+  [`HaxMeta`](https://hax.cryspen.com/frontend/docs/hax_types/driver_api/struct.HaxMeta.html)
+  type.
 - **Diagnostic messages**: sent to standard output and used to communicate
-  specifically with `cargo hax`.
+  specifically with `cargo hax`. Those messages are JSON serializations of the
+  [`HaxDriverMessage`](https://hax.cryspen.com/frontend/docs/hax_types/driver_api/enum.HaxDriverMessage.html)
+  type.
 
 After calling `cargo check`, `cargo hax` parses the `*.haxmeta` files and
 continues further along the hax toolchain, either by outputting JSON directly or
@@ -117,6 +122,9 @@ implemented in Rust, while the engine is implemented in OCaml. Communication
 between all components occurs through **stdout**, **stderr**, or **stdin**,
 using JSON messages defined in the Rust crate
 [`hax-types`](https://hax.cryspen.com/frontend/docs/hax_types/index.html).
+
+This section provides an overview of the workflow of the frontend of hax. The
+section TODO dives into the inner functioning of the components of the frontend.
 
 <!-- 
 ## A Brief Tour of The Rust Compiler
