@@ -109,8 +109,8 @@ module Make (F : Features.T) = struct
 
     let deref_mut_app = concrete_app1 Core__ops__deref__DerefMut__deref_mut
 
-    let local_var (e : expr) : expr option =
-      match e.e with LocalVar _ -> Some e | _ -> None
+    let local_var (e : expr) : local_ident option =
+      match e.e with LocalVar v -> Some v | _ -> None
 
     let arrow (typ : ty) : (ty list * ty) option =
       match typ with
@@ -341,6 +341,14 @@ module Make (F : Features.T) = struct
             super#visit_expr' ascribe_app e
 
           method! visit_expr (ascribe_app : bool) e =
+            let ascribe_app =
+              ascribe_app
+              && not
+                   (match e.typ with
+                   | TApp { ident; _ } ->
+                       Global_ident.eq_name Hax_lib__prop__Prop ident
+                   | _ -> false)
+            in
             let e = super#visit_expr ascribe_app e in
             let ascribe (e : expr) =
               if [%matches? Ascription _] e.e then e
