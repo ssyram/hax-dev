@@ -131,6 +131,8 @@ pub use self::rustc::*;
 #[cfg(feature = "rustc")]
 mod rustc {
     use super::*;
+    use rustc_const_eval::interpret::{interp_ok, InterpResult};
+    use rustc_middle::mir::interpret;
     use rustc_middle::{mir, ty};
 
     impl From<ConstantFieldExpr> for FieldExpr {
@@ -275,126 +277,6 @@ mod rustc {
             FloatTy::F128 => ieee::Quad::from_bits(bits).to_string(),
         };
         ConstantLiteral::Float(string, ty)
-    }
-
-    #[tracing::instrument(level = "trace", skip(s))]
-    pub(crate) fn scalar_to_constant_expr<'tcx, S: UnderOwnerState<'tcx>>(
-        s: &S,
-        ty: rustc_middle::ty::Ty<'tcx>,
-        scalar: &rustc_middle::mir::interpret::Scalar,
-        span: rustc_span::Span,
-    ) -> ConstantExpr {
-        use rustc_middle::mir::Mutability;
-        let cspan = span.sinto(s);
-        // The documentation explicitly says not to match on a scalar.
-        // We match on the type and use it to convert the value.
-        let kind = match ty.kind() {
-            ty::Char | ty::Bool | ty::Int(_) | ty::Uint(_) => {
-                let scalar_int = scalar.try_to_scalar_int().unwrap_or_else(|_| {
-                    fatal!(
-                        s[span],
-                        "Type is primitive, but the scalar {:#?} is not an [Int]",
-                        scalar
-                    )
-                });
-                ConstantExprKind::Literal(scalar_int_to_constant_literal(s, scalar_int, ty))
-            }
-            ty::Float(float_type) => {
-                let scalar_int = scalar.try_to_scalar_int().unwrap_or_else(|_| {
-                    fatal!(
-                        s[span],
-                        "Type is [Float], but the scalar {:#?} is not a number",
-                        scalar
-                    )
-                });
-                let data = scalar_int.to_bits_unchecked();
-                let lit = bits_and_type_to_float_constant_literal(data, float_type.sinto(s));
-                ConstantExprKind::Literal(lit)
-            }
-            ty::Ref(_, inner_ty, Mutability::Not) | ty::RawPtr(inner_ty, Mutability::Mut) => {
-                let tcx = s.base().tcx;
-                let pointer = scalar.to_pointer(&tcx).unwrap_or_else(|_| {
-                    fatal!(
-                        s[span],
-                        "Type is [Ref] or [RawPtr], but the scalar {:#?} is not a [Pointer]",
-                        scalar
-                    )
-                });
-                use rustc_middle::mir::interpret::GlobalAlloc;
-                let contents = match tcx.global_alloc(pointer.provenance.s_unwrap(s).alloc_id()) {
-                    GlobalAlloc::Static(did) => ConstantExprKind::GlobalName {
-                        id: did.sinto(s),
-                        generics: Vec::new(),
-                        trait_refs: Vec::new(),
-                    },
-                    GlobalAlloc::Memory(alloc) => {
-                        let bytes = alloc
-                            .inner()
-                            .get_bytes_unchecked(rustc_middle::mir::interpret::AllocRange {
-                                start: rustc_abi::Size::ZERO,
-                                size: alloc.inner().size(),
-                            })
-                            .to_vec();
-                        match inner_ty.kind() {
-                            ty::Slice(slice_ty) | ty::Array(slice_ty, _)
-                                if matches!(slice_ty.kind(), ty::Uint(ty::UintTy::U8)) =>
-                            {
-                                ConstantExprKind::Literal(ConstantLiteral::ByteStr(bytes))
-                            }
-                            _ => ConstantExprKind::Memory(bytes),
-                        }
-                    }
-                    provenance => fatal!(
-                        s[span],
-                        "Expected provenance to be `GlobalAlloc::Static` or \
-                        `GlobalAlloc::Memory`, got {:#?} instead",
-                        provenance
-                    ),
-                };
-                let contents = contents.decorate(inner_ty.sinto(s), cspan.clone());
-                match ty.kind() {
-                    ty::Ref(..) => ConstantExprKind::Borrow(contents),
-                    ty::RawPtr(_, mutability) => ConstantExprKind::RawBorrow {
-                        arg: contents,
-                        mutability: mutability.sinto(s),
-                    },
-                    _ => unreachable!(),
-                }
-            }
-            // A [Scalar] might also be any zero-sized [Adt] or [Tuple] (i.e., unit)
-            ty::Tuple(ty) if ty.is_empty() => ConstantExprKind::Tuple { fields: vec![] },
-            // It seems we can have ADTs when there is only one variant, and this variant doesn't have any fields.
-            ty::Adt(def, _) => {
-                if let [variant_def] = &def.variants().raw {
-                    if variant_def.fields.is_empty() {
-                        ConstantExprKind::Adt {
-                            info: get_variant_information(def, rustc_target::abi::FIRST_VARIANT, s),
-                            fields: vec![],
-                        }
-                    } else {
-                        fatal!(
-                            s[span],
-                            "Unexpected type `ty` for scalar `scalar`. Case `ty::Adt(def, _)`: \
-                            `variant_def.fields` was not empty";
-                            {ty, scalar, def, variant_def}
-                        )
-                    }
-                } else {
-                    fatal!(
-                        s[span],
-                        "Unexpected type `ty` for scalar `scalar`. Case `ty::Adt(def, _)`: \
-                        `def.variants().raw` was supposed to contain exactly one variant.";
-                        {ty, scalar, def, &def.variants().raw}
-                    )
-                }
-            }
-            _ => fatal!(
-                s[span],
-                "Unexpected type `ty` for scalar `scalar`";
-                {ty, scalar}
-            ),
-        };
-        kind.decorate(ty.sinto(s), cspan)
     }
 
     /// Whether a `DefId` is a `AnonConst`. An anonymous constant is
@@ -635,119 +517,127 @@ mod rustc {
         kind.decorate(ty.sinto(s), span.sinto(s))
     }
 
-    pub(crate) fn const_value_reference_to_constant_expr<'tcx, S: UnderOwnerState<'tcx>>(
+    /// Use the const-eval interpreter to convert an evaluated operand back to a structured
+    /// constant expression.
+    fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
         s: &S,
-        ty: rustc_middle::ty::Ty<'tcx>,
-        val: rustc_middle::mir::ConstValue<'tcx>,
         span: rustc_span::Span,
-    ) -> ConstantExpr {
+        ecx: &rustc_const_eval::const_eval::CompileTimeInterpCx<'tcx>,
+        op: rustc_const_eval::interpret::OpTy<'tcx>,
+    ) -> InterpResult<'tcx, ConstantExpr> {
+        use crate::rustc_const_eval::interpret::Projectable;
+        // Code inspired from `try_destructure_mir_constant_for_user_output` and
+        // `const_eval::eval_queries::op_to_const`.
         let tcx = s.base().tcx;
-        match ty.kind() {
-            ty::TyKind::Tuple(_) | ty::TyKind::Adt(..) => {
-                let dc = tcx
-                    .try_destructure_mir_constant_for_user_output(val, ty)
-                    .s_unwrap(s);
-
-                // Iterate over the fields, which should be values
-                // Below: we are mutually recursive with [const_value_to_constant_expr],
-                // which takes a [Const] as input, but it should be
-                // ok because we call it on a strictly smaller value.
-                let fields = dc
-                    .fields
-                    .iter()
-                    .copied()
-                    .map(|(val, ty)| const_value_to_constant_expr(s, ty, val, span));
-
-                let kind = match ty.kind() {
-                    ty::TyKind::Tuple(_) => {
-                        assert!(dc.variant.is_none());
-                        let fields = fields.collect();
-                        ConstantExprKind::Tuple { fields }
-                    }
-                    ty::TyKind::Adt(adt_def, ..) => {
-                        let variant = dc.variant.unwrap_or(rustc_target::abi::FIRST_VARIANT);
-                        let variants_info = get_variant_information(adt_def, variant, s);
-                        let fields = fields
-                            .zip(&adt_def.variant(variant).fields)
-                            .map(|(value, field)| ConstantFieldExpr {
-                                field: field.did.sinto(s),
-                                value,
-                            })
-                            .collect();
-                        ConstantExprKind::Adt {
-                            info: variants_info,
-                            fields,
-                        }
-                    }
-                    _ => unreachable!(),
-                };
-                kind.decorate(ty.sinto(s), span.sinto(s))
+        let ty = op.layout.ty;
+        // Helper for struct-likes.
+        let read_fields = |of: rustc_const_eval::interpret::OpTy<'tcx>, field_count| {
+            (0..field_count).map(move |i| {
+                let field_op = ecx.project_field(&of, i)?;
+                op_to_const(s, span, &ecx, field_op)
+            })
+        };
+        let kind = match ty.kind() {
+            // Detect statics
+            _ if let Some(place) = op.as_mplace_or_imm().left()
+                && let ptr = place.ptr()
+                && let (alloc_id, _, _) = ecx.ptr_get_alloc_id(ptr, 0)?
+                && let interpret::GlobalAlloc::Static(did) = tcx.global_alloc(alloc_id) =>
+            {
+                ConstantExprKind::GlobalName {
+                    id: did.sinto(s),
+                    generics: Vec::new(),
+                    trait_refs: Vec::new(),
+                }
             }
-            _ => fatal!(s[span], "Expected the type to be tuple or adt: {:?}", val),
-        }
+            ty::Char | ty::Bool | ty::Uint(_) | ty::Int(_) | ty::Float(_) => {
+                let scalar = ecx.read_scalar(&op)?;
+                let scalar_int = scalar.try_to_scalar_int().unwrap();
+                let lit = scalar_int_to_constant_literal(s, scalar_int, ty);
+                ConstantExprKind::Literal(lit)
+            }
+            ty::Adt(adt_def, ..) if !adt_def.is_union() => {
+                let variant = ecx.read_discriminant(&op)?;
+                let down = ecx.project_downcast(&op, variant)?;
+                let field_count = adt_def.variants()[variant].fields.len();
+                let fields = read_fields(down, field_count)
+                    .zip(&adt_def.variant(variant).fields)
+                    .map(|(value, field)| {
+                        interp_ok(ConstantFieldExpr {
+                            field: field.did.sinto(s),
+                            value: value?,
+                        })
+                    })
+                    .collect::<InterpResult<Vec<_>>>()?;
+                let variants_info = get_variant_information(adt_def, variant, s);
+                ConstantExprKind::Adt {
+                    info: variants_info,
+                    fields,
+                }
+            }
+            ty::Tuple(args) => {
+                let fields = read_fields(op, args.len()).collect::<InterpResult<Vec<_>>>()?;
+                ConstantExprKind::Tuple { fields }
+            }
+            ty::Array(..) | ty::Slice(..) => {
+                let len = op.len(ecx)?;
+                let fields = (0..len)
+                    .map(|i| {
+                        let op = ecx.project_index(&op, i)?;
+                        op_to_const(s, span, ecx, op)
+                    })
+                    .collect::<InterpResult<Vec<_>>>()?;
+                ConstantExprKind::Array { fields }
+            }
+            ty::Str => {
+                let str = ecx.read_str(&op.assert_mem_place())?;
+                ConstantExprKind::Literal(ConstantLiteral::Str(str.to_owned()))
+            }
+            ty::FnDef(def_id, args) => {
+                let (def_id, generics, generics_impls, method_impl) =
+                    get_function_from_def_id_and_generics(s, *def_id, args);
+                ConstantExprKind::FnPtr {
+                    def_id,
+                    generics,
+                    generics_impls,
+                    method_impl,
+                }
+            }
+            ty::RawPtr(..) | ty::Ref(..) => {
+                let op = ecx.deref_pointer(&op)?;
+                let val = op_to_const(s, span, ecx, op.into())?;
+                match ty.kind() {
+                    ty::Ref(..) => ConstantExprKind::Borrow(val),
+                    ty::RawPtr(.., mutability) => ConstantExprKind::RawBorrow {
+                        arg: val,
+                        mutability: mutability.sinto(s),
+                    },
+                    _ => unreachable!(),
+                }
+            }
+            _ => {
+                fatal!(s[span], "Cannot convert constant back to an expression"; {op})
+            }
+        };
+        let val = kind.decorate(ty.sinto(s), span.sinto(s));
+        interp_ok(val)
     }
 
     pub fn const_value_to_constant_expr<'tcx, S: UnderOwnerState<'tcx>>(
         s: &S,
         ty: rustc_middle::ty::Ty<'tcx>,
-        val: rustc_middle::mir::ConstValue<'tcx>,
+        val: mir::ConstValue<'tcx>,
         span: rustc_span::Span,
-    ) -> ConstantExpr {
-        use rustc_middle::mir::ConstValue;
-        match val {
-            ConstValue::Scalar(scalar) => scalar_to_constant_expr(s, ty, &scalar, span),
-            ConstValue::Indirect { .. } => const_value_reference_to_constant_expr(s, ty, val, span),
-            ConstValue::Slice { data, meta } => {
-                let end = meta.try_into().unwrap();
-                // This is outside of the interpreter, so we are okay to use
-                // `inspect_with_uninit_and_ptr_outside_interpreter`. Moreover this is a string/byte
-                // literal, so we don't have to care about initialization.
-                // This is copied from `ConstantValue::try_get_slice_bytes_for_diagnostics`, available
-                // only in a more recent rustc version.
-                let slice: &[u8] = data
-                    .inner()
-                    .inspect_with_uninit_and_ptr_outside_interpreter(0..end);
-                ConstantExprKind::Literal(ConstantLiteral::byte_str(slice.to_vec()))
-                    .decorate(ty.sinto(s), span.sinto(s))
-            }
-            ConstValue::ZeroSized { .. } => {
-                // Should be unit
-                let hty: Ty = ty.sinto(s);
-                let cv = match ty.kind() {
-                    ty::TyKind::Tuple(tys) if tys.is_empty() => {
-                        ConstantExprKind::Tuple { fields: Vec::new() }
-                    }
-                    ty::TyKind::FnDef(def_id, args) => {
-                        let (def_id, generics, generics_impls, method_impl) =
-                            get_function_from_def_id_and_generics(s, *def_id, args);
-
-                        ConstantExprKind::FnPtr {
-                            def_id,
-                            generics,
-                            generics_impls,
-                            method_impl,
-                        }
-                    }
-                    ty::TyKind::Adt(adt_def, ..) => {
-                        assert_eq!(adt_def.variants().len(), 1);
-                        let variant = rustc_target::abi::FIRST_VARIANT;
-                        let variants_info = get_variant_information(adt_def, variant, s);
-                        ConstantExprKind::Adt {
-                            info: variants_info,
-                            fields: vec![],
-                        }
-                    }
-                    _ => {
-                        fatal!(
-                            s[span],
-                            "Expected the type to be tuple or arrow";
-                            {val, ty}
-                        )
-                    }
-                };
-
-                cv.decorate(hty, span.sinto(s))
-            }
-        }
+    ) -> InterpResult<'tcx, ConstantExpr> {
+        let tcx = s.base().tcx;
+        let param_env = ty::ParamEnv::reveal_all();
+        let (ecx, op) = rustc_const_eval::const_eval::mk_eval_cx_for_const_val(
+            tcx.at(span),
+            param_env,
+            val,
+            ty,
+        )
+        .unwrap();
+        op_to_const(s, span, &ecx, op)
     }
 }

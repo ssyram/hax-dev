@@ -1,5 +1,7 @@
 #![allow(rustdoc::private_intra_doc_links)]
 #![cfg_attr(feature = "rustc", feature(concat_idents))]
+#![cfg_attr(feature = "rustc", feature(if_let_guard))]
+#![cfg_attr(feature = "rustc", feature(let_chains))]
 #![cfg_attr(feature = "rustc", feature(macro_metavar_expr))]
 #![cfg_attr(feature = "rustc", feature(rustc_private))]
 #![cfg_attr(feature = "rustc", feature(trait_alias))]
@@ -24,6 +26,7 @@ cfg_feature_rustc! {
     extern crate rustc_ast_pretty;
     extern crate rustc_attr;
     extern crate rustc_apfloat;
+    extern crate rustc_const_eval;
     extern crate rustc_data_structures;
     extern crate rustc_driver;
     extern crate rustc_errors;

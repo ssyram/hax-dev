@@ -211,7 +211,13 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
     let mut promoted = None;
     let evaluated = match konst {
         Const::Val(const_value, ty) => {
-            const_value_to_constant_expr(s, ty, const_value, rustc_span::DUMMY_SP)
+            let span = rustc_span::DUMMY_SP;
+            const_value_to_constant_expr(s, ty, const_value, span).unwrap_or_else(|err| {
+                fatal!(
+                    s[span], "Cannot convert constant back to an expression";
+                    {const_value, ty, err}
+                )
+            })
         }
         Const::Ty(_ty, c) => c.sinto(s),
         Const::Unevaluated(ucv, _ty) => {
