@@ -1,9 +1,9 @@
 #![allow(rustdoc::private_intra_doc_links)]
-#![cfg_attr(feature = "rustc", feature(type_changing_struct_update))]
-#![cfg_attr(feature = "rustc", feature(macro_metavar_expr))]
 #![cfg_attr(feature = "rustc", feature(concat_idents))]
-#![cfg_attr(feature = "rustc", feature(trait_alias))]
+#![cfg_attr(feature = "rustc", feature(macro_metavar_expr))]
 #![cfg_attr(feature = "rustc", feature(rustc_private))]
+#![cfg_attr(feature = "rustc", feature(trait_alias))]
+#![cfg_attr(feature = "rustc", feature(type_changing_struct_update))]
 
 macro_rules! cfg_feature_rustc {
     ($($item:item)*) => {
