@@ -565,10 +565,10 @@ let issue_844_ (e_x: u8)
           true) = e_x
 
 let add3_lemma (x: u32)
-    : Lemma Prims.l_True
-      (ensures
-        x <=. mk_u32 10 || x >=. (u32_max /! mk_u32 3 <: u32) ||
-        (add3 x x x <: u32) =. (x *! mk_u32 3 <: u32)) = ()
+    : Lemma
+    (ensures
+      x <=. mk_u32 10 || x >=. (u32_max /! mk_u32 3 <: u32) ||
+      (add3 x x x <: u32) =. (x *! mk_u32 3 <: u32)) = ()
 
 type t_Foo = {
   f_x:u32;
