@@ -190,7 +190,7 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
     for rustc_middle::mir::ConstOperand<'tcx>
 {
     fn sinto(&self, s: &S) -> ConstOperand {
-        let (evaluated, promoted) = translate_mir_const(s, self.const_);
+        let (evaluated, promoted) = translate_mir_const(s, self.span, self.const_);
         ConstOperand {
             span: self.span.sinto(s),
             ty: self.const_.ty().sinto(s),
@@ -204,27 +204,27 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
 /// Translate a MIR constant.
 fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
+    span: rustc_span::Span,
     konst: mir::Const<'tcx>,
 ) -> (ConstantExpr, Option<PromotedConstant>) {
     use rustc_middle::mir::Const;
     let tcx = s.base().tcx;
     let mut promoted = None;
     let evaluated = match konst {
-        Const::Val(const_value, ty) => {
-            let span = rustc_span::DUMMY_SP;
-            const_value_to_constant_expr(s, ty, const_value, span).unwrap_or_else(|err| {
+        Const::Val(const_value, ty) => const_value_to_constant_expr(s, ty, const_value, span)
+            .unwrap_or_else(|err| {
                 fatal!(
                     s[span], "Cannot convert constant back to an expression";
                     {const_value, ty, err}
                 )
-            })
-        }
+            }),
         Const::Ty(_ty, c) => c.sinto(s),
         Const::Unevaluated(ucv, _ty) => {
             use crate::rustc_middle::query::Key;
-            let span = tcx
-                .def_ident_span(ucv.def)
-                .unwrap_or_else(|| ucv.def.default_span(tcx));
+            let span = span.substitute_dummy(
+                tcx.def_ident_span(ucv.def)
+                    .unwrap_or_else(|| ucv.def.default_span(tcx)),
+            );
             match ucv.promoted {
                 Some(promoted_id) => {
                     let (_, promoteds) = tcx.mir_promoted(ucv.def.as_local().unwrap());
@@ -268,7 +268,7 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
 #[cfg(feature = "rustc")]
 impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
     fn sinto(&self, s: &S) -> ConstantExpr {
-        translate_mir_const(s, *self).0
+        translate_mir_const(s, rustc_span::DUMMY_SP, *self).0
     }
 }
 
