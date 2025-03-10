@@ -872,11 +872,27 @@ struct
   (*   F.mk_refined binder (pty span ty) (pexpr refinement) *)
 
   let add_clauses_effect_type ~no_tot_abbrev (attrs : attrs) typ : F.AST.typ =
-    let attr_term ?keep_last_args kind f =
+    let attr_term ?keep_last_args ?map_expr kind f =
       Attrs.associated_expr ?keep_last_args kind attrs
-      |> Option.map ~f:(pexpr >> f >> F.term)
+      |> Option.map
+           ~f:(Option.value ~default:Fn.id map_expr >> pexpr >> f >> F.term)
     in
-    let decreases = attr_term Decreases (fun t -> F.AST.Decreases (t, None)) in
+    let decreases =
+      let visitor =
+        object
+          inherit [_] U.Visitors.map as super
+
+          method! visit_expr () e =
+            match e.e with
+            | App { f = { e = GlobalVar f; _ }; args = [ e ]; _ }
+              when Global_ident.eq_name Hax_lib__any_to_unit f ->
+                e
+            | _ -> super#visit_expr () e
+        end
+      in
+      attr_term Decreases ~map_expr:(visitor#visit_expr ()) (fun t ->
+          F.AST.Decreases (t, None))
+    in
     let is_lemma = Attrs.lemma attrs in
     let prepost_bundle =
       let trivial_pre = F.term_of_lid [ "Prims"; "l_True" ] in

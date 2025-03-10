@@ -593,4 +593,11 @@ let after 2 = "example after 2"
 let after 3 = "example after 3"
 
 unfold let some_function _ = "hello from F*"
+
+let rec fib (x: usize) : Prims.Tot usize (decreases x) =
+  if x <=. mk_usize 2
+  then x
+  else
+    Core.Num.impl_usize__wrapping_add (fib (x -! mk_usize 1 <: usize) <: usize)
+      (fib (x -! mk_usize 2 <: usize) <: usize)
 '''

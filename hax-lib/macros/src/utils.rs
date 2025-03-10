@@ -265,7 +265,7 @@ pub fn make_fn_decoration(
                 sig.generics = merge_generics(generics, sig.generics);
             }
             sig.output = if let FnDecorationKind::Decreases = &kind {
-                syn::parse_quote! { -> Box<dyn Any> }
+                syn::parse_quote! { -> () }
             } else {
                 syn::parse_quote! { -> impl Into<::hax_lib::Prop> }
             };
@@ -273,11 +273,8 @@ pub fn make_fn_decoration(
         };
         let uid_attr = AttrPayload::Uid(uid.clone());
         let late_skip = &AttrPayload::ItemStatus(ItemStatus::Included { late_skip: true });
-        let any_trait = if let FnDecorationKind::Decreases = &kind {
-            phi = parse_quote! {Box::new(#phi)};
-            quote! {#AttrHaxLang #[allow(unused)] trait Any {} impl<T> Any for T {}}
-        } else {
-            quote! {}
+        if let FnDecorationKind::Decreases = &kind {
+            phi = parse_quote! {::hax_lib::any_to_unit(#phi)};
         };
         let quantifiers = if let FnDecorationKind::Decreases = &kind {
             None
@@ -295,7 +292,6 @@ pub fn make_fn_decoration(
             #late_skip
             const _: () = {
                 #quantifiers
-                #any_trait
                 #future
                 #uid_attr
                 #late_skip
