@@ -47,6 +47,15 @@ pub fn f<'a, T>(c: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     }
 }
 
+#[hax::decreases(x)]
+fn fib(x: usize) -> usize {
+    if x <= 2 {
+        x
+    } else {
+        fib(x - 1).wrapping_add(fib(x - 2))
+    }
+}
+
 #[hax::attributes]
 pub struct Foo {
     pub x: u32,

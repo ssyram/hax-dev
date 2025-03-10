@@ -131,6 +131,14 @@ pub fn inline_unsafe<T>(_: &str) -> T {
     unreachable!()
 }
 
+/// Sink for any value into unit. This is used internally by hax to capture
+/// value of any type. Specifically, this is useful for the `decreases` clauses
+/// for the F* backend.
+#[doc(hidden)]
+pub fn any_to_unit<T>(_: T) -> () {
+    unreachable!()
+}
+
 /// A dummy function that holds a loop invariant.
 #[doc(hidden)]
 pub fn _internal_loop_invariant<T, R: Into<Prop>, P: FnOnce(T) -> R>(_: P) {}
