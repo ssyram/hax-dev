@@ -1824,8 +1824,10 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       ]
   | Union _ ->
       unimplemented ~issue_id:998 [ item.span ] "Union types: not supported"
-  | ExternCrate _ | Macro _ | Mod _ | ForeignMod _ | GlobalAsm _ | TraitAlias _
-    ->
+  | GlobalAsm _ ->
+      unimplemented ~issue_id:1344 [ item.span ]
+        "Inline assembly blocks are not supported"
+  | ExternCrate _ | Macro _ | Mod _ | ForeignMod _ | TraitAlias _ ->
       mk NotImplementedYet
 
 let import_item ~type_only (item : Thir.item) :
