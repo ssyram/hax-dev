@@ -1,3 +1,5 @@
+use syn::visit::Visit;
+
 use crate::prelude::*;
 use crate::rewrite_self::*;
 
@@ -140,6 +142,29 @@ pub(crate) fn expect_future_expr(e: &Expr) -> Option<std::result::Result<Ident, 
     None
 }
 
+#[derive(Default)]
+pub struct IdentCollector {
+    pub idents: Vec<Ident>,
+}
+
+impl<'ast> syn::visit::Visit<'ast> for IdentCollector {
+    fn visit_ident(&mut self, ident: &'ast Ident) {
+        self.idents.push(ident.clone());
+    }
+}
+
+impl IdentCollector {
+    /// Returns a fresh identifier with the given prefix that is not in the collected identifiers.
+    pub fn fresh_ident(&self, prefix: &str) -> Ident {
+        let idents: HashSet<&Ident> = HashSet::from_iter(self.idents.iter());
+        let mk = |s| Ident::new(s, Span::call_site());
+        std::iter::once(mk(prefix))
+            .chain((0u64..).map(|i| Ident::new(&format!("{}{}", prefix, i), Span::call_site())))
+            .find(|ident| !idents.contains(ident))
+            .unwrap()
+    }
+}
+
 /// Rewrites `future(x)` nodes in an expression when (1) `x` is an
 /// ident and (2) the ident `x` is contained in the HashSet.
 struct RewriteFuture(HashSet<String>);
@@ -206,7 +231,12 @@ pub fn make_fn_decoration(
     mut generics: Option<Generics>,
     self_type: Option<Type>,
 ) -> (TokenStream, AttrPayload) {
-    let self_ident: Ident = syn::parse_quote! {self_};
+    let self_ident: Ident = {
+        let mut idents = IdentCollector::default();
+        idents.visit_expr(&phi);
+        idents.visit_signature(&signature);
+        idents.fresh_ident("self_")
+    };
     let error = {
         let mut rewriter = RewriteSelf::new(self_ident, self_type);
         rewriter.visit_expr_mut(&mut phi);

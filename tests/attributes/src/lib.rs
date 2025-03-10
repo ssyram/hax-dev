@@ -434,3 +434,13 @@ mod props {
         !(p | y).implies(forall(|x: u8| x <= u8::MAX) & exists(|x: u16| x > 300))
     }
 }
+
+mod issue_1276 {
+    struct S(pub u8);
+
+    #[hax_lib::attributes]
+    impl S {
+        #[hax_lib::requires(self.0 == 0 && self_ == self_1 && self_2 == 9)]
+        fn f(&self, self_: u8, self_0: u8, self_1: u8, self_2: u8) {}
+    }
+}

@@ -867,15 +867,31 @@ struct
         F.mk_refined binder_name (pty span ty) (fun ~x -> pexpr refinement)
     | None -> pty span ty
 
-  (* let prefined_ty span (binder : string) (ty : ty) (refinement : expr) : *)
-  (*     F.AST.term = *)
-  (*   F.mk_refined binder (pty span ty) (pexpr refinement) *)
-
-  let add_clauses_effect_type ~no_tot_abbrev (attrs : attrs) typ : F.AST.typ =
+  let add_clauses_effect_type ~self ~no_tot_abbrev (attrs : attrs) typ :
+      F.AST.typ =
     let attr_term ?keep_last_args ?map_expr kind f =
+      (* A clause on a method with a `self` produces a function whose first argument is `self_`.
+         `subst_self` will substitute that first argument `self_` into the provided local identifier `self`.
+      *)
+      let subst_self : (expr -> expr) option =
+        (* If `self` was present on the original function.  *)
+        let* self = self in
+        (* Lookup the pre/post/decreases function, get the first argument: that is `self`. *)
+        let* self' =
+          let* _, params, _ = Attrs.associated_fn kind attrs in
+          let* first_param = List.hd params in
+          let* { var; _ } = Destruct.pat_PBinding first_param.pat in
+          Some var
+        in
+        let f id = if [%eq: local_ident] self' id then self else id in
+        Some ((U.Mappers.rename_local_idents f)#visit_expr ())
+      in
       Attrs.associated_expr ?keep_last_args kind attrs
       |> Option.map
-           ~f:(Option.value ~default:Fn.id map_expr >> pexpr >> f >> F.term)
+           ~f:
+             (Option.value ~default:Fn.id subst_self
+             >> Option.value ~default:Fn.id map_expr
+             >> pexpr >> f >> F.term)
     in
     let decreases =
       let visitor =
@@ -1030,6 +1046,11 @@ struct
         let is_const = List.is_empty params in
         let ty =
           add_clauses_effect_type
+            ~self:
+              (let* hd = List.hd params in
+               let* { var; _ } = Destruct.pat_PBinding hd.pat in
+               let*? () = String.equal var.name "self" in
+               Some var)
             ~no_tot_abbrev:(ctx.interface_mode && not is_const)
             e.attrs (pty body.span body.typ)
         in
