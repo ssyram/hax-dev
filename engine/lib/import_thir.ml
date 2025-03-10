@@ -1504,6 +1504,13 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
              params = [];
              safety = Safe;
            }
+  | Static (_, true, _) ->
+      unimplemented ~issue_id:1343 [ item.span ]
+        "Mutable static items are not supported."
+  | Static (_ty, false, body) ->
+      let name = Concrete_ident.of_def_id ~value:true (assert_item_def_id ()) in
+      let generics = { params = []; constraints = [] } in
+      mk (Fn { name; generics; body = c_body body; params = []; safety = Safe })
   | TyAlias (ty, generics) ->
       mk
       @@ TyAlias
@@ -1817,8 +1824,8 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       ]
   | Union _ ->
       unimplemented ~issue_id:998 [ item.span ] "Union types: not supported"
-  | ExternCrate _ | Static _ | Macro _ | Mod _ | ForeignMod _ | GlobalAsm _
-  | TraitAlias _ ->
+  | ExternCrate _ | Macro _ | Mod _ | ForeignMod _ | GlobalAsm _ | TraitAlias _
+    ->
       mk NotImplementedYet
 
 let import_item ~type_only (item : Thir.item) :

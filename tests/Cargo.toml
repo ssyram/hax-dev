@@ -37,5 +37,6 @@ members = [
         "cyclic-modules",
         "unsafe",
         "constructor-as-closure",
+        "statics",
 ]
 resolver = "2"
