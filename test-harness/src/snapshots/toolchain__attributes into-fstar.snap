@@ -577,7 +577,7 @@ type t_Foo = {
 }
 
 let props (_: Prims.unit) : Prims.unit =
-  let _:Prims.unit = Hax_lib.v_assume #Hax_lib.Prop.t_Prop True in
+  let _:Prims.unit = Hax_lib.v_assume True in
   let _:Prims.unit = Hax_lib.assert_prop True in
   let _:Prims.unit = () in
   ()
