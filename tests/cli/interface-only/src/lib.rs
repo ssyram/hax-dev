@@ -91,3 +91,13 @@ impl T2 for u8 {
     #[hax_lib::requires(false)]
     fn d() {}
 }
+
+#[hax_lib::requires(b.len() >= n)]
+#[hax_lib::ensures(|out| out <= n)]
+fn padlen(b: &[u8], n: usize) -> usize {
+    if n > 0 && b[n - 1] == 0 {
+        1 + padlen(b, n - 1)
+    } else {
+        0
+    }
+}

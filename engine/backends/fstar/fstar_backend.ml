@@ -1740,13 +1740,16 @@ let string_of_items ~mod_name ~bundles (bo : BackendOptions.t) m items :
           |> String.concat ~sep:"")
         ^ "\n\n"
   in
-  let map_string ~f (str, space) =
-    ((match str with `Impl s -> `Impl (f s) | `Intf s -> `Intf (f s)), space)
+  let map_string ~f ?(map_intf = true) (str, space) =
+    ( (match str with
+      | `Impl s -> `Impl (f s)
+      | `Intf s -> `Intf (if map_intf then f s else s)),
+      space )
   in
   let replace_in_strs ~pattern ~with_ =
     List.map
       ~f:
-        (map_string ~f:(fun str ->
+        (map_string ~map_intf:false ~f:(fun str ->
              String.substr_replace_first ~pattern ~with_ str))
   in
 
