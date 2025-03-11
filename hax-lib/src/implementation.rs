@@ -73,7 +73,7 @@ macro_rules! assert_prop {
         {
             #[cfg(hax)]
             {
-                $crate::assert_prop($crate::Prop::from($($arg)*));
+                $crate::assert_prop(::hax_lib::Prop::from($($arg)*));
             }
         }
     };
@@ -97,7 +97,7 @@ pub fn assume(_formula: Prop) {}
 #[macro_export]
 macro_rules! assume {
     ($formula:expr) => {
-        $crate::assume(Prop::from($formula))
+        $crate::assume(::hax_lib::Prop::from($formula))
     };
 }
 

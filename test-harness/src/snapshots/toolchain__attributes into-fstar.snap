@@ -576,6 +576,12 @@ type t_Foo = {
   f_z:f_z: u32{b2t (((f_y +! f_x <: u32) +! f_z <: u32) >. mk_u32 3 <: bool)}
 }
 
+let props (_: Prims.unit) : Prims.unit =
+  let _:Prims.unit = Hax_lib.v_assume True in
+  let _:Prims.unit = Hax_lib.assert_prop True in
+  let _:Prims.unit = () in
+  ()
+
 let inlined_code__v_V: u8 = mk_u8 12
 
 let before_inlined_code = "example before"

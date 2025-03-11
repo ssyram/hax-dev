@@ -817,24 +817,28 @@ macro_rules! make_quoting_proc_macro {
             #[proc_macro]
             pub fn [<$backend _expr>](payload: pm::TokenStream) -> pm::TokenStream {
                 let ts: TokenStream = quote::expression(quote::InlineExprType::Unit, payload).into();
-                quote!{
+                quote!{{
                     #[cfg([< hax_backend_ $backend >])]
                     {
                         #ts
                     }
-                }.into()
+                }}.into()
             }
 
             #[doc = concat!("The `Prop` version of `", stringify!($backend), "_expr`.")]
             #[proc_macro]
             pub fn [<$backend _prop_expr>](payload: pm::TokenStream) -> pm::TokenStream {
                 let ts: TokenStream = quote::expression(quote::InlineExprType::Prop, payload).into();
-                quote!{
+                quote!{{
                     #[cfg([< hax_backend_ $backend >])]
                     {
                         #ts
                     }
-                }.into()
+                    #[cfg(not([< hax_backend_ $backend >]))]
+                    {
+                        ::hax_lib::Prop::from_bool(true)
+                    }
+                }}.into()
             }
 
             #[doc = concat!("The unsafe (because polymorphic: even computationally relevant code can be inlined!) version of `", stringify!($backend), "_expr`.")]
@@ -842,12 +846,12 @@ macro_rules! make_quoting_proc_macro {
             #[doc(hidden)]
             pub fn [<$backend _unsafe_expr>](payload: pm::TokenStream) -> pm::TokenStream {
                 let ts: TokenStream = quote::expression(quote::InlineExprType::Anything, payload).into();
-                quote!{
+                quote!{{
                     #[cfg([< hax_backend_ $backend >])]
                     {
                         #ts
                     }
-                }.into()
+                }}.into()
             }
 
             make_quoting_item_proc_macro!($backend, [< $backend _before >], ItemQuotePosition::Before, [< hax_backend_ $backend >]);

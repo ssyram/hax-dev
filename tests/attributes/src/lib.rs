@@ -75,6 +75,11 @@ impl Foo {
     fn h(&self) {}
 }
 
+fn props() {
+    hax_lib::assume!(hax_lib::fstar::prop!("True"));
+    hax_lib::assert_prop!(hax_lib::fstar::prop!("True"));
+}
+
 #[hax::attributes]
 mod refined_arithmetic {
     use core::ops::{Add, Mul};

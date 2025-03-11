@@ -291,6 +291,25 @@ module Make (F : Features.T) =
 
       module Attrs = Attr_payloads.Make (F) (Error)
 
+      (** Drop `from` or `into` when they are of type `T -> T`, for any `T`. *)
+      let remove_from_into_identity =
+        object
+          inherit [_] Visitors.map as super
+
+          method! visit_expr () e =
+            let e =
+              match e.e with
+              | App { f = { e = GlobalVar f; _ }; args = [ x ]; _ }
+                when [%equal: ty] e.typ x.typ
+                     && (Ast.Global_ident.eq_name Core__convert__Into__into f
+                        || Ast.Global_ident.eq_name Core__convert__From__from f
+                        ) ->
+                  x
+              | _ -> e
+            in
+            super#visit_expr () e
+        end
+
       let visitor =
         object (self)
           inherit [_] Visitors.map as super
@@ -354,5 +373,7 @@ module Make (F : Features.T) =
         end
 
       let ditems (l : A.item list) : B.item list =
-        List.map ~f:(visitor#visit_item ()) l
+        List.map
+          ~f:(visitor#visit_item () >> remove_from_into_identity#visit_item ())
+          l
     end)
