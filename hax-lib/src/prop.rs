@@ -21,19 +21,24 @@ pub mod constructors {
     pub fn not(lhs: Prop) -> Prop {
         Prop(!lhs.0)
     }
-    /// Equality between two value of *any* type
+
+    /// Logical equality between two value of *any* type
     pub fn eq<T>(_lhs: T, _rhs: T) -> Prop {
         Prop(true)
     }
-    pub fn ne(lhs: Prop, other: Prop) -> Prop {
-        Prop(lhs.0 != other.0)
+
+    pub fn ne<T>(_lhs: T, _rhs: T) -> Prop {
+        Prop(true)
     }
+
     pub fn implies(lhs: Prop, other: Prop) -> Prop {
         Prop(lhs.0 || !other.0)
     }
+
     pub fn forall<A, F: Fn(A) -> Prop>(_pred: F) -> Prop {
         Prop(true)
     }
+
     pub fn exists<A, F: Fn(A) -> Prop>(_pred: F) -> Prop {
         Prop(true)
     }
