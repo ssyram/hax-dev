@@ -63,7 +63,7 @@ macro_rules! assert {
 /// This function exists only when compiled with `hax`, and is not
 /// meant to be used directly. It is called by `assert!` only in
 /// appropriate situations.
-pub fn assert(_formula: bool) {}
+pub fn assert(_formula: impl Into<Prop>) {}
 
 #[macro_export]
 /// Assert a logical proposition [`Prop`]: this exists only in the backends of
@@ -73,7 +73,7 @@ macro_rules! assert_prop {
         {
             #[cfg(hax)]
             {
-                $crate::assert_prop($crate::Prop::from($($arg)*));
+                $crate::assert_prop($($arg)*);
             }
         }
     };
@@ -91,13 +91,13 @@ pub fn assert_prop(_formula: Prop) {}
 /// This function exists only when compiled with `hax`, and is not
 /// meant to be used directly. It is called by `assume!` only in
 /// appropriate situations.
-pub fn assume(_formula: Prop) {}
+pub fn assume(_formula: impl Into<Prop>) {}
 
 #[cfg(hax)]
 #[macro_export]
 macro_rules! assume {
     ($formula:expr) => {
-        $crate::assume(Prop::from($formula))
+        $crate::assume($formula)
     };
 }
 
