@@ -19,7 +19,7 @@ paste = { version = "1.0.15" }
 syn = { version = "2.0", features = ["full", "visit-mut", "visit"] }
 
 [dependencies]
-syn = { version = "2.0", features = ["full", "visit-mut"] }
+syn = { version = "2.0", features = ["full", "visit", "visit-mut"] }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 
