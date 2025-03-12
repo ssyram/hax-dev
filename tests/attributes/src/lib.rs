@@ -194,6 +194,17 @@ fn some_function() -> String {
     String::from("hello from Rust")
 }
 
+mod future_self {
+    #[derive(Eq, PartialEq)]
+    struct Dummy;
+
+    #[hax_lib::attributes]
+    impl Dummy {
+        #[hax_lib::ensures(|_| future(self) == self)]
+        fn f(&mut self) {}
+    }
+}
+
 mod replace_body {
     #[hax_lib::fstar::replace_body("magic ${x}")]
     fn f(x: u8, y: u8) -> u8 {
