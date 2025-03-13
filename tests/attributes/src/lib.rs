@@ -47,6 +47,15 @@ pub fn f<'a, T>(c: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     }
 }
 
+#[hax::decreases(x)]
+fn fib(x: usize) -> usize {
+    if x <= 2 {
+        x
+    } else {
+        fib(x - 1).wrapping_add(fib(x - 2))
+    }
+}
+
 #[hax::attributes]
 pub struct Foo {
     pub x: u32,
@@ -64,6 +73,11 @@ impl Foo {
 impl Foo {
     #[hax::exclude]
     fn h(&self) {}
+}
+
+fn props() {
+    hax_lib::assume!(hax_lib::fstar::prop!("True"));
+    hax_lib::assert_prop!(hax_lib::fstar::prop!("True"));
 }
 
 #[hax::attributes]
@@ -178,6 +192,17 @@ fn mutliple_before_after() {}
 #[hax::fstar::replace(r#"unfold let $some_function _ = "hello from F*""#)]
 fn some_function() -> String {
     String::from("hello from Rust")
+}
+
+mod future_self {
+    #[derive(Eq, PartialEq)]
+    struct Dummy;
+
+    #[hax_lib::attributes]
+    impl Dummy {
+        #[hax_lib::ensures(|_| future(self) == self)]
+        fn f(&mut self) {}
+    }
 }
 
 mod replace_body {
@@ -423,5 +448,15 @@ mod props {
         let xprop: Prop = y.into();
         let p = y.lift() & xprop & y & y.to_prop();
         !(p | y).implies(forall(|x: u8| x <= u8::MAX) & exists(|x: u16| x > 300))
+    }
+}
+
+mod issue_1276 {
+    struct S(pub u8);
+
+    #[hax_lib::attributes]
+    impl S {
+        #[hax_lib::requires(self.0 == 0 && self_ == self_1 && self_2 == 9)]
+        fn f(&self, self_: u8, self_0: u8, self_1: u8, self_2: u8) {}
     }
 }

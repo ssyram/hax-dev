@@ -48,6 +48,40 @@ let basically_a_constant (_: Prims.unit)
           let x:u8 = x in
           x >. mk_u8 100) = mk_u8 127
 '''
+"Attributes.Future_self.fst" = '''
+module Attributes.Future_self
+#set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
+open Core
+open FStar.Mul
+
+type t_Dummy = | Dummy : t_Dummy
+
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume
+val impl_1': Core.Marker.t_StructuralPartialEq t_Dummy
+
+let impl_1 = impl_1'
+
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume
+val impl_2': Core.Cmp.t_PartialEq t_Dummy t_Dummy
+
+let impl_2 = impl_2'
+
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+assume
+val impl': Core.Cmp.t_Eq t_Dummy
+
+let impl = impl'
+
+let impl_Dummy__f (self: t_Dummy)
+    : Prims.Pure t_Dummy
+      Prims.l_True
+      (ensures
+        fun self_e_future ->
+          let self_e_future:t_Dummy = self_e_future in
+          self_e_future =. self) = self
+'''
 "Attributes.Inlined_code_ensures_requires.fst" = '''
 module Attributes.Inlined_code_ensures_requires
 #set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
@@ -125,6 +159,19 @@ class t_T (v_Self: Type0) = {
   f_v_post:x: v_Self -> x_future: v_Self -> pred: Type0{pred ==> true};
   f_v:x0: v_Self -> Prims.Pure v_Self (f_v_pre x0) (fun result -> f_v_post x0 result)
 }
+'''
+"Attributes.Issue_1276_.fst" = '''
+module Attributes.Issue_1276_
+#set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
+open Core
+open FStar.Mul
+
+type t_S = | S : u8 -> t_S
+
+let impl_S__f (self: t_S) (self_ self_0_ self_1_ self_2_: u8)
+    : Prims.Pure Prims.unit
+      (requires self._0 =. mk_u8 0 && self_ =. self_1_ && self_2_ =. mk_u8 9)
+      (fun _ -> Prims.l_True) = ()
 '''
 "Attributes.Nested_refinement_elim.fst" = '''
 module Attributes.Nested_refinement_elim
@@ -552,16 +599,22 @@ let issue_844_ (e_x: u8)
           true) = e_x
 
 let add3_lemma (x: u32)
-    : Lemma Prims.l_True
-      (ensures
-        x <=. mk_u32 10 || x >=. (u32_max /! mk_u32 3 <: u32) ||
-        (add3 x x x <: u32) =. (x *! mk_u32 3 <: u32)) = ()
+    : Lemma
+    (ensures
+      x <=. mk_u32 10 || x >=. (u32_max /! mk_u32 3 <: u32) ||
+      (add3 x x x <: u32) =. (x *! mk_u32 3 <: u32)) = ()
 
 type t_Foo = {
   f_x:u32;
   f_y:f_y: u32{b2t (f_y >. mk_u32 3 <: bool)};
   f_z:f_z: u32{b2t (((f_y +! f_x <: u32) +! f_z <: u32) >. mk_u32 3 <: bool)}
 }
+
+let props (_: Prims.unit) : Prims.unit =
+  let _:Prims.unit = Hax_lib.v_assume True in
+  let _:Prims.unit = Hax_lib.assert_prop True in
+  let _:Prims.unit = () in
+  ()
 
 let inlined_code__v_V: u8 = mk_u8 12
 
@@ -593,4 +646,11 @@ let after 2 = "example after 2"
 let after 3 = "example after 3"
 
 unfold let some_function _ = "hello from F*"
+
+let rec fib (x: usize) : Prims.Tot usize (decreases x) =
+  if x <=. mk_usize 2
+  then x
+  else
+    Core.Num.impl_usize__wrapping_add (fib (x -! mk_usize 1 <: usize) <: usize)
+      (fib (x -! mk_usize 2 <: usize) <: usize)
 '''

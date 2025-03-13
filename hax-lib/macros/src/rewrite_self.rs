@@ -99,6 +99,7 @@ impl visit_mut::VisitMut for RewriteSelf {
     }
     fn visit_fn_arg_mut(&mut self, arg: &mut FnArg) {
         visit_mut::visit_fn_arg_mut(self, arg);
+        let arg_span = arg.span();
         if let FnArg::Receiver(r) = arg {
             let span = r.self_token.span();
             *arg = FnArg::Typed(PatType {
@@ -110,8 +111,17 @@ impl visit_mut::VisitMut for RewriteSelf {
                     ident: self.self_ident(span).clone(),
                     subpat: None,
                 })),
-                colon_token: token::Colon(arg.span()),
-                ty: Box::new(self.self_ty(span)),
+                colon_token: token::Colon(arg_span),
+                ty: Box::new({
+                    let ty = self.self_ty(span);
+                    let (reference, lt) = r
+                        .reference
+                        .clone()
+                        .map(|(r, lt)| (Some(r), lt))
+                        .unwrap_or((None, None));
+                    let mutability = r.mutability.clone();
+                    parse_quote! {#reference #lt #mutability #ty}
+                }),
             });
         }
     }

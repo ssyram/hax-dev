@@ -1,6 +1,7 @@
 module Core.Num
 open Rust_primitives
 
+let impl_u64__MAX: u64 = mk_u64 (maxint u64_inttype)
 let impl_u16__MAX: u16 = mk_u16 (maxint u16_inttype)
 let impl_i32__MAX: i32 = mk_i32 (maxint i32_inttype)
 let impl_i32__MIN: i32 = mk_i32 (minint i32_inttype)
@@ -35,6 +36,7 @@ val impl_u64__to_be_bytes: u64 -> t_Array u8 (sz 8)
 val impl_u64__rotate_right: u64 -> u64 -> u64
 
 let impl_u128__wrapping_add: u128 -> u128 -> u128 = add_mod
+let impl_u128__wrapping_sub: u128 -> u128 -> u128 = sub_mod
 val impl_u128__rotate_left: u128 -> u128 -> u128
 val impl_u128__from_le_bytes: t_Array u8 (sz 16) -> u128
 val impl_u128__from_be_bytes: t_Array u8 (sz 16) -> u128
@@ -49,6 +51,9 @@ val impl_u64__pow: u64 -> u32 -> u64
 val impl_u128__pow: u128 -> u32 -> u128
 val impl_i16__pow (base: i16) (exponent: u32): result: i16 {v base == 2 /\ v exponent < 15 ==> (Math.Lemmas.pow2_lt_compat 15 (v exponent); result == mk_i16 (pow2 (v exponent)))}
 val impl_i32__pow (base: i32) (exponent: u32): result: i32 {v base == 2 /\ v exponent <= 16 ==> result == mk_i32 (pow2 (v exponent))}
+
+let impl_i128__wrapping_add: i128 -> i128 -> i128 = add_mod
+let impl_i128__wrapping_sub: i128 -> i128 -> i128 = sub_mod
 
 val impl_u8__count_ones: u8 -> r:u32{v r <= 8}
 val impl_i32__count_ones: i32 -> r:u32{v r <= 32}

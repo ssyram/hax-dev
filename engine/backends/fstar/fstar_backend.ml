@@ -867,16 +867,48 @@ struct
         F.mk_refined binder_name (pty span ty) (fun ~x -> pexpr refinement)
     | None -> pty span ty
 
-  (* let prefined_ty span (binder : string) (ty : ty) (refinement : expr) : *)
-  (*     F.AST.term = *)
-  (*   F.mk_refined binder (pty span ty) (pexpr refinement) *)
-
-  let add_clauses_effect_type ~no_tot_abbrev (attrs : attrs) typ : F.AST.typ =
-    let attr_term ?keep_last_args kind f =
+  let add_clauses_effect_type ~self ~no_tot_abbrev (attrs : attrs) typ :
+      F.AST.typ =
+    let attr_term ?keep_last_args ?map_expr kind f =
+      (* A clause on a method with a `self` produces a function whose first argument is `self_`.
+         `subst_self` will substitute that first argument `self_` into the provided local identifier `self`.
+      *)
+      let subst_self : (expr -> expr) option =
+        (* If `self` was present on the original function.  *)
+        let* self = self in
+        (* Lookup the pre/post/decreases function, get the first argument: that is `self`. *)
+        let* self' =
+          let* _, params, _ = Attrs.associated_fn kind attrs in
+          let* first_param = List.hd params in
+          let* { var; _ } = Destruct.pat_PBinding first_param.pat in
+          Some var
+        in
+        let f id = if [%eq: local_ident] self' id then self else id in
+        Some ((U.Mappers.rename_local_idents f)#visit_expr ())
+      in
       Attrs.associated_expr ?keep_last_args kind attrs
-      |> Option.map ~f:(pexpr >> f >> F.term)
+      |> Option.map
+           ~f:
+             (Option.value ~default:Fn.id subst_self
+             >> Option.value ~default:Fn.id map_expr
+             >> pexpr >> f >> F.term)
     in
-    let decreases = attr_term Decreases (fun t -> F.AST.Decreases (t, None)) in
+    let decreases =
+      let visitor =
+        object
+          inherit [_] U.Visitors.map as super
+
+          method! visit_expr () e =
+            match e.e with
+            | App { f = { e = GlobalVar f; _ }; args = [ e ]; _ }
+              when Global_ident.eq_name Hax_lib__any_to_unit f ->
+                e
+            | _ -> super#visit_expr () e
+        end
+      in
+      attr_term Decreases ~map_expr:(visitor#visit_expr ()) (fun t ->
+          F.AST.Decreases (t, None))
+    in
     let is_lemma = Attrs.lemma attrs in
     let prepost_bundle =
       let trivial_pre = F.term_of_lid [ "Prims"; "l_True" ] in
@@ -911,7 +943,7 @@ struct
             if is_lemma then mk [] "Lemma" else prims "Pure"
           else prims "Tot"
         in
-        F.mk_e_app effect (if is_lemma then args else typ :: args)
+        F.mk_e_app effect (if is_lemma then List.drop args 1 else typ :: args)
 
   (** Prints doc comments out of a list of attributes *)
   let pdoc_comments attrs =
@@ -1014,6 +1046,11 @@ struct
         let is_const = List.is_empty params in
         let ty =
           add_clauses_effect_type
+            ~self:
+              (let* hd = List.hd params in
+               let* { var; _ } = Destruct.pat_PBinding hd.pat in
+               let*? () = String.equal var.name "self" in
+               Some var)
             ~no_tot_abbrev:(ctx.interface_mode && not is_const)
             e.attrs (pty body.span body.typ)
         in
@@ -1724,13 +1761,16 @@ let string_of_items ~mod_name ~bundles (bo : BackendOptions.t) m items :
           |> String.concat ~sep:"")
         ^ "\n\n"
   in
-  let map_string ~f (str, space) =
-    ((match str with `Impl s -> `Impl (f s) | `Intf s -> `Intf (f s)), space)
+  let map_string ~f ?(map_intf = true) (str, space) =
+    ( (match str with
+      | `Impl s -> `Impl (f s)
+      | `Intf s -> `Intf (if map_intf then f s else s)),
+      space )
   in
   let replace_in_strs ~pattern ~with_ =
     List.map
       ~f:
-        (map_string ~f:(fun str ->
+        (map_string ~map_intf:false ~f:(fun str ->
              String.substr_replace_first ~pattern ~with_ str))
   in
 

@@ -253,9 +253,6 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
     quote! { #attr #NeverErased #item }.into()
 }
 
-/*
-TODO: this is disabled for now, we need `dyn` types (see issue #296)
-
 /// Provide a measure for a function: this measure will be used once
 /// extracted in a backend for checking termination. The expression
 /// that decreases can be of any type. (TODO: this is probably as it
@@ -288,7 +285,6 @@ pub fn decreases(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStrea
     );
     quote! {#requires #attr #item}.into()
 }
-*/
 
 /// Add a logical precondition to a function.
 // Note you can use the `forall` and `exists` operators. (TODO: commented out for now, see #297)
@@ -821,24 +817,28 @@ macro_rules! make_quoting_proc_macro {
             #[proc_macro]
             pub fn [<$backend _expr>](payload: pm::TokenStream) -> pm::TokenStream {
                 let ts: TokenStream = quote::expression(quote::InlineExprType::Unit, payload).into();
-                quote!{
+                quote!{{
                     #[cfg([< hax_backend_ $backend >])]
                     {
                         #ts
                     }
-                }.into()
+                }}.into()
             }
 
             #[doc = concat!("The `Prop` version of `", stringify!($backend), "_expr`.")]
             #[proc_macro]
             pub fn [<$backend _prop_expr>](payload: pm::TokenStream) -> pm::TokenStream {
                 let ts: TokenStream = quote::expression(quote::InlineExprType::Prop, payload).into();
-                quote!{
+                quote!{{
                     #[cfg([< hax_backend_ $backend >])]
                     {
                         #ts
                     }
-                }.into()
+                    #[cfg(not([< hax_backend_ $backend >]))]
+                    {
+                        ::hax_lib::Prop::from_bool(true)
+                    }
+                }}.into()
             }
 
             #[doc = concat!("The unsafe (because polymorphic: even computationally relevant code can be inlined!) version of `", stringify!($backend), "_expr`.")]
@@ -846,12 +846,12 @@ macro_rules! make_quoting_proc_macro {
             #[doc(hidden)]
             pub fn [<$backend _unsafe_expr>](payload: pm::TokenStream) -> pm::TokenStream {
                 let ts: TokenStream = quote::expression(quote::InlineExprType::Anything, payload).into();
-                quote!{
+                quote!{{
                     #[cfg([< hax_backend_ $backend >])]
                     {
                         #ts
                     }
-                }.into()
+                }}.into()
             }
 
             make_quoting_item_proc_macro!($backend, [< $backend _before >], ItemQuotePosition::Before, [< hax_backend_ $backend >]);
