@@ -98,17 +98,9 @@ module ProVerifNamePolicy = struct
 
   [@@@ocamlformat "disable"]
 
-  let anonymous_field_transform index = Fn.id index
-
   let reserved_words = Hash_set.of_list (module String) [
   "among"; "axiom"; "channel"; "choice"; "clauses"; "const"; "def"; "diff"; "do"; "elimtrue"; "else"; "equation"; "equivalence"; "event"; "expand"; "fail"; "for"; "forall"; "foreach"; "free"; "fun"; "get"; "if"; "implementation"; "in"; "inj-event"; "insert"; "lemma"; "let"; "letfun"; "letproba"; "new"; "noninterf"; "noselect"; "not"; "nounif"; "or"; "otherwise"; "out"; "param"; "phase"; "pred"; "proba"; "process"; "proof"; "public vars"; "putbegin"; "query"; "reduc"; "restriction"; "secret"; "select"; "set"; "suchthat"; "sync"; "table"; "then"; "type"; "weaksecret"; "yield"
   ]
-
-  let field_name_transform ~struct_name field_name = struct_name ^ "_" ^ field_name
-
-  let enum_constructor_name_transform ~enum_name constructor_name = enum_name ^ "_" ^ constructor_name ^ "_c"
-
-  let struct_constructor_name_transform constructor_name =  constructor_name ^ "_c"
 end
 
 module U = Ast_utils.Make (InputLanguage)
@@ -229,7 +221,8 @@ module Make (Options : OPTS) : MAKE = struct
         method error_letfun_name type_name = type_name ^^ string "_err"
 
         method field_accessor_prefix field_name prefix =
-          string "accessori" ^^ underscore ^^ prefix ^^ underscore ^^ print#concrete_ident field_name
+          string "accessor" ^^ underscore ^^ prefix ^^ underscore
+          ^^ print#concrete_ident field_name
 
         method match_arm scrutinee { arm_pat; body } =
           let body_typ = print#ty AlreadyPar body.typ in
@@ -414,18 +407,20 @@ module Make (Options : OPTS) : MAKE = struct
                       | Some (name, translation) -> translation args
                       | None -> (
                           match name with
-                          | `Projector (`Concrete name) ->
-                             let arg = (Option.value_exn (List.hd args)) in
-                             match arg.typ with
-                             | TApp { ident = `Concrete concrete_ident; _} -> (
-                                let base_name = print#concrete_ident concrete_ident in
-                                print#field_accessor_prefix name base_name
-                                ^^ iblock parens
-                                     (separate_map
-                                        (comma ^^ break 1)
-                                        (fun arg -> print#expr AlreadyPar arg)
-                                        args))
-                             | _ -> super#expr' ctx e
+                          | `Projector (`Concrete name) -> (
+                              let arg = Option.value_exn (List.hd args) in
+                              match arg.typ with
+                              | TApp { ident = `Concrete concrete_ident; _ } ->
+                                  let base_name =
+                                    print#concrete_ident concrete_ident
+                                  in
+                                  print#field_accessor_prefix name base_name
+                                  ^^ iblock parens
+                                       (separate_map
+                                          (comma ^^ break 1)
+                                          (fun arg -> print#expr AlreadyPar arg)
+                                          args)
+                              | _ -> super#expr' ctx e)
                           | _ -> super#expr' ctx e)))
             | Construct { constructor; fields; _ }
               when Global_ident.eq_name Core__option__Option__None constructor
@@ -488,10 +483,7 @@ module Make (Options : OPTS) : MAKE = struct
           in
           let fun_and_reduc base_name constructor =
             let constructor_name = print#concrete_ident constructor.name in
-            let field_prefix =
-              if constructor.is_record then empty
-              else print#concrete_ident base_name ^^ underscore ^^ print#concrete_ident constructor.name
-            in
+            let field_prefix = print#concrete_ident base_name in
             let fun_args = constructor.arguments in
             let fun_args_full =
               separate_map
