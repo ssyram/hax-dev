@@ -37,3 +37,18 @@ val impl__split_at #t (s: t_Slice t) (mid: usize): Pure (t_Slice t * t_Slice t)
 
 let impl__is_empty (s: t_Slice 'a): bool = Seq.length s = 0
 
+let impl__contains (#t: eqtype) (s: t_Slice t) (v: t) =
+  Seq.mem v s 
+
+val impl__copy_within
+      (#v_T #v_R: Type0)
+      (#[FStar.Tactics.Typeclasses.tcresolve
+            ()]
+          i3:
+          Core.Marker.t_Copy v_T)
+      (v: t_Slice v_T)
+      (src: v_R)
+      (dest: usize)
+    : t_Slice v_T
+
+val impl__binary_search #t (s: t_Slice t) (v: t): Core.Result.t_Result usize usize

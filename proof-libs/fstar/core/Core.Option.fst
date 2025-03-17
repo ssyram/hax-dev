@@ -1,6 +1,6 @@
 module Core.Option
 
-type t_Option t = | Option_Some of t | Option_None
+include Core.Result_Option_bundle {t_Option, impl__ok_or, impl__ok_or_else}
 
 let impl__and_then #t_Self #t (self: t_Option t_Self) (f: t_Self -> t_Option t): t_Option t = 
   match self with
@@ -18,7 +18,7 @@ let impl__is_some #t_Self (self: t_Option t_Self): bool =  Option_Some? self
 
 let impl__is_none #t_Self (self: t_Option t_Self): bool =  Option_None? self
 
-let impl__take #t (x: t_Option t) : (t_Option t & t_Option t) = (x, Option_None)
+let impl__take #t (x: t_Option t) : (t_Option t & t_Option t) = (Option_None, x)
 	
 let impl__as_ref #t_Self (self: t_Option t_Self): t_Option t_Self = self
 
@@ -39,12 +39,5 @@ let impl__unwrap_or
   | Option_Some inner -> inner
   | Core.Option.Option_None  -> def
 
-let impl__ok_or_else #t_Self #e (self: t_Option t_Self) (err: unit -> e): Core.Result.t_Result t_Self e =
-  match self with 
-  | Option_Some inner -> Core.Result.Result_Ok inner
-  | Option_None -> Core.Result.Result_Err (err ())
-
-let impl__ok_or #t_Self #e (self: t_Option t_Self) (err: e): Core.Result.t_Result t_Self e =
-  match self with 
-  | Option_Some inner -> Core.Result.Result_Ok inner
-  | Option_None -> Core.Result.Result_Err err
+let impl__expect #t (self: t_Option t {Option_Some? self}) (msg: string) =
+  impl__unwrap self
