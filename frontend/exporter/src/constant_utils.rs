@@ -199,8 +199,7 @@ impl From<ConstantExpr> for Expr {
                 source: source.into(),
             },
             kind @ (FnPtr { .. } | TraitConst { .. } | Memory { .. }) => {
-                // SH: I see the `Closure` kind, but it's not the same as function pointer?
-                ExprKind::Todo(format!("FnPtr or TraitConst or Memory. kind={:#?}", kind))
+                ExprKind::Todo(format!("Unsupported constant kind. kind={:#?}", kind))
             }
             Todo(msg) => ExprKind::Todo(msg),
         };
