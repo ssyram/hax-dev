@@ -407,3 +407,31 @@ mod props {
         !(p | y).implies(forall(|x: u8| x <= u8::MAX) & exists(|x: u16| x > 300))
     }
 }
+
+mod reorder {
+    #[hax_lib::attributes]
+    struct Foo {
+        #[order(40)]
+        pub field_1: u8,
+        #[hax_lib::order(31)]
+        pub field_2: u8,
+        pub field_3: u8,
+        pub field_4: u8,
+    }
+
+    #[hax_lib::attributes]
+    enum Bar {
+        A {
+            a_field_1: u8,
+            a_field_2: u8,
+            #[hax_lib::order(-42)]
+            a_field_3: u8,
+        },
+        B {
+            b_field_1: u8,
+            #[hax_lib::order(42)]
+            b_field_2: u8,
+            b_field_3: u8,
+        },
+    }
+}
