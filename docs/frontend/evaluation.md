@@ -96,8 +96,6 @@ hax-specific bugs.
 
 For the crates that successfully generated ASTs, we compared the time taken by `cargo hax json` against `cargo check`. Because crate size and complexity vary greatly, we **normalized** the times to allow fair comparisons.
 
-> **TODO**: Include a plot showing the correlation between crate size and `cargo hax json` time.
-
 <div class="center-table" markdown>
 
 | Statistic       | Cargo Check | Cargo Hax |
