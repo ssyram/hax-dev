@@ -10,7 +10,7 @@ The hax toolchain is composed of several components (see [high-level architectur
 
 - **Frontend**: hooks into the Rust compiler to export rich Abstract Syntax Trees (ASTs) for specified crates.
 - **Engine** and **Backends**: consume those ASTs to produce code.
-- **hax lib** and models of existing Rust libraries: provide supporting functionality and reference models.
+- **Libraries**: `hax-lib` provides supporting functionality, and reference models for existing Rust libraries (e.g. the [Core library](https://doc.rust-lang.org/stable/core/) of Rust).
 
 In this quantitative evaluation, we focus on the **frontend**: the process of generating JSON-encoded ASTs from Rust code. We aim to assess:
 
