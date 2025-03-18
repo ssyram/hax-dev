@@ -30,7 +30,7 @@ For each Rust crate in our test set, we follow these steps:
 
 1. Clone the crate's source code.
 2. Run `cargo fetch` to download its dependencies.
-3. Execute `cargo hax json` (with appropriate flags), recording any errors and the time taken.
+3. Execute `cargo hax json --use-ids`, recording any errors and the time taken.
 4. Clean Cargo's cache with `cargo clean`.
 5. Run `cargo check`, again recording any errors and time. Since `cargo hax json` is effectively `cargo check` with extra work, this serves as our performance baseline.
 
