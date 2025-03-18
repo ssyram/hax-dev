@@ -162,47 +162,6 @@ pub fn eval_mir_constant<'tcx, S: UnderOwnerState<'tcx>>(
     (evaluated != c).then_some(evaluated)
 }
 
-pub enum TranslateUnevalRes<T> {
-    // TODO: rename
-    GlobalName(ConstantExpr),
-    EvaluatedConstant(T),
-}
-
-pub trait ConstantExt<'tcx>: Sized + std::fmt::Debug {
-    fn eval_constant<S: UnderOwnerState<'tcx>>(&self, s: &S) -> Option<Self>;
-
-    /// Performs a one-step translation of a constant.
-    ///  - When a constant refers to a named top-level constant, we want to use that, thus we translate the constant to a `ConstantExprKind::GlobalName`. This is captured by the variant `TranslateUnevalRes::GlobalName`.
-    ///  - When a constant refers to a anonymous top-level constant, we evaluate it. If the evaluation fails, we report an error: we expect every AnonConst to be reducible. Otherwise, we return the variant `TranslateUnevalRes::EvaluatedConstant`.
-    fn translate_uneval(
-        &self,
-        s: &impl UnderOwnerState<'tcx>,
-        ucv: rustc_middle::ty::UnevaluatedConst<'tcx>,
-        span: rustc_span::Span,
-    ) -> TranslateUnevalRes<Self> {
-        match translate_constant_reference(s, span, ucv) {
-            Some(val) => TranslateUnevalRes::GlobalName(val),
-            None => {
-                match self.eval_constant(s) {
-                    Some(val) => TranslateUnevalRes::EvaluatedConstant(val),
-                    // TODO: This is triggered when compiling using `generic_const_exprs`
-                    None => supposely_unreachable_fatal!(s, "TranslateUneval"; {self, ucv}),
-                }
-            }
-        }
-    }
-}
-
-impl<'tcx> ConstantExt<'tcx> for ty::Const<'tcx> {
-    fn eval_constant<S: UnderOwnerState<'tcx>>(&self, s: &S) -> Option<Self> {
-        eval_ty_constant(s, *self)
-    }
-}
-impl<'tcx> ConstantExt<'tcx> for mir::Const<'tcx> {
-    fn eval_constant<S: UnderOwnerState<'tcx>>(&self, s: &S) -> Option<Self> {
-        eval_mir_constant(s, *self)
-    }
-}
 impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for ty::Const<'tcx> {
     #[tracing::instrument(level = "trace", skip(s))]
     fn sinto(&self, s: &S) -> ConstantExpr {
@@ -218,10 +177,15 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for ty::Const<'tcx> 
                 fatal!(s[span], "ty::ConstKind::Infer node? {:#?}", self)
             }
 
-            ty::ConstKind::Unevaluated(ucv) => match self.translate_uneval(s, ucv, span) {
-                TranslateUnevalRes::EvaluatedConstant(c) => c.sinto(s),
-                TranslateUnevalRes::GlobalName(c) => c,
+            ty::ConstKind::Unevaluated(ucv) => match translate_constant_reference(s, span, ucv) {
+                Some(val) => val,
+                None => match eval_ty_constant(s, *self) {
+                    Some(val) => val.sinto(s),
+                    // TODO: This is triggered when compiling using `generic_const_exprs`
+                    None => supposely_unreachable_fatal!(s, "TranslateUneval"; {self, ucv}),
+                },
             },
+
             ty::ConstKind::Value(ty, valtree) => valtree_to_constant_expr(s, valtree, ty, span),
             ty::ConstKind::Error(_) => fatal!(s[span], "ty::ConstKind::Error"),
             ty::ConstKind::Expr(e) => fatal!(s[span], "ty::ConstKind::Expr {:#?}", e),
