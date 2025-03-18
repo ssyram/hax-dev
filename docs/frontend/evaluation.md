@@ -1,78 +1,98 @@
-# Evaluation of the hax frontend
+# Evaluation of the hax Frontend
 
-(intro)
-We evaluate the hax frontend with first quantitative metrics, and then a qualitative study.
+We begin with a **quantitative** evaluation of the hax frontend, followed by a **qualitative** study.
 
-## Quantitative evaluation
+## Quantitative Evaluation
 
-### What are we testing in the toolchain?
+### Overview
 
-The hax toolchain [is architectured](./evaluation.md#high-level-arch) as several pieces: first, the frontend hooks into the Rust compiler and exports rich abstract syntax trees (ASTs) for given crates. Then, there are the engine and the backend, consuming those ASTs to produce code. On the side, there is the hax library and the models of existing Rust libraries.
+The hax toolchain is composed of several components (see [high-level architecture](./evaluation.md#high-level-arch)):
 
-This quantitative evaluation is about what we call the frontend: the process of producing JSON-encoded ASTs out of Rust code.
+- **Frontend**: hooks into the Rust compiler to export rich Abstract Syntax Trees (ASTs) for specified crates.
+- **Engine** and **Backends**: consume those ASTs to produce code.
+- **hax lib** and models of existing Rust libraries: provide supporting functionality and reference models.
 
-Our goal is to *measure* how well the frontend performs.
- - **Successful extraction:** what is the success rate of producing ASTs?
- - **Performance:** we use hax for verifying real-world crates; we should make sure its performance is not prohibitive.
+In this quantitative evaluation, we focus on the **frontend**: the process of generating JSON-encoded ASTs from Rust code. We aim to assess:
 
-### How are we testing the hax frontend?
+1. **Successful Extraction**: The success rate of producing ASTs.
+2. **Performance**: Ensuring the extraction process remains efficient enough for real-world usage.
 
-For a given selection of Rust crate, our protocol is as follows.
- 1. Clone the source code of the crate.
- 2. Run `cargo fetch` to download the required dependencies for the crate.
- 3. Run `cargo hax json` (with the appropriate flags), and record errors and time.
- 4. Clean Cargo's cache with `cargo clean`.
- 5. Run `cargo check`, record errors and time. `cargo hax json` being a `cargo check` with extra work, this measure serves as reference.
+### Methodology
 
-This protocol is implemented as a tool we develop at Cryspen: `hax-test-crates`.
-This tool does extra work and tests some other parts of the hax toolchain.
+For each Rust crate in our test set, we follow these steps:
 
-### What crate are we testing?
+1. Clone the crate's source code.
+2. Run `cargo fetch` to download its dependencies.
+3. Execute `cargo hax json` (with appropriate flags), recording any errors and the time taken.
+4. Clean Cargo's cache with `cargo clean`.
+5. Run `cargo check`, again recording any errors and time. Since `cargo hax json` is effectively `cargo check` with extra work, this serves as our performance baseline.
 
-To get a representative corpus of crate, we first include the 5k most downlaoded
-crates on crates.io.
+We implemented this protocol in an internal Cryspen tool, which also evaluates other parts of the hax toolchain.
 
-Then, we also include the top 2k crates in the cryptography category of
-crates.io. hax is about verifying critical software, and cryptography certainly
-matters in this area.
+### Crate Selection
 
-> TODO: pin a the precise list of crate
+To ensure we capture a diverse set of crates:
 
-> TODO: actually run the tool on all those crate, currently it's less than that
+- We include the **5,000 most downloaded** crates from crates.io.
+- We also include the **top 1,500 crates** in the **cryptography** category on crates.io, reflecting hax's relevance for verifying critical software like cryptographic libraries.
 
-### How many crates do we extract successfully?
+> **TODO:** the numbers are wrong: I want to get more numbers. Currently we have top 1000k crates only. This is because the tool ran for 10 hours, and handled only 1k crates. The top 1k crates in the corpus `5k top crate \union top 1k5 crypto crates` is actually top 1k crates. (that makes sense)
 
-As presented in the chart below, each crate may fall into one of four
-categoires: (1) hax extracted an AST successfully (2) hax timed-out (3) hax
-failed or (4) both `cargo check` and `cargo hax` failed.
+### Success Rate
 
-> TODO: pie chart with those 4 cats.
-> TODO: look into timeouts
-> TODO: look into failures
+Each crate falls into one of three categories:
 
-**Failures.** On XX crates, hax failed on NN crates, for the following reasons:
- - (todo) rustc overflow
- - (todo) bug issue #XX
+1. **Successful**: hax produced a valid AST.
+2. **Failed**: hax could not produce an AST (despite `cargo check` succeeding).
+3. **Both Failed**: Both `cargo check` and `cargo hax` failed.
 
-**Timeouts.** Also, YY crates timeout.
+```mermaid
+pie showData
+    "Regular Cargo Failure" : 41
+    "Frontend Failure" : 24
+    "Success" : 935
+```
 
-All the other crates were successfully extracted. For those, we focus on performance and time.
+Out of 1000 crates, our tool failed to run `cargo check` on 41 of them due to
+setup issues. These problems typically involve missing system packages that
+Cargo cannot automatically install or unusual Cargo configurations that require
+manual intervention. We therefore exclude these 41 crates from further analysis.
 
-### How performant is the frontend?
+Of the remaining 959 crates, the hax frontend successfully processed a **vast
+majority (97.5%)**. The remaining failures fall into four distinct categories,
+as illustrated in the pie chart below.
 
-To compare the numbers and make sense of them, we had to do some normalization.
-Indeed, recorded times vary significantly based on the size and complexity of
-the crate. A "big" crate naturally takes longer to build than a "small" crate,
-making direct comparisons misleading. We therefore normalized our measurements
-to allow a fair evaluation of both `cargo check` and `cargo hax` across all
-crates in our data set.
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'pie1': '#c0392b', 'pie2': '#3498db', 'pie3': '#2980b9', 'pie4': '#e74c3c'}}}%%
+pie showData title Frontend failures
+    "Unsupported Rust toolchain" : 4
+    "Rust setup issue" : 6
+    "Binder panic" : 10
+    "Stack overflow in Rustc" : 4
+```
 
-> TODO: add plot for correlation between size and `cargo hax` times.
+The errors marked in **blue** on the chart indicate situations where the Rust
+toolchain used by the tested crate or its dependencies is incompatible with the
+specific version hax is pinned to, or where the crate and hax are sensitive to
+toolchain variations. Rust edition 2024 was updated very recently, which
+explains roughly half of these issues.
 
+The errors shown in **red**, however, are directly related to hax. The
+binder-related panics are a [known
+bug](https://github.com/cryspen/hax/issues/1046). Additionally, the stack
+overflow errors occur due to specific code paths in the Rust compiler being
+incorrectly triggered by hax. Ultimately, only **1.6%** of crates encounter such
+hax-specific bugs.
 
-We break down the results into two main categories: **crypto crates** and **general crates**.
+### Performance Analysis
 
-#### Crypto Crates
+For the crates that successfully generated ASTs, we compared the time taken by `cargo hax json` against `cargo check`. Because crate size and complexity vary greatly, we **normalized** the times to allow fair comparisons.
+
+> **TODO**: Include a plot showing the correlation between crate size and `cargo hax json` time.
+
+We break down the results into **cryptography crates** and **general crates**:
+
+#### Cryptography Crates
 
 | Statistic       | Cargo Check | Cargo Hax |
 |-----------------|------------:|----------:|
@@ -93,14 +113,15 @@ Observations:
 | **Mean**        |       0.215 |     0.771 |
 | **10th Decile** |       0.425 |     0.953 |
 
-Overall, it seems that the general crates are a little friendlier to hax, only by a little offset. 
+- The overall trend is similar, though results suggest a slightly smaller overhead in these general crates compared to the cryptography set.
 
 ## Conclusion
 
-The hax frontend is capable of extracting successfuly a great portion of Rust crates out there.
+Our quantitative evaluation shows that the hax frontend successfully extracts ASTs for a large portion of the Rust ecosystem. Nevertheless, certain crates reveal performance bottlenecks or outright failures that require further investigation and optimization.
 
-However, there are edge cases that triggers prohibitive performance issue or plain failures.
+These results also highlight a few **limitations** of this initial study:
 
-Also, this quantitative evaluation have its limits:
- - only the frontend is evaluated, we need to evaluate the various parts of the engine and backends
- - the contents and well-formedness of the JSON produced is out of scope of this evaluation, whence the need for a quantitative evaluation as well. 
+- We only evaluated the **frontend** process. Other stages of the toolchain, such as the engine and backend, require separate assessments.
+- We did not assess the **correctness or completeness** of the generated JSON, highlighting the need for a qualitative analysis to verify that the extracted ASTs meet the required specifications.
+
+Overall, the hax frontend demonstrates capabilities for large-scale Rust code verification, but continued refinement is needed to handle edge cases and improve performance.
