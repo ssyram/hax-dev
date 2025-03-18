@@ -98,11 +98,15 @@ For the crates that successfully generated ASTs, we compared the time taken by `
 
 > **TODO**: Include a plot showing the correlation between crate size and `cargo hax json` time.
 
+<div class="center-table" markdown>
+
 | Statistic       | Cargo Check | Cargo Hax |
 |-----------------|------------:|----------:|
 | **Median**      |       0.147 |     0.780 |
 | **Mean**        |       0.215 |     0.771 |
 | **10th Decile** |       0.425 |     0.953 |
+
+</div>
 
 <!-- We break down the results into **cryptography crates** and **general crates**: -->
 
