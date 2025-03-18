@@ -1,6 +1,11 @@
 # Evaluation of the hax Frontend
 
-We begin with a **quantitative** evaluation of the hax frontend, followed by a **qualitative** study.
+This section provides an evaluation of the hax frontend, consisting of two parts:
+
+- A **quantitative evaluation**, which measures how effectively the frontend processes Rust code.
+- A **qualitative analysis**, which explores the frontend’s capabilities in real-world scenarios.
+
+Together, these evaluations document the current strengths and limitations of the hax frontend.
 
 ## Quantitative Evaluation
 
