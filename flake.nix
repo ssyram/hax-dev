@@ -11,7 +11,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     fstar = {
-      url = "github:FStarLang/FStar/v2024.01.13";
+      url = "github:FStarLang/FStar/v2025.02.17";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-utils.follows = "flake-utils";
