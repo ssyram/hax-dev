@@ -98,38 +98,32 @@ For the crates that successfully generated ASTs, we compared the time taken by `
 
 > **TODO**: Include a plot showing the correlation between crate size and `cargo hax json` time.
 
-We break down the results into **cryptography crates** and **general crates**:
-
-#### Cryptography Crates
-
-| Statistic       | Cargo Check | Cargo Hax |
-|-----------------|------------:|----------:|
-| **Median**      |       0.148 |     0.796 |
-| **Mean**        |       0.199 |     0.777 |
-| **10th Decile** |       0.411 |     0.948 |
-
-Observations:
-
-- For *median* and *mean* values, `cargo hax` is between 4 and 5.3 times slower than a regular `cargo check`.
-- In contrast, at the **10th decile**, `cargo hax` is only about 2 times slower than `cargo check`, which seems to indiquate that it perform better in bigger settings.
-
-#### General Crates
-
 | Statistic       | Cargo Check | Cargo Hax |
 |-----------------|------------:|----------:|
 | **Median**      |       0.147 |     0.780 |
 | **Mean**        |       0.215 |     0.771 |
 | **10th Decile** |       0.425 |     0.953 |
 
-- The overall trend is similar, though results suggest a slightly smaller overhead in these general crates compared to the cryptography set.
+<!-- We break down the results into **cryptography crates** and **general crates**: -->
+
+<!-- #### Cryptography Crates
+
+| Statistic       | Cargo Check | Cargo Hax |
+|-----------------|------------:|----------:|
+| **Median**      |       0.148 |     0.796 |
+| **Mean**        |       0.199 |     0.777 |
+| **10th Decile** |       0.411 |     0.948 | -->
+
+- On average, `cargo hax` is about 4–5 times slower than `cargo check`.
+- At the **10th decile**, the slowdown is only about 2×, indicating better scaling for larger crates.
 
 ## Conclusion
 
-Our quantitative evaluation shows that the hax frontend successfully extracts ASTs for a large portion of the Rust ecosystem. Nevertheless, certain crates reveal performance bottlenecks or outright failures that require further investigation and optimization.
+Our quantitative evaluation shows that the hax frontend successfully extracts ASTs for a large portion of the Rust ecosystem. Nevertheless, a small portion of crates reveal performance bottlenecks or outright failures that require further investigation and optimization.
 
 These results also highlight a few **limitations** of this initial study:
 
-- We only evaluated the **frontend** process. Other stages of the toolchain, such as the engine and backend, require separate assessments.
+- We only evaluated the **frontend** process. Other stages of the toolchain, such as the engine, backends or libraries, require separate assessments.
 - We did not assess the **correctness or completeness** of the generated JSON, highlighting the need for a qualitative analysis to verify that the extracted ASTs meet the required specifications.
 
 Overall, the hax frontend demonstrates capabilities for large-scale Rust code verification, but continued refinement is needed to handle edge cases and improve performance.
