@@ -4,6 +4,8 @@ We begin with a **quantitative** evaluation of the hax frontend, followed by a *
 
 ## Quantitative Evaluation
 
+The quantitative evaluation aims to estimate how much Rust code the frontend can handle. It does **not** assess the correctness of the frontend's output.
+
 ### Overview
 
 The hax toolchain is composed of several components (see [high-level architecture](./evaluation.md#high-level-arch)):
