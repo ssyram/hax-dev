@@ -67,4 +67,6 @@ To manage this effectively, we introduced a hierarchical view for identifiers. I
 
 This comprehensive redesign of identifier representation and handling has resolved most previously identified naming issues and significantly enhanced the expressiveness and robustness of backend identifier rendering in hax.
 
+Check out the pull request [#1199](https://github.com/cryspen/hax/pull/1199) on the GitHub repository of hax for more details!
+
 We are confident that this enhanced representation is sufficiently robust and flexible to accommodate future developments and evolving project requirements.
