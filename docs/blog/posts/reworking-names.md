@@ -39,11 +39,32 @@ The frontend has been enhanced to explicitly indicate the kind of each identifie
 
 ### Simplified Identifier Views
 
-Rust's namespace structure is highly flexible—allowing nesting of types within functions, functions within constants, and more. This complexity can reflect user-driven nesting (such as functions within functions) or mandatory relational nesting (fields within structs or associated items within implementations).
+Rust's namespace structure is highly flexible, allowing various forms of nesting, such as types within functions, functions within constants, and more.
 
-To handle this effectively, we introduced a hierarchical view for identifiers. Complex Rust identifier paths are projected into simpler, structured relational representations. This hierarchical view simplifies backend processing, reduces namespace conflicts, and better aligns with backend language constraints.
+Broadly, there are two kinds of nesting in Rust. Consider the following snippet:
 
-## Results
+```rust
+mod a {
+    impl MyTrait for MyType {
+        fn assoc_fn() {
+            struct LocalStruct {
+                field: u8,
+            };
+        }
+   }
+}
+```
+
+In this example, the user has intentionally placed `LocalStruct` within the method `assoc_fn`, which itself resides inside the module `a`. This is an instance of **user-driven nesting**, where the developer freely organizes elements within the code for clarity, convenience, or structural preference.
+
+At the same time, we observe another form of nesting: `field` is contained within `LocalStruct`, and `assoc_fn` is enclosed within the `impl` block implementing `MyTrait` for `MyType`. This represents **hierarchical nesting**, which is dictated by the Rust language itself. Unlike user-driven nesting, hierarchical relationships are inherent to Rust's type system: a field **must** belong to a struct or an enum variant, and a method **must** exist within an impl block.
+
+Distinguishing between these two types of nesting is crucial when rendering names. Hierarchical nesting often requires special handling in backends due to its structural constraints, whereas user-driven nesting primarily serves readability and organization.
+
+To manage this effectively, we introduced a hierarchical view for identifiers. Instead of handling Rust's deeply nested identifier paths as-is, we transform them into structured, relational representations. This approach simplifies backend processing, minimizes namespace conflicts, and ensures better compatibility with backend language constraints.
+
+## Conclusion: Say Goodbye to Naming Issues (Almost)!
 
 This comprehensive redesign of identifier representation and handling has resolved most previously identified naming issues and significantly enhanced the expressiveness and robustness of backend identifier rendering in hax.
 
+We are confident that this enhanced representation is sufficiently robust and flexible to accommodate future developments and evolving project requirements.
