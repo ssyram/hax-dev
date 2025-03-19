@@ -35,7 +35,6 @@ jobs:
       - name: Create a Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GH_TOKEN }}
           commit-message: "Merge latest changes from hax"
           branch: sync-hax
           title: "Sync updates from hax"
