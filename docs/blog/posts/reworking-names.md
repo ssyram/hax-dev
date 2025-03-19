@@ -9,7 +9,7 @@ date: 2025-03-19
 
 In this technical overview, we present significant enhancements to the internal architecture used by the hax engine for representing and manipulating global identifiers. These updates address fundamental design limitations, greatly improving maintainability, clarity, and backend code generation precision.
 
-## Motivation for the Improvements
+## Global Identifiers from the Rust Compiler
 
 Initially, hax assumed that all identifiers originated exclusively from Rust. While valid at the outset, this assumption quickly became inadequate. As hax evolved, new requirements emerged, prompting the engine to generate identifiers internally:
 
