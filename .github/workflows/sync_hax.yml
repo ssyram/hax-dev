@@ -36,6 +36,7 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           commit-message: "Merge latest changes from hax"
+          base: main
           branch: sync-hax
           title: "Sync updates from hax"
           body: "This PR merges the latest updates from the public repo [`cryspen/hax`](https://github.com/cryspen/hax) into the private repo [`cryspen/hax-evit`](https://github.com/cryspen/hax-evit)."
