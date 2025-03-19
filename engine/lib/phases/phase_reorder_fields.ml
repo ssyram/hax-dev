@@ -1,8 +1,4 @@
-(* This phase rewrites: `if c {return a}; b` as `if c {return a; b} else {b}`
-   and does the equivalent transformation for pattern matchings.
-   It rewrites the body of loops considering `break` and `continue`
-   as `return` to place them in return position. If a loop contains
-   a `return` it places it is rewritten inside a pattern matching over the result. *)
+(** This phase re-order fields in structs according to the attribute [AttrPayload::Order] (if any). *)
 
 open! Prelude
 
