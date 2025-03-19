@@ -1,11 +1,11 @@
 ---
 authors:
   - lucas
-title: "Enhanced Representation and Management of Global Identifiers in hax"
+title: "Redesigning Global Identifiers in hax"
 date: 2025-03-19
 ---
 
-# Enhanced Representation and Management of Global Identifiers in hax
+# Redesigning Global Identifiers in hax
 
 In this technical overview, we present significant enhancements to the internal architecture used by the hax engine for representing and manipulating global identifiers. These updates address fundamental design limitations, greatly improving maintainability, clarity, and backend code generation precision.
 
