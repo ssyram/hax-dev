@@ -927,7 +927,7 @@ end) : EXPR = struct
                   ("expected a pattern, got " ^ [%show: expr'] e)
           in
           (c_constant_expr value |> pat_of_expr).p
-      | InlineConstant { subpattern; _ } -> (c_pat subpattern).p
+      | ExpandedConstant { subpattern; _ } -> (c_pat subpattern).p
       | Array _ -> unimplemented ~issue_id:804 [ pat.span ] "Pat:Array"
       | Or { pats } -> POr { subpats = List.map ~f:c_pat pats }
       | Slice _ -> unimplemented ~issue_id:804 [ pat.span ] "pat Slice"

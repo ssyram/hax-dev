@@ -730,7 +730,7 @@ where
     let def_id = s.owner_id();
     let real_sig = tcx.fn_sig(def_id).instantiate_identity();
     let item = tcx.associated_item(def_id);
-    if !matches!(item.container, ty::AssocItemContainer::ImplContainer) {
+    if !matches!(item.container, ty::AssocItemContainer::Impl) {
         return real_sig;
     }
     let Some(decl_method_id) = item.trait_item_def_id else {
