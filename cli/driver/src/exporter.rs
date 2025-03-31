@@ -3,7 +3,7 @@ use hax_frontend_exporter::SInto;
 use hax_types::cli_options::{Backend, PathOrDash, ENV_VAR_OPTIONS_FRONTEND};
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface;
-use rustc_interface::{interface::Compiler, Queries};
+use rustc_interface::interface::Compiler;
 use rustc_middle::middle::region::Scope;
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::{
@@ -76,7 +76,7 @@ fn precompute_local_thir_bodies(
     }
 
     use itertools::Itertools;
-    tcx.hir().body_owners()
+    tcx.hir_body_owners()
         .filter(|ldid| {
             match tcx.def_kind(ldid.to_def_id()) {
                 InlineConst | AnonConst => {
@@ -93,10 +93,20 @@ fn precompute_local_thir_bodies(
             }
         })
         .sorted_by_key(|ldid| const_level_of(tcx, *ldid))
-        .filter(move |ldid| tcx.hir().maybe_body_owned_by(*ldid).is_some())
+        .filter(move |ldid| tcx.hir_maybe_body_owned_by(*ldid).is_some())
         .map(move |ldid| {
             tracing::debug!("⏳ Type-checking THIR body for {:#?}", ldid);
-            let span = tcx.hir().span(tcx.local_def_id_to_hir_id(ldid));
+            let hir_id = tcx.local_def_id_to_hir_id(ldid);
+            // The `type_of` anon constants isn't available directly, it needs to be fed by some
+            // other query. This hack ensures this happens, otherwise `thir_body` returns an error.
+            // See https://rust-lang.zulipchat.com/#narrow/channel/182449-t-compiler.2Fhelp/topic/Change.20in.20THIR.20of.20anonymous.20constants.3F/near/509764021 .
+            for (parent_id, parent) in tcx.hir_parent_iter(hir_id) {
+                if let rustc_hir::Node::Item(..) = parent {
+                    let _ = tcx.check_well_formed(parent_id.owner.def_id);
+                    break;
+                }
+            }
+            let span = tcx.hir().span(hir_id);
             let (thir, expr) = match tcx.thir_body(ldid) {
                 Ok(x) => x,
                 Err(e) => {
@@ -145,9 +155,8 @@ fn convert_thir<'tcx, Body: hax_frontend_exporter::IsBody>(
     }
 
     let result = tcx
-        .hir()
-        .items()
-        .map(|id| tcx.hir().item(id).sinto(&state))
+        .hir_free_items()
+        .map(|id| tcx.hir_item(id).sinto(&state))
         .collect();
     let impl_infos = hax_frontend_exporter::impl_def_ids_to_impled_types_and_bounds(&state)
         .into_iter()
@@ -184,102 +193,87 @@ impl From<ExtractionCallbacks> for hax_frontend_exporter_options::Options {
 }
 
 impl Callbacks for ExtractionCallbacks {
-    fn after_crate_root_parsing<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
-        let parse_ast = queries.parse().unwrap();
-        let parse_ast = parse_ast.borrow();
-        Compilation::Continue
-    }
-    fn after_expansion<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
+    fn after_expansion<'tcx>(&mut self, compiler: &Compiler, tcx: TyCtxt<'tcx>) -> Compilation {
         use std::ops::{Deref, DerefMut};
 
-        queries.global_ctxt().unwrap().enter(|tcx| {
-            use hax_frontend_exporter::ThirBody;
-            use hax_types::cli_options::Command;
-            use rustc_session::config::CrateType;
-            use serde::{Deserialize, Serialize};
-            use std::fs::File;
-            use std::io::BufWriter;
+        use hax_frontend_exporter::ThirBody;
+        use hax_types::cli_options::Command;
+        use rustc_session::config::CrateType;
+        use serde::{Deserialize, Serialize};
+        use std::fs::File;
+        use std::io::BufWriter;
 
-            use std::path::PathBuf;
+        use std::path::PathBuf;
 
-            let opts = &compiler.sess.opts;
-            let externs: Vec<_> = opts
-                .externs
-                .iter()
-                .flat_map(|(_, ext)| match &ext.location {
-                    rustc_session::config::ExternLocation::ExactPaths(set) => set
+        let opts = &compiler.sess.opts;
+        let externs: Vec<_> = opts
+            .externs
+            .iter()
+            .flat_map(|(_, ext)| match &ext.location {
+                rustc_session::config::ExternLocation::ExactPaths(set) => set
+                    .iter()
+                    .map(|cp| cp.canonicalized())
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+                _ => vec![].into_iter(),
+            })
+            .map(|path| path.with_extension("haxmeta"))
+            .collect();
+
+        let cg_metadata = opts.cg.metadata[0].clone();
+        let crate_name = opts.crate_name.clone().unwrap();
+
+        let output_dir = compiler.sess.io.output_dir.clone().unwrap();
+        let haxmeta_path = output_dir.join(format!("{crate_name}-{cg_metadata}.haxmeta",));
+
+        let mut file = BufWriter::new(File::create(&haxmeta_path).unwrap());
+
+        use hax_types::driver_api::{with_kind_type, HaxMeta};
+        with_kind_type!(
+            self.body_types.clone(),
+            <Body>|| {
+                let (spans, def_ids, impl_infos, items, cache_map) =
+                    convert_thir(&self.clone().into(), tcx);
+                let files: HashSet<PathBuf> = HashSet::from_iter(
+                    items
                         .iter()
-                        .map(|cp| cp.canonicalized())
-                        .collect::<Vec<_>>()
-                        .into_iter(),
-                    _ => vec![].into_iter(),
-                })
-                .map(|path| path.with_extension("haxmeta"))
-                .collect();
+                        .flat_map(|item| item.span.filename.to_path().map(|path| path.to_path_buf()))
+                );
+                let haxmeta: HaxMeta<Body> = HaxMeta {
+                    crate_name,
+                    cg_metadata,
+                    externs,
+                    impl_infos,
+                    items,
+                    comments: files.into_iter()
+                        .flat_map(|path|hax_frontend_exporter::comments::comments_of_file(path).ok())
+                        .flatten()
+                        .collect(),
+                    def_ids,
+                    hax_version: hax_types::HAX_VERSION.into(),
+                };
+                haxmeta.write(&mut file, cache_map);
+            }
+        );
 
-            let cg_metadata = opts.cg.metadata[0].clone();
-            let crate_name = opts.crate_name.clone().unwrap();
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let manifest_dir = std::path::Path::new(&manifest_dir);
 
-            let output_dir = compiler.sess.io.output_dir.clone().unwrap();
-            let haxmeta_path = output_dir.join(format!("{crate_name}-{cg_metadata}.haxmeta",));
+        let data = hax_types::driver_api::EmitHaxMetaMessage {
+            manifest_dir: manifest_dir.to_path_buf(),
+            working_dir: opts
+                .working_dir
+                .to_path(rustc_span::FileNameDisplayPreference::Local)
+                .to_path_buf(),
+            path: haxmeta_path,
+        };
+        eprintln!(
+            "{}{}",
+            hax_types::driver_api::HAX_DRIVER_STDERR_PREFIX,
+            &serde_json::to_string(&hax_types::driver_api::HaxDriverMessage::EmitHaxMeta(data))
+                .unwrap()
+        );
 
-            let mut file = BufWriter::new(File::create(&haxmeta_path).unwrap());
-
-            use hax_types::driver_api::{with_kind_type, HaxMeta};
-            with_kind_type!(
-                self.body_types.clone(),
-                <Body>|| {
-                    let (spans, def_ids, impl_infos, items, cache_map) =
-                        convert_thir(&self.clone().into(), tcx);
-                    let files: HashSet<PathBuf> = HashSet::from_iter(
-                        items
-                            .iter()
-                            .flat_map(|item| item.span.filename.to_path().map(|path| path.to_path_buf()))
-                    );
-                    let haxmeta: HaxMeta<Body> = HaxMeta {
-                        crate_name,
-                        cg_metadata,
-                        externs,
-                        impl_infos,
-                        items,
-                        comments: files.into_iter()
-                            .flat_map(|path|hax_frontend_exporter::comments::comments_of_file(path).ok())
-                            .flatten()
-                            .collect(),
-                        def_ids,
-                        hax_version: hax_types::HAX_VERSION.into(),
-                    };
-                    haxmeta.write(&mut file, cache_map);
-                }
-            );
-
-            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-            let manifest_dir = std::path::Path::new(&manifest_dir);
-
-            let data = hax_types::driver_api::EmitHaxMetaMessage {
-                manifest_dir: manifest_dir.to_path_buf(),
-                working_dir: opts
-                    .working_dir
-                    .to_path(rustc_span::FileNameDisplayPreference::Local)
-                    .to_path_buf(),
-                path: haxmeta_path,
-            };
-            eprintln!(
-                "{}{}",
-                hax_types::driver_api::HAX_DRIVER_STDERR_PREFIX,
-                &serde_json::to_string(&hax_types::driver_api::HaxDriverMessage::EmitHaxMeta(data))
-                    .unwrap()
-            );
-
-            Compilation::Stop
-        })
+        Compilation::Stop
     }
 }
