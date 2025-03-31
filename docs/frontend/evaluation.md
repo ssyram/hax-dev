@@ -94,7 +94,7 @@ hax-specific bugs.
 
 ### Performance Analysis
 
-For the crates that successfully generated ASTs, we compared the time taken by `cargo hax json` against `cargo check`. Because crate size and complexity vary greatly, we **normalized** the times to allow fair comparisons.
+For the crates that successfully generated ASTs, we compared the time taken by `cargo hax json` against `cargo check`. Because crate size and complexity vary greatly, we normalized[^1] the times to allow fair comparisons.
 
 <div class="center-table" markdown>
 
@@ -129,3 +129,5 @@ These results also highlight a few **limitations** of this initial study:
 - We did not assess the **correctness or completeness** of the generated JSON, highlighting the need for a qualitative analysis to verify that the extracted ASTs meet the required specifications.
 
 Overall, the hax frontend demonstrates capabilities for large-scale Rust code verification, but continued refinement is needed to handle edge cases and improve performance.
+
+[^1]: For a given crate, we normalize the times by dividing them by the total time.
