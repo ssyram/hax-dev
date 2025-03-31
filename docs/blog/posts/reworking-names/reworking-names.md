@@ -2,7 +2,7 @@
 authors:
   - lucas
 title: "Redesigning Global Identifiers in hax"
-date: 2025-03-19
+date: 2025-04-01
 ---
 
 # Redesigning Global Identifiers in hax
