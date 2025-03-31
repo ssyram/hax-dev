@@ -56,8 +56,8 @@ Each crate falls into one of three categories:
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'pie1': '#27ae60', 'pie2': '#f1c40f', 'pie3': '#e74c3c'}}}%%
 pie showData
-    "Regular Cargo Failure" : 41
-    "Frontend Failure" : 24
+    "`cargo check` failure" : 41
+    "`cargo hax` failure" : 24
     "Success" : 935
 ```
 
