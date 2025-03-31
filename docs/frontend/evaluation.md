@@ -13,7 +13,7 @@ The quantitative evaluation aims to estimate how much Rust code the frontend can
 
 ### Overview
 
-The hax toolchain is composed of several components (see [high-level architecture](./evaluation.md#high-level-arch)):
+The hax toolchain is composed of several components (see [high-level architecture](./index.md#high-level-arch)):
 
 - **Frontend**: hooks into the Rust compiler to export rich Abstract Syntax Trees (ASTs) for specified crates.
 - **Engine** and **Backends**: consume those ASTs to produce code.
