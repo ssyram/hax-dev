@@ -7,10 +7,10 @@ on:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
+    runs-on: linux
     if: github.repository == 'cryspen/hax-evit'
     steps:
       - name: Checkout hax-evit
