@@ -200,8 +200,6 @@
             pkgs.toml2json
             rustfmt
             utils
-
-            pkgs.rustup
           ];
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           DYLD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.libz rustc ];

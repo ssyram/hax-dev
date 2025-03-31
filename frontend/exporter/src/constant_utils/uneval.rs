@@ -105,10 +105,10 @@ pub fn translate_constant_reference<'tcx>(
     if is_anon_const(ucv.def, tcx) {
         return None;
     }
-    let param_env = s.param_env();
+    let typing_env = s.typing_env();
     let ty = s.base().tcx.type_of(ucv.def).instantiate(tcx, ucv.args);
     let ty = tcx
-        .try_normalize_erasing_regions(param_env, ty)
+        .try_normalize_erasing_regions(typing_env, ty)
         .unwrap_or(ty);
     let kind = if let Some(assoc) = s.base().tcx.opt_associated_item(ucv.def) {
         if assoc.trait_item_def_id.is_some() {
@@ -143,10 +143,8 @@ pub fn eval_ty_constant<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     c: ty::Const<'tcx>,
 ) -> Option<ty::Const<'tcx>> {
-    let (ty, evaluated) = c
-        .eval_valtree(s.base().tcx, s.param_env(), rustc_span::DUMMY_SP)
-        .ok()?;
-    let evaluated = ty::Const::new(s.base().tcx, ty::ConstKind::Value(ty, evaluated));
+    let tcx = s.base().tcx;
+    let evaluated = tcx.try_normalize_erasing_regions(s.typing_env(), c).ok()?;
     (evaluated != c).then_some(evaluated)
 }
 
@@ -156,7 +154,7 @@ pub fn eval_mir_constant<'tcx, S: UnderOwnerState<'tcx>>(
     c: mir::Const<'tcx>,
 ) -> Option<mir::Const<'tcx>> {
     let evaluated = c
-        .eval(s.base().tcx, s.param_env(), rustc_span::DUMMY_SP)
+        .eval(s.base().tcx, s.typing_env(), rustc_span::DUMMY_SP)
         .ok()?;
     let evaluated = mir::Const::Val(evaluated, c.ty());
     (evaluated != c).then_some(evaluated)
@@ -391,9 +389,9 @@ pub fn const_value_to_constant_expr<'tcx, S: UnderOwnerState<'tcx>>(
     span: rustc_span::Span,
 ) -> InterpResult<'tcx, ConstantExpr> {
     let tcx = s.base().tcx;
-    let param_env = ty::ParamEnv::reveal_all();
+    let typing_env = s.typing_env();
     let (ecx, op) =
-        rustc_const_eval::const_eval::mk_eval_cx_for_const_val(tcx.at(span), param_env, val, ty)
+        rustc_const_eval::const_eval::mk_eval_cx_for_const_val(tcx.at(span), typing_env, val, ty)
             .unwrap();
     op_to_const(s, span, &ecx, op)
 }

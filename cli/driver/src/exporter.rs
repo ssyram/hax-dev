@@ -36,7 +36,10 @@ fn dummy_thir_body(
             neg: false,
         },
         ty,
-        temp_lifetime: None,
+        temp_lifetime: TempLifetime {
+            temp_lifetime: None,
+            backwards_incompatible: None,
+        },
         span,
     });
     (Rc::new(thir), expr)
@@ -65,7 +68,7 @@ fn precompute_local_thir_bodies(
             Const | ConstParam | AssocConst | AnonConst | InlineConst
         ) {
             ConstLevel::Const
-        } else if tcx.is_const_fn_raw(ldid.to_def_id()) {
+        } else if tcx.is_const_fn(ldid.to_def_id()) {
             ConstLevel::ConstFn
         } else {
             ConstLevel::NotConst

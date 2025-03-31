@@ -772,17 +772,6 @@ impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, ForeignItem<Body>> for h
     }
 }
 
-/// Reflects [`hir::OpaqueTy`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: UnderOwnerState<'tcx> >, from: hir::OpaqueTy<'tcx>, state: S as tcx)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub struct OpaqueTy<Body: IsBody> {
-    pub generics: Generics<Body>,
-    pub bounds: GenericBounds,
-    pub origin: OpaqueTyOrigin,
-}
-
 /// Reflects [`hir::GenericBounds`]
 type GenericBounds = Vec<Clause>;
 
@@ -837,24 +826,6 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, GenericBounds> for hir::GenericBou
     }
 }
 
-/// Reflects [`hir::OpaqueTyOrigin`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: hir::OpaqueTyOrigin, state: S as tcx)]
-#[derive(Clone, Debug, JsonSchema)]
-#[derive_group(Serializers)]
-pub enum OpaqueTyOrigin {
-    FnReturn {
-        parent: GlobalIdent,
-    },
-    AsyncFn {
-        parent: GlobalIdent,
-    },
-    TyAlias {
-        parent: GlobalIdent,
-        in_assoc_ty: bool,
-    },
-}
-
 /// Reflects [`rustc_ast::tokenstream::TokenStream`] as a plain
 /// string. If you need to reshape that into Rust tokens or construct,
 /// please use, e.g., `syn`.
@@ -876,8 +847,10 @@ pub enum Delimiter {
     Parenthesis,
     Brace,
     Bracket,
-    Invisible,
+    Invisible(InvisibleOrigin),
 }
+
+sinto_todo!(rustc_ast::token, InvisibleOrigin);
 
 /// Reflects [`rustc_ast::ast::DelimArgs`]
 #[derive(AdtInto)]

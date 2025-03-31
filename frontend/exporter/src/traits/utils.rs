@@ -160,12 +160,13 @@ where
 }
 
 // Lifetimes are irrelevant when resolving instances.
-pub fn erase_and_norm<'tcx, T>(tcx: TyCtxt<'tcx>, param_env: ParamEnv<'tcx>, x: T) -> T
+pub fn erase_and_norm<'tcx, T>(tcx: TyCtxt<'tcx>, typing_env: TypingEnv<'tcx>, x: T) -> T
 where
     T: TypeFoldable<TyCtxt<'tcx>> + Copy,
 {
     erase_all_regions(
         tcx,
-        tcx.try_normalize_erasing_regions(param_env, x).unwrap_or(x),
+        tcx.try_normalize_erasing_regions(typing_env, x)
+            .unwrap_or(x),
     )
 }
