@@ -75,7 +75,6 @@ markdown_extensions:
 plugins:
   - glightbox
   - search
-  - offline
   - blog
   - mkdocs-nav-weight
   - tags:

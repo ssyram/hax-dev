@@ -63,7 +63,12 @@ In this example, the user has intentionally placed `LocalStruct` within the meth
 
 At the same time, we observe another form of nesting: `field` is contained within `LocalStruct`, and `assoc_fn` is enclosed within the `impl` block implementing `MyTrait` for `MyType`. This represents **hierarchical nesting**, which is dictated by the Rust language itself. Unlike user-driven nesting, hierarchical relationships are inherent to Rust's type system: a field **must** belong to a struct or an enum variant, and a method **must** exist within an impl block.
 
+The following diagram shows how these hierarchical relationships are structured.
+
+![](name-example.excalidraw.png)
+
 Distinguishing between these two types of nesting is crucial when rendering names. Hierarchical nesting often requires special handling in backends due to its structural constraints, whereas user-driven nesting primarily serves readability and organization.
+
 
 To manage this effectively, we introduced a hierarchical view for identifiers. Instead of handling Rust's deeply nested identifier paths as-is, we transform them into structured, relational representations. This approach simplifies backend processing, minimizes namespace conflicts, and ensures better compatibility with backend language constraints.
 
