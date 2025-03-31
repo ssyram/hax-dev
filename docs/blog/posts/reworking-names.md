@@ -13,7 +13,7 @@ In Rust, global identifier serves to uniquely locate uniquely an item: for insta
 
 ## Global Identifiers from the Rust Compiler
 
-Initially, hax assumed that all identifiers originated exclusively from Rust. While valid at the outset, this assumption quickly became inadequate. As hax evolved, new requirements emerged, prompting the engine to generate identifiers internally:
+Initially, hax assumed that all identifiers originated exclusively from Rust. While this assumption held in the early stages, it was eventually challenged as the system grew. As hax evolved, new requirements emerged, prompting the engine to generate identifiers internally:
 
 - **Trait pre- and post-conditions:** in hax, these are explicitly represented as concrete methods within typeclasses. Conversely, in Rust, these conditions exist only as anonymous standalone functions.
 - **Explicit enum cast operations:** enum casts are primitive operations in Rust, but hax treats these casts as specialized operations, assigning distinct identifiers to them.
