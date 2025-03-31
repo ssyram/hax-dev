@@ -13,13 +13,14 @@ In Rust, global identifier serves to uniquely locate uniquely an item: for insta
 
 ## Global Identifiers from the Rust Compiler
 
-Initially, hax assumed that all identifiers originated exclusively from Rust. While this assumption held in the early stages, it was eventually challenged as the system grew. As hax evolved, new requirements emerged, prompting the engine to generate identifiers internally:
+Initially, hax assumed that all identifiers originated exclusively from Rust. While this assumption held in the early stages, it was eventually challenged as the system grew[^1]. As hax evolved, new requirements emerged, prompting the engine to generate identifiers internally:
 
 - **Trait pre- and post-conditions:** in hax, these are explicitly represented as concrete methods within typeclasses. Conversely, in Rust, these conditions exist only as anonymous standalone functions.
 - **Explicit enum cast operations:** enum casts are primitive operations in Rust, but hax treats these casts as specialized operations, assigning distinct identifiers to them.
-- **Cross-module mutually recursive item bundles:** these bundles[^1] are internally introduced by hax, necessitating the generation of unique identifiers to prevent naming conflicts.
+- **Cross-module mutually recursive item bundles:** these bundles[^2] are internally introduced by hax, necessitating the generation of unique identifiers to prevent naming conflicts.
 
-[^1]: Rust supports cross-module mutual recursion without enforcing declaration order, an uncommon feature among programming languages. In contrast, most of our backends require some form of forward declaration. To bridge this gap and accommodate Rust’s permissive namespacing, we group related items into bundles and reorder them to eliminate cross-module recursion.
+[^1]: See [PR #935](https://github.com/cryspen/hax/pull/935), [PR #211](https://github.com/cryspen/hax/pull/211) or [PR #571](https://github.com/cryspen/hax/pull/571) for examples of such new features.
+[^2]: Rust supports cross-module mutual recursion without enforcing declaration order, an uncommon feature among programming languages. In contrast, most of our backends require some form of forward declaration. To bridge this gap and accommodate Rust’s permissive namespacing, we group related items into bundles and reorder them to eliminate cross-module recursion.
 
 Moreover, the previous identifier system lacked detailed metadata, such as the type of identifier (struct, function, type, etc.), complicating identifier rendering for backend tools.
 
@@ -68,7 +69,6 @@ The following diagram shows how these hierarchical relationships are structured.
 ![](name-example.excalidraw.png)
 
 Distinguishing between these two types of nesting is crucial when rendering names. Hierarchical nesting often requires special handling in backends due to its structural constraints, whereas user-driven nesting primarily serves readability and organization.
-
 
 To manage this effectively, we introduced a hierarchical view for identifiers. Instead of handling Rust's deeply nested identifier paths as-is, we transform them into structured, relational representations. This approach simplifies backend processing, minimizes namespace conflicts, and ensures better compatibility with backend language constraints.
 
