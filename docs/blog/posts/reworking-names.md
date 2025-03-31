@@ -17,7 +17,9 @@ Initially, hax assumed that all identifiers originated exclusively from Rust. Wh
 
 - **Trait pre- and post-conditions:** in hax, these are explicitly represented as concrete methods within typeclasses. Conversely, in Rust, these conditions exist only as anonymous standalone functions.
 - **Explicit enum cast operations:** enum casts are primitive operations in Rust, but hax treats these casts as specialized operations, assigning distinct identifiers to them.
-- **Cross-module mutually recursive item bundles:** these bundles are internally introduced by hax, necessitating the generation of unique identifiers to prevent naming conflicts.
+- **Cross-module mutually recursive item bundles:** these bundles[^1] are internally introduced by hax, necessitating the generation of unique identifiers to prevent naming conflicts.
+
+[^1]: Rust supports cross-module mutual recursion without enforcing declaration order, an uncommon feature among programming languages. In contrast, most of our backends require some form of forward declaration. To bridge this gap and accommodate Rust’s permissive namespacing, we group related items into bundles and reorder them to eliminate cross-module recursion.
 
 Moreover, the previous identifier system lacked detailed metadata, such as the type of identifier (struct, function, type, etc.), complicating identifier rendering for backend tools.
 
