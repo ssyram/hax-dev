@@ -9,6 +9,8 @@ date: 2025-03-19
 
 A careful treatment of identifiers lies at the heart of all code analysis frameworks, and we hope our experience here proves useful to others.
 
+In Rust, global identifier serves to uniquely locate uniquely an item: for instance `::serde::ser::Serialize` designates the `Serialize` trait from the Serde library. In constrat, local identifiers are relative, limited to the scope in which they are declared.
+
 ## Global Identifiers from the Rust Compiler
 
 Initially, hax assumed that all identifiers originated exclusively from Rust. While valid at the outset, this assumption quickly became inadequate. As hax evolved, new requirements emerged, prompting the engine to generate identifiers internally:
