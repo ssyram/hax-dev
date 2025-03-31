@@ -24,13 +24,27 @@ Initially, hax assumed that all identifiers originated exclusively from Rust. Wh
 
 Moreover, the previous identifier system lacked detailed metadata, such as the type of identifier (struct, function, type, etc.), complicating identifier rendering for backend tools.
 
-## Issues with the Previous Design
+## Issues with the Previous Design {#issues-with-previous-design}
 
 Initially, identifiers were represented using slightly modified Rust `DefId`s accompanied by minimal metadata indicating the identifier's kind. This approach presumed that hax would never alter these `DefId`s but merely use those directly produced by the Rust compiler.
 
 This assumption was quickly challenged. The need to prefix or suffix identifiers emerged early, but the introduction of new internal modules completely disrupted the assumption. Identifiers had to be relocated across modules, representing a significant departure from the original design.
 
-As the API for manipulating identifiers grew increasingly permissive and transparent, the foundational assumption—that `DefId`s were unique, consistent, and Rust-generated—was entirely undermined. This resulted in numerous bugs in identifier rendering in backend outputs, leading to at least 16 documented issues ([#1135](https://github.com/cryspen/hax/issues/1135)).
+As the API for manipulating identifiers grew increasingly permissive and transparent, the foundational assumption—that `DefId`s were unique, consistent, and Rust-generated—was entirely undermined. In consequence, rendering names for the backends became a complicated, error-prone process. This resulted in numerous bugs in identifier rendering in backend outputs, leading to at least 16 documented issues ([#1135](https://github.com/cryspen/hax/issues/1135)).
+
+As an example, the rendering process made distinguishing the two functions `c` very difficult in the following snippet of code:
+```rust
+mod a {
+    mod b {
+        fn c() { ... }
+    }
+}
+fn a() {
+    mod b {
+        fn c() { ... }
+    }
+}
+```
 
 ## Our New Approach
 
@@ -71,6 +85,8 @@ The following diagram shows how these hierarchical relationships are structured.
 Distinguishing between these two types of nesting is crucial when rendering names. Hierarchical nesting often requires special handling in backends due to its structural constraints, whereas user-driven nesting primarily serves readability and organization.
 
 To manage this effectively, we introduced a hierarchical view for identifiers. Instead of handling Rust's deeply nested identifier paths as-is, we transform them into structured, relational representations. This approach simplifies backend processing, minimizes namespace conflicts, and ensures better compatibility with backend language constraints.
+
+Looking back at our [`a::b::c` example](./reworking-names.md#issues-with-previous-design), this hierarchical view makes the problem very easy, since modules and functions are user nesting.
 
 ## Conclusion: Say Goodbye to Naming Issues (Almost)!
 
