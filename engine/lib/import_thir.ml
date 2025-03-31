@@ -470,13 +470,6 @@ end) : EXPR = struct
     let ( ->. ) a b = TArrow (a, b) in
     let (v : expr') =
       match e.contents with
-      | MacroInvokation { argument; macro_ident; _ } ->
-          MacroInvokation
-            {
-              args = argument;
-              macro = def_id ~value:false macro_ident;
-              witness = W.macro;
-            }
       | If
           {
             cond = { contents = Let { expr = scrutinee; pat }; _ };
@@ -1621,15 +1614,6 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let variants = [ v ] in
       let name = Concrete_ident.of_def_id ~value:false def_id in
       mk @@ Type { name; generics; variants; is_struct }
-  | MacroInvokation { macro_ident; argument; span } ->
-      mk
-      @@ IMacroInvokation
-           {
-             macro = Concrete_ident.of_def_id ~value:false macro_ident;
-             argument;
-             span = Span.of_thir span;
-             witness = W.macro;
-           }
   | Trait (No, safety, generics, _bounds, items) ->
       let items =
         List.filter

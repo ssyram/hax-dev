@@ -611,8 +611,6 @@ pub struct PathSegment {
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
 pub enum ItemKind<Body: IsBody> {
-    #[disable_mapping]
-    MacroInvokation(MacroInvokation),
     ExternCrate(Option<Symbol>),
     Use(UsePath, UseKind),
     Static(Ty, Mutability, Body),
@@ -733,10 +731,11 @@ impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, TraitItem<Body>> for hir
 #[cfg(feature = "rustc")]
 impl<'a, 'tcx, S: UnderOwnerState<'tcx>, Body: IsBody> SInto<S, Vec<Item<Body>>> for hir::Mod<'a> {
     fn sinto(&self, s: &S) -> Vec<Item<Body>> {
-        inline_macro_invocations(self.item_ids.iter().copied(), s)
-        // .iter()
-        // .map(|item_id| item_id.sinto(s))
-        // .collect()
+        let tcx = s.base().tcx;
+        self.item_ids
+            .iter()
+            .map(|id| tcx.hir().item(*id).sinto(s))
+            .collect()
     }
 }
 
@@ -1018,18 +1017,6 @@ impl<S> SInto<S, u128> for rustc_data_structures::packed::Pu128 {
     fn sinto(&self, _s: &S) -> u128 {
         self.0
     }
-}
-
-// FIXME: typo: invo**C**ation
-#[allow(rustdoc::private_intra_doc_links)]
-/// Describe a macro invocation, using
-/// [`macro_invocation_of_raw_mac_invocation`]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub struct MacroInvokation {
-    pub macro_ident: DefId,
-    pub argument: String,
-    pub span: Span,
 }
 
 /// Reflects [`rustc_ast::token::CommentKind`]
