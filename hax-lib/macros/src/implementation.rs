@@ -10,7 +10,7 @@ mod prelude {
     pub use crate::syn_ext::*;
     pub use proc_macro as pm;
     pub use proc_macro2::*;
-    pub use proc_macro_error::*;
+    pub use proc_macro_error2::*;
     pub use quote::*;
     pub use std::collections::HashSet;
     pub use syn::spanned::Spanned;
@@ -751,7 +751,7 @@ macro_rules! make_quoting_item_proc_macro {
                         r#impl: ident_str == "impl" || ident_str == "both",
                     });
                     if !matches!(ident_str.as_str(), "impl" | "both" | "interface") {
-                        proc_macro_error::abort!(
+                        proc_macro_error2::abort!(
                             ident.span(),
                             "Expected `impl`, `both` or `interface`"
                         );
@@ -931,7 +931,7 @@ pub fn refinement_type(mut attr: pm::TokenStream, item: pm::TokenStream) -> pm::
     let mut item = parse_macro_input!(item as syn::ItemStruct);
 
     let syn::Fields::Unnamed(fields) = &item.fields else {
-        proc_macro_error::abort!(
+        proc_macro_error2::abort!(
             item.generics.span(),
             "Expected a newtype (a struct with one unnamed field), got one or more named field"
         );
@@ -939,14 +939,14 @@ pub fn refinement_type(mut attr: pm::TokenStream, item: pm::TokenStream) -> pm::
     let paren_token = fields.paren_token;
     let fields = fields.unnamed.iter().collect::<Vec<_>>();
     let [field] = &fields[..] else {
-        proc_macro_error::abort!(
+        proc_macro_error2::abort!(
             item.generics.span(),
             "Expected a newtype (a struct with one unnamed field), got {} fields",
             fields.len()
         );
     };
     if !matches!(field.vis, syn::Visibility::Inherited) {
-        proc_macro_error::abort!(field.vis.span(), "This field was expected to be private");
+        proc_macro_error2::abort!(field.vis.span(), "This field was expected to be private");
     }
 
     let no_debug_assert = {
@@ -955,10 +955,10 @@ pub fn refinement_type(mut attr: pm::TokenStream, item: pm::TokenStream) -> pm::
             (tokens.next(), tokens.next())
         {
             if ident.to_string() != "no_debug_runtime_check" {
-                proc_macro_error::abort!(ident.span(), "Expected 'no_debug_runtime_check'");
+                proc_macro_error2::abort!(ident.span(), "Expected 'no_debug_runtime_check'");
             }
             if comma.as_char() != ',' {
-                proc_macro_error::abort!(ident.span(), "Expected a comma");
+                proc_macro_error2::abort!(ident.span(), "Expected a comma");
             }
             attr = pm::TokenStream::from_iter(tokens);
             true
