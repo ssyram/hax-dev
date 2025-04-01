@@ -533,10 +533,8 @@ impl NormalizePaths for Options {
 }
 
 impl From<Options> for hax_frontend_exporter_options::Options {
-    fn from(opts: Options) -> hax_frontend_exporter_options::Options {
-        hax_frontend_exporter_options::Options {
-            inline_macro_calls: opts.inline_macro_calls,
-        }
+    fn from(_opts: Options) -> hax_frontend_exporter_options::Options {
+        hax_frontend_exporter_options::Options {}
     }
 }
 

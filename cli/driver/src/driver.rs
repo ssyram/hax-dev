@@ -123,9 +123,7 @@ fn main() {
         !vanilla_rustc && !is_build_script && (options.deps || is_primary_package);
     let mut callbacks: Box<dyn Callbacks + Send> = if translate_package {
         Box::new(exporter::ExtractionCallbacks {
-            inline_macro_calls: options.inline_macro_calls.clone(),
             body_types: options.command.body_kinds(),
-            macro_calls: std::collections::HashMap::new(),
         })
     } else {
         struct CallbacksNoop;
