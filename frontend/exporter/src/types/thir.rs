@@ -521,8 +521,8 @@ pub enum PatKind {
     Constant {
         value: ConstantExpr,
     },
-    InlineConstant {
-        def: DefId,
+    ExpandedConstant {
+        def_id: DefId,
         subpattern: Pat,
     },
     Range(PatRange),
@@ -647,7 +647,7 @@ pub enum ExprKind {
                 e.sinto(gstate)
             },
             ty_kind => {
-                let ty_norm: Ty = gstate.base().tcx.normalize_erasing_regions(gstate.param_env(), *ty).sinto(gstate);
+                let ty_norm: Ty = gstate.base().tcx.normalize_erasing_regions(gstate.typing_env(), *ty).sinto(gstate);
                 let ty_kind_sinto = ty_kind.sinto(gstate);
                 supposely_unreachable_fatal!(
                     gstate[e.span],

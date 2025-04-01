@@ -120,11 +120,18 @@ pub fn translate_span(span: rustc_span::Span, sess: &rustc_session::Session) -> 
 
 pub trait HasParamEnv<'tcx> {
     fn param_env(&self) -> ty::ParamEnv<'tcx>;
+    fn typing_env(&self) -> ty::TypingEnv<'tcx>;
 }
 
 impl<'tcx, S: UnderOwnerState<'tcx>> HasParamEnv<'tcx> for S {
     fn param_env(&self) -> ty::ParamEnv<'tcx> {
         self.base().tcx.param_env(self.owner_id())
+    }
+    fn typing_env(&self) -> ty::TypingEnv<'tcx> {
+        ty::TypingEnv {
+            param_env: self.param_env(),
+            typing_mode: ty::TypingMode::PostAnalysis,
+        }
     }
 }
 
