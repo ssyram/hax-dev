@@ -1866,6 +1866,7 @@ module TransformToInputLanguage =
   |> Phases.Newtype_as_refinement
   |> Phases.Reject.Trait_item_default
   |> Phases.Bundle_cycles
+  |> Phases.Reorder_fields
   |> Phases.Sort_items
   |> SubtypeToInputLanguage
   |> Identity
