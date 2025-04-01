@@ -32,7 +32,7 @@ This assumption was quickly challenged. The need to prefix or suffix identifiers
 
 As the API for manipulating identifiers grew increasingly permissive and transparent, the foundational assumption—that `DefId`s were unique, consistent, and Rust-generated—was entirely undermined. In consequence, rendering names for the backends became a complicated, error-prone process. This resulted in numerous bugs in identifier rendering in backend outputs, leading to at least 16 documented issues ([#1135](https://github.com/cryspen/hax/issues/1135)).
 
-As an example, the rendering process made distinguishing the two functions `c` very difficult in the following snippet of code:
+As an example, the rendering process made distinguishing the two functions `c` very difficult in the following snippet of code. This resulted in a bug (see [\#1136](https://github.com/cryspen/hax/issues/1136)) where hax would extract F\* code with two functions both named `c` in the same module `Mycrate.A.B`!
 ```rust
 mod a {
     mod b {
