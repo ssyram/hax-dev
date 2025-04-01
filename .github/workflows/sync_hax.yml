@@ -7,17 +7,31 @@ on:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
     permissions:
-      contents: write
       pull-requests: write
+      contents: write
+      # actions:	read/write	none	read
+      # attestations:	read/write	none	read
+      # checks:	read/write	none	read
+      # contents:	read/write	read	read
+      # deployments:	read/write	none	read
+      # discussions:	read/write	none	read
+      # id-token:	none	none	none
+      # issues:	read/write	none	read
+      # metadata:	read	read	read
+      # packages:	read/write	read	read
+      # pages:	read/write	none	read
+      # pull-requests:	read/write	none	read
+      # repository-projects:	read/write	none	read
+      # security-events:	read/write	none	read
+      # statuses:	read/write	none	read
+    runs-on: linux
     if: github.repository == 'cryspen/hax-evit'
     steps:
       - name: Checkout hax-evit
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_TOKEN }}
-          fetch-depth: 0
+          token: ${{ secrets.PR_PAT }}
 
       - name: Set up Git
         run: |
@@ -26,20 +40,17 @@ jobs:
 
       - name: Add hax as upstream
         run: |
-          git remote add upstream https://github.com/cryspen/hax.git
+          git remote add upstream https://github.com/cryspen/hax.git || true
           git fetch upstream
 
       - name: Create and update sync branch
         run: |
           git checkout -B sync-hax
-          git merge upstream/main --no-edit || true
+          git merge upstream/main -X theirs --allow-unrelated-histories --no-edit
           git push origin sync-hax --force
 
-      - name: Create a Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          commit-message: "Merge latest changes from hax"
-          branch: sync-hax
-          title: "Sync updates from hax"
-          body: "This PR merges the latest updates from the public repo [`cryspen/hax`](https://github.com/cryspen/hax) into the private repo [`cryspen/hax-evit`](https://github.com/cryspen/hax-evit)."
+      - name: Create pull request
+        run: nix run nixpkgs#gh -- pr create -B main -H sync-hax --title 'Synchronize with upstream hax' --body 'Created by Github action'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: cryspen/hax-evit
