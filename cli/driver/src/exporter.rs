@@ -77,20 +77,18 @@ fn precompute_local_thir_bodies(
 
     use itertools::Itertools;
     tcx.hir_body_owners()
-        .filter(|ldid| {
-            match tcx.def_kind(ldid.to_def_id()) {
-                InlineConst | AnonConst => {
-                    fn is_fn(tcx: TyCtxt<'_>, did: rustc_span::def_id::DefId) -> bool {
-                        use rustc_hir::def::DefKind;
-                        matches!(
-                            tcx.def_kind(did),
-                            DefKind::Fn | DefKind::AssocFn | DefKind::Ctor(..) | DefKind::Closure
-                        )
-                    }
-                    !is_fn(tcx, tcx.local_parent(*ldid).to_def_id())
-                },
-                _ => true
+        .filter(|ldid| match tcx.def_kind(ldid.to_def_id()) {
+            InlineConst | AnonConst => {
+                fn is_fn(tcx: TyCtxt<'_>, did: rustc_span::def_id::DefId) -> bool {
+                    use rustc_hir::def::DefKind;
+                    matches!(
+                        tcx.def_kind(did),
+                        DefKind::Fn | DefKind::AssocFn | DefKind::Ctor(..) | DefKind::Closure
+                    )
+                }
+                !is_fn(tcx, tcx.local_parent(*ldid).to_def_id())
             }
+            _ => true,
         })
         .sorted_by_key(|ldid| const_level_of(tcx, *ldid))
         .filter(move |ldid| tcx.hir_maybe_body_owned_by(*ldid).is_some())
@@ -117,15 +115,21 @@ fn precompute_local_thir_bodies(
                     return (ldid, dummy_thir_body(tcx, span, guar));
                 }
             };
-            let thir = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                thir.borrow().clone()
-            })) {
-                Ok(x) => x,
-                Err(e) => {
-                    let guar = tcx.dcx().span_err(span, format!("The THIR body of item {:?} was stolen.\nThis is not supposed to happen.\nThis is a bug in Hax's frontend.\nThis is discussed in issue https://github.com/hacspec/hax/issues/27.\nPlease comment this issue if you see this error message!", ldid));
-                    return (ldid, dummy_thir_body(tcx, span, guar));
-                }
-            };
+            if thir.is_stolen() {
+                let guar = tcx.dcx().span_err(
+                    span,
+                    format!(
+                        "The THIR body of item {:?} was stolen.\n\
+                        This is not supposed to happen.\n\
+                        This is a bug in Hax's frontend.\n\
+                        This is discussed in issue https://github.com/hacspec/hax/issues/27.\n\
+                        Please comment this issue if you see this error message!",
+                        ldid
+                    ),
+                );
+                return (ldid, dummy_thir_body(tcx, span, guar));
+            }
+            let thir = thir.borrow().clone();
             tracing::debug!("✅ Type-checked THIR body for {:#?}", ldid);
             (ldid, (Rc::new(thir), expr))
         })
