@@ -884,7 +884,6 @@ pub struct Item<Body: IsBody> {
     pub vis_span: Span,
     pub kind: ItemKind<Body>,
     pub attributes: ItemAttributes,
-    pub expn_backtrace: Vec<ExpnData>,
 }
 
 #[cfg(feature = "rustc")]
@@ -903,7 +902,6 @@ impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, Item<Body>> for hir::Item<
             vis_span: self.span.sinto(s),
             kind: self.kind.sinto(s),
             attributes: ItemAttributes::from_owner_id(s, self.owner_id),
-            expn_backtrace: self.span.macro_backtrace().map(|o| o.sinto(s)).collect(),
         }
     }
 }
