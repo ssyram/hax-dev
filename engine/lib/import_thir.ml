@@ -363,8 +363,7 @@ end) : EXPR = struct
         with Diagnostics.SpanFreeError.Exn _ -> U.hax_failure_typ
       in
       let span = Span.of_thir e.span in
-      U.hax_failure_expr' span typ (ctx, kind)
-        ([%show: Thir.decorated_for__expr_kind] e)
+      U.hax_failure_expr' span typ (ctx, kind) ""
 
   (** Extracts an expression as the global name `dropped_body`: this
       drops the computational part of the expression, but keeps a
