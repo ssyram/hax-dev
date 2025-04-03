@@ -408,6 +408,7 @@ module Make (Options : OPTS) : MAKE = struct
                       | None -> (
                           match name with
                           | `Projector (`Concrete name) -> (
+                              (* A projector should always have an argument. *)
                               let arg = Option.value_exn (List.hd args) in
                               match arg.typ with
                               | TApp { ident = `Concrete concrete_ident; _ } ->
