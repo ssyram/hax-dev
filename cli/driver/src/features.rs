@@ -22,11 +22,11 @@ pub struct Features {
 impl From<&rustc_feature::Features> for Features {
     fn from(rfeatures: &rustc_feature::Features) -> Self {
         Features {
-            adt_const_params: rfeatures.adt_const_params,
-            generic_const_exprs: rfeatures.generic_const_exprs,
-            register_tool: rfeatures.register_tool,
-            auto_traits: rfeatures.auto_traits,
-            negative_impls: rfeatures.negative_impls,
+            adt_const_params: rfeatures.adt_const_params(),
+            generic_const_exprs: rfeatures.generic_const_exprs(),
+            register_tool: rfeatures.register_tool(),
+            auto_traits: rfeatures.auto_traits(),
+            negative_impls: rfeatures.negative_impls(),
             registered_tools: HashSet::new(),
         }
     }

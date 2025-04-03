@@ -949,6 +949,16 @@ module Make (F : Features.T) = struct
     { span; typ = TStr; e = Literal (String s) }
 
   let hax_failure_expr' span (typ : ty) (context, kind) (ast : string) =
+    let ast =
+      (* Remove consecutive withe spaces *)
+      String.split ~on:' ' ast
+      |> List.filter ~f:(String.is_empty >> not)
+      |> String.concat ~sep:" "
+    in
+    let ast =
+      if String.length ast > 200 then String.sub ~pos:0 ~len:200 ast ^ "..."
+      else ast
+    in
     let error = Diagnostics.pretty_print_context_kind context kind in
     let args = List.map ~f:(string_lit span) [ error; ast ] in
     call Rust_primitives__hax__failure args span typ

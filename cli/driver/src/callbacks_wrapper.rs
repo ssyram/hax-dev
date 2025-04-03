@@ -14,6 +14,8 @@ impl<'a> Callbacks for CallbacksWrapper<'a> {
     fn config(&mut self, config: &mut interface::Config) {
         let options = self.options.clone();
         config.psess_created = Some(Box::new(move |parse_sess| {
+            // Silence the "unexpected cfg" lints.
+            parse_sess.check_config.exhaustive_names = false;
             let depinfo = parse_sess.env_depinfo.get_mut();
             depinfo.insert((
                 Symbol::intern(ENV_VAR_OPTIONS_FRONTEND),
