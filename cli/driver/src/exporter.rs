@@ -36,7 +36,10 @@ fn dummy_thir_body(
             neg: false,
         },
         ty,
-        temp_lifetime: None,
+        temp_lifetime: TempLifetime {
+            temp_lifetime: None,
+            backwards_incompatible: None,
+        },
         span,
     });
     (Rc::new(thir), expr)
@@ -65,7 +68,7 @@ fn precompute_local_thir_bodies(
             Const | ConstParam | AssocConst | AnonConst | InlineConst
         ) {
             ConstLevel::Const
-        } else if tcx.is_const_fn_raw(ldid.to_def_id()) {
+        } else if tcx.is_const_fn(ldid.to_def_id()) {
             ConstLevel::ConstFn
         } else {
             ConstLevel::NotConst
@@ -124,7 +127,6 @@ fn precompute_local_thir_bodies(
 #[tracing::instrument(skip_all)]
 fn convert_thir<'tcx, Body: hax_frontend_exporter::IsBody>(
     options: &hax_frontend_exporter_options::Options,
-    macro_calls: HashMap<hax_frontend_exporter::Span, hax_frontend_exporter::Span>,
     tcx: TyCtxt<'tcx>,
 ) -> (
     Vec<rustc_span::Span>,
@@ -137,13 +139,16 @@ fn convert_thir<'tcx, Body: hax_frontend_exporter::IsBody>(
     hax_frontend_exporter::id_table::Table,
 ) {
     use hax_frontend_exporter::WithGlobalCacheExt;
-    let mut state = hax_frontend_exporter::state::State::new(tcx, options.clone());
-    state.base.macro_infos = Rc::new(macro_calls);
+    let state = hax_frontend_exporter::state::State::new(tcx, options.clone());
     for (def_id, thir) in precompute_local_thir_bodies(tcx) {
         state.with_item_cache(def_id, |caches| caches.thir = Some(thir));
     }
 
-    let result = hax_frontend_exporter::inline_macro_invocations(tcx.hir().items(), &state);
+    let result = tcx
+        .hir()
+        .items()
+        .map(|id| tcx.hir().item(id).sinto(&state))
+        .collect();
     let impl_infos = hax_frontend_exporter::impl_def_ids_to_impled_types_and_bounds(&state)
         .into_iter()
         .collect();
@@ -166,40 +171,15 @@ fn convert_thir<'tcx, Body: hax_frontend_exporter::IsBody>(
     )
 }
 
-/// Collect a map from spans to macro calls
-#[tracing::instrument(skip_all)]
-fn collect_macros(
-    crate_ast: &rustc_ast::ast::Crate,
-) -> HashMap<rustc_span::Span, rustc_ast::ast::MacCall> {
-    use {rustc_ast::ast::*, rustc_ast::visit::*};
-    struct MacroCollector {
-        macro_calls: HashMap<rustc_span::Span, MacCall>,
-    }
-    impl<'ast> Visitor<'ast> for MacroCollector {
-        fn visit_mac_call(&mut self, mac: &'ast rustc_ast::ast::MacCall) {
-            self.macro_calls.insert(mac.span(), mac.clone());
-        }
-    }
-    let mut v = MacroCollector {
-        macro_calls: HashMap::new(),
-    };
-    v.visit_crate(crate_ast);
-    v.macro_calls
-}
-
 /// Callback for extraction
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ExtractionCallbacks {
-    pub inline_macro_calls: Vec<hax_types::cli_options::Namespace>,
-    pub macro_calls: HashMap<hax_frontend_exporter::Span, hax_frontend_exporter::Span>,
     pub body_types: Vec<hax_types::cli_options::ExportBodyKind>,
 }
 
 impl From<ExtractionCallbacks> for hax_frontend_exporter_options::Options {
     fn from(opts: ExtractionCallbacks) -> hax_frontend_exporter_options::Options {
-        hax_frontend_exporter_options::Options {
-            inline_macro_calls: opts.inline_macro_calls,
-        }
+        hax_frontend_exporter_options::Options {}
     }
 }
 
@@ -211,17 +191,6 @@ impl Callbacks for ExtractionCallbacks {
     ) -> Compilation {
         let parse_ast = queries.parse().unwrap();
         let parse_ast = parse_ast.borrow();
-        self.macro_calls = collect_macros(&parse_ast)
-            .into_iter()
-            .map(|(k, v)| {
-                use hax_frontend_exporter::*;
-                let sess = &compiler.sess;
-                (
-                    translate_span(k, sess),
-                    translate_span(argument_span_of_mac_call(&v), sess),
-                )
-            })
-            .collect();
         Compilation::Continue
     }
     fn after_expansion<'tcx>(
@@ -269,7 +238,7 @@ impl Callbacks for ExtractionCallbacks {
                 self.body_types.clone(),
                 <Body>|| {
                     let (spans, def_ids, impl_infos, items, cache_map) =
-                        convert_thir(&self.clone().into(), self.macro_calls.clone(), tcx);
+                        convert_thir(&self.clone().into(), tcx);
                     let files: HashSet<PathBuf> = HashSet::from_iter(
                         items
                             .iter()

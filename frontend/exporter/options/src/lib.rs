@@ -96,6 +96,4 @@ impl Namespace {
 }
 
 #[derive(Debug, Clone)]
-pub struct Options {
-    pub inline_macro_calls: Vec<Namespace>,
-}
+pub struct Options {}

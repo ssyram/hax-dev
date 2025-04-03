@@ -363,8 +363,7 @@ end) : EXPR = struct
         with Diagnostics.SpanFreeError.Exn _ -> U.hax_failure_typ
       in
       let span = Span.of_thir e.span in
-      U.hax_failure_expr' span typ (ctx, kind)
-        ([%show: Thir.decorated_for__expr_kind] e)
+      U.hax_failure_expr' span typ (ctx, kind) ""
 
   (** Extracts an expression as the global name `dropped_body`: this
       drops the computational part of the expression, but keeps a
@@ -470,13 +469,6 @@ end) : EXPR = struct
     let ( ->. ) a b = TArrow (a, b) in
     let (v : expr') =
       match e.contents with
-      | MacroInvokation { argument; macro_ident; _ } ->
-          MacroInvokation
-            {
-              args = argument;
-              macro = def_id ~value:false macro_ident;
-              witness = W.macro;
-            }
       | If
           {
             cond = { contents = Let { expr = scrutinee; pat }; _ };
@@ -927,7 +919,7 @@ end) : EXPR = struct
                   ("expected a pattern, got " ^ [%show: expr'] e)
           in
           (c_constant_expr value |> pat_of_expr).p
-      | InlineConstant { subpattern; _ } -> (c_pat subpattern).p
+      | ExpandedConstant { subpattern; _ } -> (c_pat subpattern).p
       | Array _ -> unimplemented ~issue_id:804 [ pat.span ] "Pat:Array"
       | Or { pats } -> POr { subpats = List.map ~f:c_pat pats }
       | Slice _ -> unimplemented ~issue_id:804 [ pat.span ] "pat Slice"
@@ -1621,15 +1613,6 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let variants = [ v ] in
       let name = Concrete_ident.of_def_id ~value:false def_id in
       mk @@ Type { name; generics; variants; is_struct }
-  | MacroInvokation { macro_ident; argument; span } ->
-      mk
-      @@ IMacroInvokation
-           {
-             macro = Concrete_ident.of_def_id ~value:false macro_ident;
-             argument;
-             span = Span.of_thir span;
-             witness = W.macro;
-           }
   | Trait (No, safety, generics, _bounds, items) ->
       let items =
         List.filter

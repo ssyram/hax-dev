@@ -248,16 +248,19 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
                         promoted_id: promoted_id.as_u32(),
                         mir,
                     });
-                    konst
-                        .eval_constant(s)
+                    eval_mir_constant(s, konst)
                         .unwrap_or_else(|| {
                             supposely_unreachable_fatal!(s, "UnevalPromotedConstant"; {konst, ucv});
                         })
                         .sinto(s)
                 }
-                _ => match konst.translate_uneval(s, ucv.shrink(), span) {
-                    TranslateUnevalRes::EvaluatedConstant(c) => c.sinto(s),
-                    TranslateUnevalRes::GlobalName(c) => c,
+                None => match translate_constant_reference(s, span, ucv.shrink()) {
+                    Some(val) => val,
+                    None => match eval_mir_constant(s, konst) {
+                        Some(val) => val.sinto(s),
+                        // TODO: This is triggered when compiling using `generic_const_exprs`
+                        None => supposely_unreachable_fatal!(s, "TranslateUneval"; {konst, ucv}),
+                    },
                 },
             }
         }
@@ -380,12 +383,8 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         trace!("assoc: def_id: {:?}", assoc.def_id);
         // Retrieve the `DefId` of the trait declaration or the impl block.
         let container_def_id = match assoc.container {
-            rustc_middle::ty::AssocItemContainer::TraitContainer => {
-                tcx.trait_of_item(assoc.def_id).unwrap()
-            }
-            rustc_middle::ty::AssocItemContainer::ImplContainer => {
-                tcx.impl_of_method(assoc.def_id).unwrap()
-            }
+            rustc_middle::ty::AssocItemContainer::Trait => tcx.trait_of_item(assoc.def_id).unwrap(),
+            rustc_middle::ty::AssocItemContainer::Impl => tcx.impl_of_method(assoc.def_id).unwrap(),
         };
         // The generics are split in two: the arguments of the container (trait decl or impl block)
         // and the arguments of the method.
@@ -415,7 +414,7 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         // ```
         // The generics for `insert` are `<u32>` for the impl and `<bool>` for the method.
         match assoc.container {
-            rustc_middle::ty::AssocItemContainer::TraitContainer => {
+            rustc_middle::ty::AssocItemContainer::Trait => {
                 let num_container_generics = tcx.generics_of(container_def_id).own_params.len();
                 // Retrieve the trait information
                 let impl_expr = self_clause_for_item(s, &assoc, generics).unwrap();
@@ -423,7 +422,7 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
                 let method_generics = &generics[num_container_generics..];
                 (method_generics.sinto(s), Some(impl_expr))
             }
-            rustc_middle::ty::AssocItemContainer::ImplContainer => {
+            rustc_middle::ty::AssocItemContainer::Impl => {
                 // Solve the trait constraints of the impl block.
                 let container_generics = tcx.generics_of(container_def_id);
                 let container_generics = generics.truncate_to(tcx, container_generics);
@@ -722,6 +721,9 @@ pub enum StatementKind {
     Coverage(CoverageKind),
     Intrinsic(NonDivergingIntrinsic),
     ConstEvalCounter,
+    BackwardIncompatibleDropHint {
+        place: Place,
+    },
     Nop,
 }
 

@@ -159,7 +159,6 @@ mod types {
     #[derive(Clone)]
     pub struct Base<'tcx> {
         pub options: Rc<hax_frontend_exporter_options::Options>,
-        pub macro_infos: MacroCalls,
         pub local_ctx: Rc<RefCell<LocalContextS>>,
         pub opt_def_id: Option<rustc_hir::def_id::DefId>,
         pub cache: Rc<RefCell<GlobalCache<'tcx>>>,
@@ -179,7 +178,6 @@ mod types {
         ) -> Self {
             Self {
                 tcx,
-                macro_infos: Rc::new(HashMap::new()),
                 cache: Default::default(),
                 options: Rc::new(options),
                 // Always prefer `s.owner_id()` to `s.base().opt_def_id`.
