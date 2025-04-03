@@ -48,16 +48,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1705191588,
-        "narHash": "sha256-xjSWDP8mSjLcn+0hsRpEdzsBgBR+mKCZB8yLmHl+WqE=",
+        "lastModified": 1739895440,
+        "narHash": "sha256-QRZdyaHpVZafdk398yQ4LXmSrcqL/cQeYUBj9dwLDlQ=",
         "owner": "FStarLang",
         "repo": "FStar",
-        "rev": "a32b316e521fa4f239b610ec8f1d15e78d62cbe8",
+        "rev": "4b3fc11774003a6ff7c09500ecb5f0145ca6d862",
         "type": "github"
       },
       "original": {
         "owner": "FStarLang",
-        "ref": "v2024.01.13",
+        "ref": "v2025.02.17",
         "repo": "FStar",
         "type": "github"
       }

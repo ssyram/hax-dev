@@ -73,7 +73,7 @@ macro_rules! assert_prop {
         {
             #[cfg(hax)]
             {
-                $crate::assert_prop($crate::Prop::from($($arg)*));
+                $crate::assert_prop(::hax_lib::Prop::from($($arg)*));
             }
         }
     };
@@ -97,7 +97,7 @@ pub fn assume(_formula: Prop) {}
 #[macro_export]
 macro_rules! assume {
     ($formula:expr) => {
-        $crate::assume(Prop::from($formula))
+        $crate::assume(::hax_lib::Prop::from($formula))
     };
 }
 
@@ -128,6 +128,14 @@ pub fn inline(_: &str) {}
 /// Similar to `inline`, but allows for any type. Do not use directly.
 #[doc(hidden)]
 pub fn inline_unsafe<T>(_: &str) -> T {
+    unreachable!()
+}
+
+/// Sink for any value into unit. This is used internally by hax to capture
+/// value of any type. Specifically, this is useful for the `decreases` clauses
+/// for the F* backend.
+#[doc(hidden)]
+pub fn any_to_unit<T>(_: T) -> () {
     unreachable!()
 }
 

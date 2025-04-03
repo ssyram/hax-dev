@@ -27,12 +27,18 @@ jobs:
 
       - if: runner.environment == 'github-hosted'
         uses: DeterminateSystems/nix-installer-action@main
+      - name: Set up Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: fstar-nix-versions
+          push: false
+    
       - name: ⤵ Install hax
         run: |
           nix profile install ./hax
 
       - name: ⤵ Install FStar
-        run: nix profile install github:FStarLang/FStar/v2024.12.03
+        run: nix profile install github:FStarLang/FStar/v2025.02.17
 
       - name: ⤵ Clone HACL-star repository
         uses: actions/checkout@v4

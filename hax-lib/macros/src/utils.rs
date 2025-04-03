@@ -1,3 +1,5 @@
+use syn::visit::Visit;
+
 use crate::prelude::*;
 use crate::rewrite_self::*;
 
@@ -6,9 +8,9 @@ pub struct HaxQuantifiers;
 impl ToTokens for HaxQuantifiers {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         quote! {
-            use ::hax_lib::fstar_unsafe_expr as fstar;
-            use ::hax_lib::coq_unsafe_expr as coq;
-            use ::hax_lib::proverif_unsafe_expr as proverif;
+            use ::hax_lib::fstar::prop as fstar;
+            use ::hax_lib::coq::prop as coq;
+            use ::hax_lib::proverif::prop as proverif;
         }
         .to_tokens(tokens)
     }
@@ -140,6 +142,29 @@ pub(crate) fn expect_future_expr(e: &Expr) -> Option<std::result::Result<Ident, 
     None
 }
 
+#[derive(Default)]
+pub struct IdentCollector {
+    pub idents: Vec<Ident>,
+}
+
+impl<'ast> syn::visit::Visit<'ast> for IdentCollector {
+    fn visit_ident(&mut self, ident: &'ast Ident) {
+        self.idents.push(ident.clone());
+    }
+}
+
+impl IdentCollector {
+    /// Returns a fresh identifier with the given prefix that is not in the collected identifiers.
+    pub fn fresh_ident(&self, prefix: &str) -> Ident {
+        let idents: HashSet<&Ident> = HashSet::from_iter(self.idents.iter());
+        let mk = |s| Ident::new(s, Span::call_site());
+        std::iter::once(mk(prefix))
+            .chain((0u64..).map(|i| Ident::new(&format!("{}{}", prefix, i), Span::call_site())))
+            .find(|ident| !idents.contains(ident))
+            .unwrap()
+    }
+}
+
 /// Rewrites `future(x)` nodes in an expression when (1) `x` is an
 /// ident and (2) the ident `x` is contained in the HashSet.
 struct RewriteFuture(HashSet<String>);
@@ -206,7 +231,12 @@ pub fn make_fn_decoration(
     mut generics: Option<Generics>,
     self_type: Option<Type>,
 ) -> (TokenStream, AttrPayload) {
-    let self_ident: Ident = syn::parse_quote! {self_};
+    let self_ident: Ident = {
+        let mut idents = IdentCollector::default();
+        idents.visit_expr(&phi);
+        idents.visit_signature(&signature);
+        idents.fresh_ident("self_")
+    };
     let error = {
         let mut rewriter = RewriteSelf::new(self_ident, self_type);
         rewriter.visit_expr_mut(&mut phi);
@@ -265,7 +295,7 @@ pub fn make_fn_decoration(
                 sig.generics = merge_generics(generics, sig.generics);
             }
             sig.output = if let FnDecorationKind::Decreases = &kind {
-                syn::parse_quote! { -> Box<dyn Any> }
+                syn::parse_quote! { -> () }
             } else {
                 syn::parse_quote! { -> impl Into<::hax_lib::Prop> }
             };
@@ -273,11 +303,8 @@ pub fn make_fn_decoration(
         };
         let uid_attr = AttrPayload::Uid(uid.clone());
         let late_skip = &AttrPayload::ItemStatus(ItemStatus::Included { late_skip: true });
-        let any_trait = if let FnDecorationKind::Decreases = &kind {
-            phi = parse_quote! {Box::new(#phi)};
-            quote! {#AttrHaxLang #[allow(unused)] trait Any {} impl<T> Any for T {}}
-        } else {
-            quote! {}
+        if let FnDecorationKind::Decreases = &kind {
+            phi = parse_quote! {::hax_lib::any_to_unit(#phi)};
         };
         let quantifiers = if let FnDecorationKind::Decreases = &kind {
             None
@@ -295,7 +322,6 @@ pub fn make_fn_decoration(
             #late_skip
             const _: () = {
                 #quantifiers
-                #any_trait
                 #future
                 #uid_attr
                 #late_skip

@@ -47,6 +47,15 @@ pub fn f<'a, T>(c: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     }
 }
 
+#[hax::decreases(x)]
+fn fib(x: usize) -> usize {
+    if x <= 2 {
+        x
+    } else {
+        fib(x - 1).wrapping_add(fib(x - 2))
+    }
+}
+
 #[hax::attributes]
 pub struct Foo {
     pub x: u32,
@@ -64,6 +73,11 @@ impl Foo {
 impl Foo {
     #[hax::exclude]
     fn h(&self) {}
+}
+
+fn props() {
+    hax_lib::assume!(hax_lib::fstar::prop!("True"));
+    hax_lib::assert_prop!(hax_lib::fstar::prop!("True"));
 }
 
 #[hax::attributes]
@@ -178,6 +192,35 @@ fn mutliple_before_after() {}
 #[hax::fstar::replace(r#"unfold let $some_function _ = "hello from F*""#)]
 fn some_function() -> String {
     String::from("hello from Rust")
+}
+
+mod future_self {
+    #[derive(Eq, PartialEq)]
+    struct Dummy;
+
+    #[hax_lib::attributes]
+    impl Dummy {
+        #[hax_lib::ensures(|_| future(self) == self)]
+        fn f(&mut self) {}
+    }
+}
+
+mod replace_body {
+    #[hax_lib::fstar::replace_body("magic ${x}")]
+    fn f(x: u8, y: u8) -> u8 {
+        1 + 2
+    }
+    struct Foo;
+    impl Foo {
+        #[hax_lib::fstar::replace_body("(magic (${self} <: $:{Self})) ${x}")]
+        fn assoc_fn(&self, x: u8) {}
+    }
+    impl ToString for Foo {
+        #[hax_lib::fstar::replace_body(r#""The type was $:{Self}""#)]
+        fn to_string(&self) -> String {
+            "Hello".into()
+        }
+    }
 }
 
 mod pre_post_on_traits_and_impls {
@@ -433,5 +476,15 @@ mod reorder {
             b_field_2: u8,
             b_field_3: u8,
         },
+    }
+}
+
+mod issue_1276 {
+    struct S(pub u8);
+
+    #[hax_lib::attributes]
+    impl S {
+        #[hax_lib::requires(self.0 == 0 && self_ == self_1 && self_2 == 9)]
+        fn f(&self, self_: u8, self_0: u8, self_1: u8, self_2: u8) {}
     }
 }

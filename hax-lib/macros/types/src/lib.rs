@@ -159,7 +159,7 @@ impl ToTokens for HaxCfgOptionName {
 }
 impl ToTokens for DebugOrHaxCfgExpr {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        quote! {any(#HaxCfgOptionName, debug_assertion)}.to_tokens(tokens)
+        quote! {any(#HaxCfgOptionName, debug_assertions)}.to_tokens(tokens)
     }
 }
 

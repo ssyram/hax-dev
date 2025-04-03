@@ -61,6 +61,13 @@ pub trait RefineAs<RefinedType> {
 pub mod int {
     use core::ops::*;
 
+    #[macro_export]
+    macro_rules! int {
+        ($lit:expr) => {
+            Int($lit)
+        };
+    }
+
     #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
     pub struct Int(pub u8);
 
@@ -111,6 +118,9 @@ pub mod int {
         }
         pub fn _unsafe_from_str(_s: &str) -> Self {
             Int(0)
+        }
+        pub fn rem_euclid(&self, v: Self) -> Self {
+            Self::new(self.0.rem_euclid(v.0))
         }
     }
 

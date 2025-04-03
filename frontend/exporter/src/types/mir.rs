@@ -159,12 +159,30 @@ pub mod mir_kinds {
 #[cfg(feature = "rustc")]
 pub use mir_kinds::IsMirKind;
 
+/// Part of a MIR body that was promoted to be a constant.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub struct PromotedConstant {
+    /// The `def_id` of the body this was extracted from.
+    pub def_id: DefId,
+    /// The identifier for this sub-body. This is the contents of a `mir::Promoted` identifier.
+    pub promoted_id: u32,
+    /// The MIR for this sub-body. This MIR is only present in the current crate; for foreign
+    /// crates, only the evaluated constant is stored in the rlib.
+    // Note: `tcx.mir_promoted` returns MIRs in the promoted phase; `tcx.promoted_mir` returns it
+    // as in `tcx.mir_drops_elaborated_etc`. We use `mir_promoted` here.
+    pub mir: Option<MirBody<mir_kinds::Promoted>>,
+}
+
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
 pub struct ConstOperand {
     pub span: Span,
     pub ty: Ty,
-    pub const_: ConstantExpr,
+    /// The final evaluated value.
+    pub evaluated: ConstantExpr,
+    /// A MIR constant may come from a part of the MIR body that was promoted to be a constant.
+    pub promoted: Option<PromotedConstant>,
 }
 
 #[cfg(feature = "rustc")]
@@ -172,11 +190,88 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
     for rustc_middle::mir::ConstOperand<'tcx>
 {
     fn sinto(&self, s: &S) -> ConstOperand {
+        let (evaluated, promoted) = translate_mir_const(s, self.span, self.const_);
         ConstOperand {
             span: self.span.sinto(s),
             ty: self.const_.ty().sinto(s),
-            const_: self.const_.sinto(s),
+            evaluated,
+            promoted,
         }
+    }
+}
+
+#[cfg(feature = "rustc")]
+/// Translate a MIR constant.
+fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    span: rustc_span::Span,
+    konst: mir::Const<'tcx>,
+) -> (ConstantExpr, Option<PromotedConstant>) {
+    use rustc_middle::mir::Const;
+    let tcx = s.base().tcx;
+    let mut promoted = None;
+    let evaluated = match konst {
+        Const::Val(const_value, ty) => const_value_to_constant_expr(s, ty, const_value, span)
+            .unwrap_or_else(|err| {
+                fatal!(
+                    s[span], "Cannot convert constant back to an expression";
+                    {const_value, ty, err}
+                )
+            }),
+        Const::Ty(_ty, c) => c.sinto(s),
+        Const::Unevaluated(ucv, _ty) => {
+            use crate::rustc_middle::query::Key;
+            let span = span.substitute_dummy(
+                tcx.def_ident_span(ucv.def)
+                    .unwrap_or_else(|| ucv.def.default_span(tcx)),
+            );
+            match ucv.promoted {
+                Some(promoted_id) => {
+                    let (_, promoteds) = tcx.mir_promoted(ucv.def.as_local().unwrap());
+                    // TODO: also fallback to `promoted_mir`
+                    let mir = if promoteds.is_stolen() {
+                        None
+                    } else {
+                        let promoteds = promoteds.borrow();
+                        let body = &promoteds[promoted_id];
+                        let body = body.sinto(&State {
+                            base: s.base(),
+                            owner_id: s.owner_id(),
+                            mir: Rc::new(body.clone()),
+                            binder: (),
+                            thir: (),
+                        });
+                        Some(body)
+                    };
+                    promoted = Some(PromotedConstant {
+                        def_id: ucv.def.sinto(s),
+                        promoted_id: promoted_id.as_u32(),
+                        mir,
+                    });
+                    eval_mir_constant(s, konst)
+                        .unwrap_or_else(|| {
+                            supposely_unreachable_fatal!(s, "UnevalPromotedConstant"; {konst, ucv});
+                        })
+                        .sinto(s)
+                }
+                None => match translate_constant_reference(s, span, ucv.shrink()) {
+                    Some(val) => val,
+                    None => match eval_mir_constant(s, konst) {
+                        Some(val) => val.sinto(s),
+                        // TODO: This is triggered when compiling using `generic_const_exprs`
+                        None => supposely_unreachable_fatal!(s, "TranslateUneval"; {konst, ucv}),
+                    },
+                },
+            }
+        }
+    };
+    (evaluated, promoted)
+}
+
+#[cfg(feature = "rustc")]
+impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
+    fn sinto(&self, s: &S) -> ConstantExpr {
+        translate_mir_const(s, rustc_span::DUMMY_SP, *self).0
     }
 }
 
@@ -288,12 +383,8 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         trace!("assoc: def_id: {:?}", assoc.def_id);
         // Retrieve the `DefId` of the trait declaration or the impl block.
         let container_def_id = match assoc.container {
-            rustc_middle::ty::AssocItemContainer::TraitContainer => {
-                tcx.trait_of_item(assoc.def_id).unwrap()
-            }
-            rustc_middle::ty::AssocItemContainer::ImplContainer => {
-                tcx.impl_of_method(assoc.def_id).unwrap()
-            }
+            rustc_middle::ty::AssocItemContainer::Trait => tcx.trait_of_item(assoc.def_id).unwrap(),
+            rustc_middle::ty::AssocItemContainer::Impl => tcx.impl_of_method(assoc.def_id).unwrap(),
         };
         // The generics are split in two: the arguments of the container (trait decl or impl block)
         // and the arguments of the method.
@@ -323,7 +414,7 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         // ```
         // The generics for `insert` are `<u32>` for the impl and `<bool>` for the method.
         match assoc.container {
-            rustc_middle::ty::AssocItemContainer::TraitContainer => {
+            rustc_middle::ty::AssocItemContainer::Trait => {
                 let num_container_generics = tcx.generics_of(container_def_id).own_params.len();
                 // Retrieve the trait information
                 let impl_expr = self_clause_for_item(s, &assoc, generics).unwrap();
@@ -331,7 +422,7 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
                 let method_generics = &generics[num_container_generics..];
                 (method_generics.sinto(s), Some(impl_expr))
             }
-            rustc_middle::ty::AssocItemContainer::ImplContainer => {
+            rustc_middle::ty::AssocItemContainer::Impl => {
                 // Solve the trait constraints of the impl block.
                 let container_generics = tcx.generics_of(container_def_id);
                 let container_generics = generics.truncate_to(tcx, container_generics);
@@ -442,9 +533,11 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
 // We don't use the LitIntType on purpose (we don't want the "unsuffixed" case)
 #[derive_group(Serializers)]
 #[derive(Clone, Copy, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum IntUintTy {
+pub enum ScalarTy {
+    Bool,
     Int(IntTy),
     Uint(UintTy),
+    Char,
 }
 
 #[derive_group(Serializers)]
@@ -452,71 +545,44 @@ pub enum IntUintTy {
 pub struct ScalarInt {
     /// Little-endian representation of the integer
     pub data_le_bytes: [u8; 16],
-    pub int_ty: IntUintTy,
+    pub int_ty: ScalarTy,
 }
 
-// TODO: naming conventions: is "translate" ok?
-/// Translate switch targets
+/// Translate a `SwitchInt` terminator.
 #[cfg(feature = "rustc")]
-fn translate_switch_targets<'tcx, S: UnderOwnerState<'tcx>>(
+fn translate_switchint<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>>(
     s: &S,
-    switch_ty: &Ty,
-    targets: &rustc_middle::mir::SwitchTargets,
-) -> SwitchTargets {
-    let targets_vec: Vec<(u128, BasicBlock)> =
-        targets.iter().map(|(v, b)| (v, b.sinto(s))).collect();
+    discr: &mir::Operand<'tcx>,
+    targets: &mir::SwitchTargets,
+) -> TerminatorKind {
+    let discr = discr.sinto(s);
+    let ty = match discr.ty().kind() {
+        TyKind::Bool => ScalarTy::Bool,
+        TyKind::Int(ty) => ScalarTy::Int(*ty),
+        TyKind::Uint(ty) => ScalarTy::Uint(*ty),
+        TyKind::Char => ScalarTy::Char,
+        ty => fatal!(s, "Unexpected switch_ty: {:?}", ty),
+    };
 
-    match switch_ty.kind() {
-        TyKind::Bool => {
-            // This is an: `if ... then ... else ...`
-            assert!(targets_vec.len() == 1);
-            // It seems the block targets are inverted
-            let (test_val, otherwise_block) = targets_vec[0];
-
-            assert!(test_val == 0);
-
-            // It seems the block targets are inverted
-            let if_block = targets.otherwise().sinto(s);
-
-            SwitchTargets::If(if_block, otherwise_block)
-        }
-        TyKind::Int(_) | TyKind::Uint(_) => {
-            let int_ty = match switch_ty.kind() {
-                TyKind::Int(ty) => IntUintTy::Int(*ty),
-                TyKind::Uint(ty) => IntUintTy::Uint(*ty),
-                _ => unreachable!(),
+    // Convert all the test values to the proper values.
+    let otherwise = targets.otherwise().sinto(s);
+    let targets_vec: Vec<(ScalarInt, BasicBlock)> = targets
+        .iter()
+        .map(|(v, b)| {
+            let v = ScalarInt {
+                data_le_bytes: v.to_le_bytes(),
+                int_ty: ty,
             };
+            (v, b.sinto(s))
+        })
+        .collect();
 
-            // This is a: switch(int).
-            // Convert all the test values to the proper values.
-            let mut targets_map: Vec<(ScalarInt, BasicBlock)> = Vec::new();
-            for (v, tgt) in targets_vec {
-                // We need to reinterpret the bytes (`v as i128` is not correct)
-                let v = ScalarInt {
-                    data_le_bytes: v.to_le_bytes(),
-                    int_ty,
-                };
-                targets_map.push((v, tgt));
-            }
-            let otherwise_block = targets.otherwise().sinto(s);
-
-            SwitchTargets::SwitchInt(int_ty, targets_map, otherwise_block)
-        }
-        _ => {
-            fatal!(s, "Unexpected switch_ty: {:?}", switch_ty)
-        }
+    TerminatorKind::SwitchInt {
+        discr,
+        ty,
+        targets: targets_vec,
+        otherwise,
     }
-}
-
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub enum SwitchTargets {
-    /// Gives the `if` block and the `else` block
-    If(BasicBlock, BasicBlock),
-    /// Gives the integer type, a map linking values to switch branches, and the
-    /// otherwise block. Note that matches over enumerations are performed by
-    /// switching over the discriminant, which is an integer.
-    SwitchInt(IntUintTy, Vec<(ScalarInt, BasicBlock)>, BasicBlock),
 }
 
 /// A value of type `fn<...> A -> B` that can be called.
@@ -549,17 +615,18 @@ pub enum TerminatorKind {
     },
     #[custom_arm(
         rustc_middle::mir::TerminatorKind::SwitchInt { discr, targets } => {
-          let discr = discr.sinto(s);
-          let targets = translate_switch_targets(s, discr.ty(), targets);
-          TerminatorKind::SwitchInt {
-              discr,
-              targets,
-          }
+            translate_switchint(s, discr, targets)
         }
     )]
     SwitchInt {
+        /// The value being switched one.
         discr: Operand,
-        targets: SwitchTargets,
+        /// The type that is being switched on.
+        ty: ScalarTy,
+        /// Possible success cases.
+        targets: Vec<(ScalarInt, BasicBlock)>,
+        /// If none of the `targets` match, branch to that block.
+        otherwise: BasicBlock,
     },
     Return,
     Unreachable,
@@ -654,6 +721,9 @@ pub enum StatementKind {
     Coverage(CoverageKind),
     Intrinsic(NonDivergingIntrinsic),
     ConstEvalCounter,
+    BackwardIncompatibleDropHint {
+        place: Place,
+    },
     Nop,
 }
 
@@ -1039,38 +1109,6 @@ pub enum BinOp {
     Gt,
     Cmp,
     Offset,
-}
-
-#[cfg(feature = "rustc")]
-impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
-    fn sinto(&self, s: &S) -> ConstantExpr {
-        use rustc_middle::mir::Const;
-        let tcx = s.base().tcx;
-        match self {
-            Const::Val(const_value, ty) => {
-                const_value_to_constant_expr(s, *ty, *const_value, rustc_span::DUMMY_SP)
-            }
-            Const::Ty(_ty, c) => c.sinto(s),
-            Const::Unevaluated(ucv, _ty) => {
-                use crate::rustc_middle::query::Key;
-                let span = tcx
-                    .def_ident_span(ucv.def)
-                    .unwrap_or_else(|| ucv.def.default_span(tcx));
-                if ucv.promoted.is_some() {
-                    self.eval_constant(s)
-                        .unwrap_or_else(|| {
-                            supposely_unreachable_fatal!(s, "UnevalPromotedConstant"; {self, ucv});
-                        })
-                        .sinto(s)
-                } else {
-                    match self.translate_uneval(s, ucv.shrink(), span) {
-                        TranslateUnevalRes::EvaluatedConstant(c) => c.sinto(s),
-                        TranslateUnevalRes::GlobalName(c) => c,
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// Reflects [`rustc_middle::mir::BorrowKind`]
