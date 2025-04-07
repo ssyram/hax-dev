@@ -45,8 +45,8 @@ jobs:
 
       - name: Create and update sync branch
         run: |
-          git checkout -b merge-public-hax upstream/main
-          git push --set-upstream origin merge-public-hax
+          git checkout -B merge-public-hax upstream/main
+          git push --set-upstream origin merge-public-hax --force
 
       - name: Create pull request
         run: nix run nixpkgs#gh -- pr create -B main -H merge-public-hax --title 'Synchronize with upstream hax' --body 'Created by Github action'
