@@ -1,0 +1,12 @@
+[package]
+name = "coverage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+executor = "0.8.4"
+
+[features]
+fstar = []
+coq = []
+json = []

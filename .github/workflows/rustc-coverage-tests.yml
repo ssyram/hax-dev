@@ -1,0 +1,35 @@
+name: Run rustc coverage tests
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rustc-coverage-tests:
+    runs-on: linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: runner.environment == 'github-hosted'
+        uses: DeterminateSystems/nix-installer-action@main
+      - name: Set up Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: fstar-nix-versions
+          push: false
+    
+      - name: ⤵ Install hax
+        run: |
+          nix profile install .
+    
+      - name: 🏃 frontend tests
+        working-directory: rustc-coverage-tests
+        run: |
+          ./run-coverage-tests.sh all
