@@ -13,7 +13,11 @@ fn nested_if_in_condition(a: bool, b: bool, c: bool) {
 }
 
 fn doubly_nested_if_in_condition(a: bool, b: bool, c: bool, d: bool) {
-    if a && if b || if c && d { true } else { false } { false } else { true } {
+    if a && if b || if c && d { true } else { false } {
+        false
+    } else {
+        true
+    } {
         say("yes");
     } else {
         say("no");
@@ -32,7 +36,15 @@ fn nested_single_condition_decision(a: bool, b: bool) {
 }
 
 fn nested_in_then_block_in_condition(a: bool, b: bool, c: bool, d: bool, e: bool) {
-    if a && if b || c { if d && e { true } else { false } } else { false } {
+    if a && if b || c {
+        if d && e {
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    } {
         say("yes");
     } else {
         say("no");

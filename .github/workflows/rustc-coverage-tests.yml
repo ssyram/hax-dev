@@ -29,7 +29,8 @@ jobs:
         run: |
           nix profile install .
     
-      - name: 🏃 frontend tests
+      - name: 🏃 coverage tests
         working-directory: rustc-coverage-tests
         run: |
+          cargo check
           ./run-coverage-tests.sh all

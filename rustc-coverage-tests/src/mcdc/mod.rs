@@ -1,4 +1,4 @@
-#[path="condition-limit.rs"]
+#[path = "condition-limit.rs"]
 #[cfg(any(feature = "json"))]
 mod condition_limit;
 #[cfg(any(feature = "json", feature = "fstar", feature = "coq"))]
