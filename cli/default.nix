@@ -16,6 +16,7 @@ let
           || is-webapp-static-asset path);
     };
     inherit buildInputs doCheck;
+    doNotRemoveReferencesToRustToolchain = true;
   } // (if doCheck then {
     # [cargo test] builds independent workspaces. Each time another
     # workspace is added, it's corresponding lockfile should be added
