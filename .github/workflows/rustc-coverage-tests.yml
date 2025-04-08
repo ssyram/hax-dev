@@ -28,9 +28,9 @@ jobs:
       - name: ⤵ Install hax
         run: |
           nix profile install .
-    
+          nix profile install nixpkgs#rustup
       - name: 🏃 coverage tests
         working-directory: rustc-coverage-tests
         run: |
-          cargo check
+          cargo hax --version
           ./run-coverage-tests.sh all
