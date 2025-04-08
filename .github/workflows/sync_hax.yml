@@ -45,12 +45,11 @@ jobs:
 
       - name: Create and update sync branch
         run: |
-          git checkout -B sync-hax
-          git merge upstream/main -X theirs --allow-unrelated-histories --no-edit
-          git push origin sync-hax --force
+          git checkout -B merge-public-hax upstream/main
+          git push --set-upstream origin merge-public-hax --force
 
       - name: Create pull request
-        run: nix run nixpkgs#gh -- pr create -B main -H sync-hax --title 'Synchronize with upstream hax' --body 'Created by Github action'
+        run: nix run nixpkgs#gh -- pr create -B main -H merge-public-hax --title 'Synchronize with upstream hax' --body 'Created by Github action'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: cryspen/hax-evit
