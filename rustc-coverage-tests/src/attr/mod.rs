@@ -1,4 +1,5 @@
-mod r#impl;
+#[path = "impl.rs"]
+mod impl_;
 mod module;
 #[cfg(any())]
 mod nested;

@@ -2,7 +2,7 @@
 
 # Check if an argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <coq|fstar|json|all>"
+    echo "Usage: $0 <coq|fstar|fstar-lax|json|all>"
     exit 1
 fi
 
@@ -17,9 +17,17 @@ run_cargo_hax() {
     # Handle json case differently (no 'into' command)
     if [ "$feature" == "json" ]; then
         cargo hax -C --features "$feature" \; $feature
+    elif [ "$feature" == "fstar-lax" ]; then
+        cargo hax -C --features "$feature" \; into fstar
     else
         cargo hax -C --features "$feature" \; into "$feature"
     fi
+}
+
+run_fstar_lax() {
+    rm proofs/fstar/extraction/*.fst
+    run_cargo_hax "fstar-lax"
+    OTHERFLAGS="--admit_smt_queries true" make -C proofs/fstar/extraction
 }
 
 # Select the appropriate action based on the input argument
@@ -30,16 +38,20 @@ case "$1" in
     fstar)
         run_cargo_hax "fstar"
         ;;
+    fstar-lax)
+        run_fstar_lax
+        ;;
     json)
         run_cargo_hax "json"
         ;;
     all)
         run_cargo_hax "json" && \
         run_cargo_hax "fstar" && \
-        run_cargo_hax "coq"
+        run_cargo_hax "coq" && \
+        run_fstar_lax
         ;;
     *)
-        echo "Invalid argument. Please use one of the following: coq, fstar, json, all"
+        echo "Invalid argument. Please use one of the following: coq, fstar, fstar-lax, json, all"
         exit 1
         ;;
 esac

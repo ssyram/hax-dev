@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+hax-lib = { path = "../hax-lib" }
 
 [features]
 fstar = []
+fstar-lax = []
 coq = []
 json = []
 
