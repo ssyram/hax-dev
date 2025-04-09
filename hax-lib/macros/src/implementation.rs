@@ -782,110 +782,108 @@ macro_rules! make_quoting_item_proc_macro {
 
 macro_rules! make_quoting_proc_macro {
     ($backend:ident) => {
-        paste::paste! {
-            #[doc = concat!("Embed ", stringify!($backend), " expression inside a Rust expression. This macro takes only one argument: some raw ", stringify!($backend), " code as a string literal.")]
-            ///
+        #[doc = concat!("Embed ", stringify!($backend), " expression inside a Rust expression. This macro takes only one argument: some raw ", stringify!($backend), " code as a string literal.")]
+        ///
 
-            /// While it is possible to directly write raw backend code,
-            /// sometimes it can be inconvenient. For example, referencing
-            /// Rust names can be a bit cumbersome: for example, the name
-            /// `my_crate::my_module::CONSTANT` might be translated
-            /// differently in a backend (e.g. in the F* backend, it will
-            /// probably be `My_crate.My_module.v_CONSTANT`).
-            ///
+        /// While it is possible to directly write raw backend code,
+        /// sometimes it can be inconvenient. For example, referencing
+        /// Rust names can be a bit cumbersome: for example, the name
+        /// `my_crate::my_module::CONSTANT` might be translated
+        /// differently in a backend (e.g. in the F* backend, it will
+        /// probably be `My_crate.My_module.v_CONSTANT`).
+        ///
 
-            /// To facilitate this, you can write Rust names directly,
-            /// using the prefix `$`: `f $my_crate::my_module__CONSTANT + 3`
-            /// will be replaced with `f My_crate.My_module.v_CONSTANT + 3`
-            /// in the F* backend for instance.
+        /// To facilitate this, you can write Rust names directly,
+        /// using the prefix `$`: `f $my_crate::my_module__CONSTANT + 3`
+        /// will be replaced with `f My_crate.My_module.v_CONSTANT + 3`
+        /// in the F* backend for instance.
 
-            /// If you want to refer to the Rust constructor
-            /// `Enum::Variant`, you should write `$$Enum::Variant` (note
-            /// the double dollar).
+        /// If you want to refer to the Rust constructor
+        /// `Enum::Variant`, you should write `$$Enum::Variant` (note
+        /// the double dollar).
 
-            /// If the name refers to something polymorphic, you need to
-            /// signal it by adding _any_ type informations,
-            /// e.g. `${my_module::function<()>}`. The curly braces are
-            /// needed for such more complex expressions.
+        /// If the name refers to something polymorphic, you need to
+        /// signal it by adding _any_ type informations,
+        /// e.g. `${my_module::function<()>}`. The curly braces are
+        /// needed for such more complex expressions.
 
-            /// You can also write Rust patterns with the `$?{SYNTAX}`
-            /// syntax, where `SYNTAX` is a Rust pattern. The syntax
-            /// `${EXPR}` also allows any Rust expressions
-            /// `EXPR` to be embedded.
+        /// You can also write Rust patterns with the `$?{SYNTAX}`
+        /// syntax, where `SYNTAX` is a Rust pattern. The syntax
+        /// `${EXPR}` also allows any Rust expressions
+        /// `EXPR` to be embedded.
 
-            /// Types can be refered to with the syntax `$:{TYPE}`.
-            #[proc_macro]
-            pub fn [<$backend _expr>](payload: pm::TokenStream) -> pm::TokenStream {
-                let ts: TokenStream = quote::expression(quote::InlineExprType::Unit, payload).into();
-                quote!{{
-                    #[cfg([< hax_backend_ $backend >])]
-                    {
-                        #ts
-                    }
-                }}.into()
-            }
+        /// Types can be refered to with the syntax `$:{TYPE}`.
+        #[proc_macro]
+        pub fn ${concat($backend, _expr)}(payload: pm::TokenStream) -> pm::TokenStream {
+            let ts: TokenStream = quote::expression(quote::InlineExprType::Unit, payload).into();
+            quote!{{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                {
+                    #ts
+                }
+            }}.into()
+        }
 
-            #[doc = concat!("The `Prop` version of `", stringify!($backend), "_expr`.")]
-            #[proc_macro]
-            pub fn [<$backend _prop_expr>](payload: pm::TokenStream) -> pm::TokenStream {
-                let ts: TokenStream = quote::expression(quote::InlineExprType::Prop, payload).into();
-                quote!{{
-                    #[cfg([< hax_backend_ $backend >])]
-                    {
-                        #ts
-                    }
-                    #[cfg(not([< hax_backend_ $backend >]))]
-                    {
-                        ::hax_lib::Prop::from_bool(true)
-                    }
-                }}.into()
-            }
+        #[doc = concat!("The `Prop` version of `", stringify!($backend), "_expr`.")]
+        #[proc_macro]
+        pub fn ${concat($backend, _prop_expr)}(payload: pm::TokenStream) -> pm::TokenStream {
+            let ts: TokenStream = quote::expression(quote::InlineExprType::Prop, payload).into();
+            quote!{{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                {
+                    #ts
+                }
+                #[cfg(not(${concat(hax_backend_, $backend)}))]
+                {
+                    ::hax_lib::Prop::from_bool(true)
+                }
+            }}.into()
+        }
 
-            #[doc = concat!("The unsafe (because polymorphic: even computationally relevant code can be inlined!) version of `", stringify!($backend), "_expr`.")]
-            #[proc_macro]
-            #[doc(hidden)]
-            pub fn [<$backend _unsafe_expr>](payload: pm::TokenStream) -> pm::TokenStream {
-                let ts: TokenStream = quote::expression(quote::InlineExprType::Anything, payload).into();
-                quote!{{
-                    #[cfg([< hax_backend_ $backend >])]
-                    {
-                        #ts
-                    }
-                }}.into()
-            }
+        #[doc = concat!("The unsafe (because polymorphic: even computationally relevant code can be inlined!) version of `", stringify!($backend), "_expr`.")]
+        #[proc_macro]
+        #[doc(hidden)]
+        pub fn ${concat($backend, _unsafe_expr)}(payload: pm::TokenStream) -> pm::TokenStream {
+            let ts: TokenStream = quote::expression(quote::InlineExprType::Anything, payload).into();
+            quote!{{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                {
+                    #ts
+                }
+            }}.into()
+        }
 
-            make_quoting_item_proc_macro!($backend, [< $backend _before >], ItemQuotePosition::Before, [< hax_backend_ $backend >]);
-            make_quoting_item_proc_macro!($backend, [< $backend _after >], ItemQuotePosition::After, [< hax_backend_ $backend >]);
+        make_quoting_item_proc_macro!($backend, ${concat($backend, _before)}, ItemQuotePosition::Before, ${concat(hax_backend_, $backend)});
+        make_quoting_item_proc_macro!($backend, ${concat($backend, _after)}, ItemQuotePosition::After, ${concat(hax_backend_, $backend)});
 
-            #[doc = concat!("Replaces a Rust item with some verbatim ", stringify!($backend)," code.")]
-            #[proc_macro_error]
-            #[proc_macro_attribute]
-            pub fn [< $backend _replace >](payload: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
-                let item: TokenStream = item.into();
-                let attr = AttrPayload::ItemStatus(ItemStatus::Included { late_skip: true });
-                [< $backend _before >](payload, quote!{#attr #item}.into())
-            }
+        #[doc = concat!("Replaces a Rust item with some verbatim ", stringify!($backend)," code.")]
+        #[proc_macro_error]
+        #[proc_macro_attribute]
+        pub fn ${concat($backend, _replace)}(payload: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+            let item: TokenStream = item.into();
+            let attr = AttrPayload::ItemStatus(ItemStatus::Included { late_skip: true });
+            ${concat($backend, _before)}(payload, quote!{#attr #item}.into())
+        }
 
-            #[doc = concat!("Replaces the body of a Rust function with some verbatim ", stringify!($backend)," code.")]
-            #[proc_macro_error]
-            #[proc_macro_attribute]
-            pub fn [< $backend _replace_body >](payload: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
-                let payload: TokenStream = payload.into();
-                let item: ItemFn = parse_macro_input!(item);
-                let mut hax_item = item.clone();
-                *hax_item.block.as_mut() = parse_quote!{
-                    {
-                        ::hax_lib::$backend::unsafe_expr!(#payload)
-                    }
-                };
-                quote!{
-                    #[cfg([< hax_backend_ $backend >])]
-                    #hax_item
+        #[doc = concat!("Replaces the body of a Rust function with some verbatim ", stringify!($backend)," code.")]
+        #[proc_macro_error]
+        #[proc_macro_attribute]
+        pub fn ${concat($backend, _replace_body)}(payload: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+            let payload: TokenStream = payload.into();
+            let item: ItemFn = parse_macro_input!(item);
+            let mut hax_item = item.clone();
+            *hax_item.block.as_mut() = parse_quote!{
+                {
+                    ::hax_lib::$backend::unsafe_expr!(#payload)
+                }
+            };
+            quote!{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                #hax_item
 
-                    #[cfg(not([< hax_backend_ $backend >]))]
-                    #item
-                }.into()
-            }
+                #[cfg(not(${concat(hax_backend_, $backend)}))]
+                #item
+            }.into()
         }
     };
     ($($backend:ident)*) => {
