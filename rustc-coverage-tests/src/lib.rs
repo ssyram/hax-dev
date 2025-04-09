@@ -6,8 +6,8 @@
 mod attr;
 #[cfg(any(feature = "json", feature = "fstar", feature = "coq"))]
 mod auxiliary;
-/// Modules that are commented out are not used by any test target.
-/// They are kept in case they need to be added to a target in the future.
+/* Modules that are commented out are not used by any test target.
+They are kept in case they need to be added to a target in the future. */
 // mod branch;
 #[cfg(any(feature = "json", feature = "fstar"))]
 mod abort;
