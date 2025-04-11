@@ -102,7 +102,7 @@ pub fn translate_constant_reference<'tcx>(
     ucv: rustc_middle::ty::UnevaluatedConst<'tcx>,
 ) -> Option<ConstantExpr> {
     let tcx = s.base().tcx;
-    if is_anon_const(ucv.def, tcx) {
+    if s.base().options.inline_anon_consts && is_anon_const(ucv.def, tcx) {
         return None;
     }
     let typing_env = s.typing_env();

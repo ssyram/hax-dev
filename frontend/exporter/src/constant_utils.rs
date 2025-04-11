@@ -56,6 +56,9 @@ pub enum ConstantExprKind {
     ///   const LEN: usize = N; // This has generics <N, T>
     /// }
     /// ```
+    ///
+    /// If `options.inline_anon_consts` is `false`, this is also used for inline const blocks and
+    /// advanced const generics expressions.
     GlobalName {
         id: GlobalIdent,
         generics: Vec<GenericArg>,
