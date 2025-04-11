@@ -88,8 +88,8 @@ pub(crate) fn is_anon_const(
     tcx: rustc_middle::ty::TyCtxt<'_>,
 ) -> bool {
     matches!(
-        tcx.def_path(did).data.last().map(|x| x.data),
-        Some(rustc_hir::definitions::DefPathData::AnonConst)
+        tcx.def_kind(did),
+        rustc_hir::def::DefKind::AnonConst | rustc_hir::def::DefKind::InlineConst
     )
 }
 
