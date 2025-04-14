@@ -69,7 +69,7 @@ fn translate_pat(pat: &src::Pat) -> dst::Pat {
     let ty = translate_ty(&pat.ty, span);
     let meta = dst::Metadata {
         span,
-        attrs: translate_attributes(&pat.attributes[..]),
+        attrs: translate_attributes(&pat.attributes),
     };
     dst::Pat { kind, ty, meta }
 }
@@ -255,10 +255,10 @@ pub fn translate_item_kind(
 
 pub fn translate_item(item: &src::Item<Body>) -> dst::Item {
     let span = (&item.span).into();
-    let name = item.owner_id.clone().into();
-    let kind = translate_item_kind(&item.kind, name, span);
+    let name: dst::GlobalId = item.owner_id.clone().into();
+    let kind = translate_item_kind(&item.kind, name.clone(), span);
     dst::Item {
-        ident: item.owner_id.clone().into(),
+        ident: name,
         kind,
         meta: dst::Metadata {
             span,

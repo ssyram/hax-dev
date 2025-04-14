@@ -11,8 +11,5 @@ readme.workspace = true
 [dependencies]
 hax-types = { path = "../hax-types" }
 hax-frontend-exporter = { path = "../frontend/exporter" }
-pretty = "0.12.4"
-bumpalo = "3.17.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-backtrace-on-stack-overflow = "0.3.0"

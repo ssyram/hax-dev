@@ -45,8 +45,8 @@ fn main() {
     }
 
     let printer = ModPrinter {
-        modules: &modules[..],
-        items: &items[..],
+        modules: &modules,
+        items: &items,
         current_path: vec![],
     };
 
