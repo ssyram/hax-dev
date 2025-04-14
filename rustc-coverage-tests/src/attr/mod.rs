@@ -1,8 +1,7 @@
 #[path = "impl.rs"]
 mod impl_;
 mod module;
-#[cfg(any())]
-mod nested;
+// mod nested;
 #[path = "off-on-sandwich.rs"]
 mod off_on_sandwich;
 #[path = "trait-impl-inherit.rs"]

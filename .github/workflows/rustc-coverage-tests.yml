@@ -36,5 +36,4 @@ jobs:
       - name: 🏃 coverage tests
         working-directory: rustc-coverage-tests
         run: |
-          cargo hax --version
-          ./run-coverage-tests.sh all
+          FSTAR_HOME=~/.nix-profile python3 run-coverage-tests.py all
