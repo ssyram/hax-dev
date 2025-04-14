@@ -20,7 +20,7 @@ def compare_and_store_outputs(target, base_dir="proofs", store_dir="snapshots", 
     unstable = False
     
     # Only consider .v and .fst files
-    valid_extensions = {".fst"}
+    valid_extensions = {".fst", ".v"}
     files_to_check = [f for f in actual_dir.rglob("*") if f.is_file() and f.suffix in valid_extensions]
 
 
@@ -76,9 +76,13 @@ def load_config(file_path):
         return yaml.safe_load(f)
 
 def run_command(cmd):
-    print(f"Running: {cmd}")
-    result = subprocess.run(cmd, shell=True)
-    return result.returncode
+    result = subprocess.run(
+        cmd, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.STDOUT,  # Redirect stderr to stdout
+        shell = True,
+        text=True)
+    return result
 
 def cargo_cmd(test_name, target, feature):
     feature_flag = f"--features {feature}"
@@ -88,7 +92,7 @@ def cargo_cmd(test_name, target, feature):
 def run_fstar_lax(test_name, include_negative):
     cmd = cargo_cmd(test_name, "fstar", "json" if include_negative else "fstar-lax")
     extraction = run_command(cmd)
-    if extraction != 0:
+    if extraction.returncode != 0:
         return extraction
     return run_command("OTHERFLAGS='--admit_smt_queries true' make -C proofs/fstar/extraction")
 
@@ -128,14 +132,16 @@ def run_tests(config, target, include_negative, check_stability, update_snapshot
     applicable_targets = [target] if target != "all" else all_targets
     
     if "json" in applicable_targets:
-        rc = run_json_target()
-        expected_code = 0
+        result = run_json_target()
+        rc = result.returncode
+        if rc != 0:
+            print(result.stdout)   
         results.append({
             "test": "cargo-hax-json",
             "target": "json",
             "expected": "✅ Pass",
             "actual": "✅ Pass" if rc == 0 else "❌ Fail",
-            "result": "✅" if rc == expected_code else "❌"
+            "result": "✅" if rc == 0 else "❌"
         })
 
     
@@ -153,12 +159,12 @@ def run_tests(config, target, include_negative, check_stability, update_snapshot
             cleanup_extraction()
 
             if t == "fstar-lax":
-                rc = run_fstar_lax(test_name, include_negative)
+                command_result = run_fstar_lax(test_name, include_negative)
             else:
                 cmd = cargo_cmd(test_name, t, "json" if include_negative else t)
-                rc = run_command(cmd)
-            
-            rc = min(rc, 1)
+                command_result = run_command(cmd)
+
+            rc = min(command_result.returncode, 1)
 
             expected_code = 0 if is_expected_to_run else 1
             passed = (rc == expected_code)
@@ -171,7 +177,7 @@ def run_tests(config, target, include_negative, check_stability, update_snapshot
                 "result": "✅" if passed else "❌"
             }
 
-            if check_stability and t in ["fstar", "coq"]:
+            if check_stability and t in ["fstar"]:
                 is_stable = compare_and_store_outputs(t, update_snapshots = update_snapshots)
                 if not is_stable:
                     # optionally mark test as failed
@@ -179,6 +185,11 @@ def run_tests(config, target, include_negative, check_stability, update_snapshot
                     result["result"] = "❌"
                 else:
                     result["stability"] = "✅"
+
+            print(result)
+            
+            if not passed:
+                print(command_result.stdout)
 
             results.append(result)
 
