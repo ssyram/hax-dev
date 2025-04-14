@@ -488,3 +488,13 @@ mod issue_1276 {
         fn f(&self, self_: u8, self_0: u8, self_1: u8, self_2: u8) {}
     }
 }
+
+mod issue_evit_57 {
+    struct Foo;
+
+    #[hax_lib::attributes]
+    impl Foo {
+        #[hax_lib::requires(true)]
+        fn f(mut self) {}
+    }
+}
