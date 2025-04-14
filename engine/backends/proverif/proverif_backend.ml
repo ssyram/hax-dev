@@ -644,7 +644,7 @@ module Make (Options : OPTS) : MAKE = struct
             string "let" ^^ space
             ^^ iblock Fn.id (print#pat_at Expr_Let_lhs lhs)
             ^^ space ^^ equals ^^ space
-            ^^ iblock Fn.id (print#expr_at Expr_Let_rhs rhs)
+            ^^ iblock parens (print#expr_at Expr_Let_rhs rhs |> group)
             ^^ space ^^ string "in" ^^ hardline
             ^^ (print#expr_at Expr_Let_body body |> group)
 
