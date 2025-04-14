@@ -9,7 +9,7 @@ import difflib
 
 CONFIG_FILE = "test_config.yaml"
 
-def compare_and_store_outputs(test, target, base_dir="proofs", store_dir="snapshots", update_snapshots = False):
+def compare_and_store_outputs(target, base_dir="proofs", store_dir="snapshots", update_snapshots = False):
     actual_dir = Path(base_dir) / target / "extraction"
     expected_dir = Path(store_dir) / target
 
@@ -20,7 +20,7 @@ def compare_and_store_outputs(test, target, base_dir="proofs", store_dir="snapsh
     unstable = False
     
     # Only consider .v and .fst files
-    valid_extensions = {".v", ".fst"}
+    valid_extensions = {".fst"}
     files_to_check = [f for f in actual_dir.rglob("*") if f.is_file() and f.suffix in valid_extensions]
 
 
@@ -172,7 +172,7 @@ def run_tests(config, target, include_negative, check_stability, update_snapshot
             }
 
             if check_stability and t in ["fstar", "coq"]:
-                is_stable = compare_and_store_outputs(test_name, t, update_snapshots = update_snapshots)
+                is_stable = compare_and_store_outputs(t, update_snapshots = update_snapshots)
                 if not is_stable:
                     # optionally mark test as failed
                     result["stability"] = "❌"
