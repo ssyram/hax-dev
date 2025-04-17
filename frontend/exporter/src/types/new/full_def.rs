@@ -331,7 +331,7 @@ pub enum FullDefKind<Body> {
     Use,
     Mod {
         #[value(get_mod_children(s.base().tcx, s.owner_id()).sinto(s))]
-        items: Vec<DefId>,
+        items: Vec<(Option<Ident>, DefId)>,
     },
     /// An `extern` block.
     ForeignMod {
@@ -566,7 +566,10 @@ fn get_def_attrs<'tcx>(
 
 /// Gets the children of a module.
 #[cfg(feature = "rustc")]
-fn get_mod_children<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Vec<RDefId> {
+fn get_mod_children<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    def_id: RDefId,
+) -> Vec<(Option<rustc_span::Ident>, RDefId)> {
     match def_id.as_local() {
         Some(ldid) => match tcx.hir_node_by_def_id(ldid) {
             rustc_hir::Node::Crate(m)
@@ -576,14 +579,18 @@ fn get_mod_children<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Vec<RDefId> 
             }) => m
                 .item_ids
                 .iter()
-                .map(|item_id| item_id.owner_id.to_def_id())
+                .map(|&item_id| {
+                    let opt_ident = tcx.hir_item(item_id).kind.ident();
+                    let def_id = item_id.owner_id.to_def_id();
+                    (opt_ident, def_id)
+                })
                 .collect(),
             node => panic!("DefKind::Module is an unexpected node: {node:?}"),
         },
         None => tcx
             .module_children(def_id)
             .iter()
-            .map(|child| child.res.def_id())
+            .map(|child| (Some(child.ident), child.res.def_id()))
             .collect(),
     }
 }
