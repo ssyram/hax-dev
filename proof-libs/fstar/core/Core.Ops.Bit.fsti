@@ -30,3 +30,11 @@ let impl_bitxor_bool: Core.Ops.Bit.t_BitXor Prims.bool Prims.bool =
     f_bitxor = fun (self: Prims.bool) (rhs: Prims.bool) -> (self <> rhs) <: Prims.bool
   }
 
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+let impl_bitand_bool: Core.Ops.Bit.t_BitAnd Prims.bool Prims.bool =
+  {
+    f_Output = Prims.bool;
+    f_bitand_pre = (fun (self: Prims.bool) (rhs: Prims.bool) -> true);
+    f_bitand_post = (fun (self: Prims.bool) (rhs: Prims.bool) (out: Prims.bool) -> (self && rhs) = out );
+    f_bitand = fun (self: Prims.bool) (rhs: Prims.bool) -> (self && rhs) <: Prims.bool
+  }
