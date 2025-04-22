@@ -331,7 +331,7 @@ pub enum FullDefKind<Body> {
     Use,
     Mod {
         #[value(get_mod_children(s.base().tcx, s.owner_id()).sinto(s))]
-        items: Vec<DefId>,
+        items: Vec<(Option<Ident>, DefId)>,
     },
     /// An `extern` block.
     ForeignMod {
@@ -455,6 +455,45 @@ impl<Body> FullDef<Body> {
             _ => None,
         }
     }
+
+    /// Lists the children of this item that can be named, in the way of normal rust paths. For
+    /// types, this includes inherent items.
+    #[cfg(feature = "rustc")]
+    pub fn nameable_children<'tcx>(&self, s: &impl BaseState<'tcx>) -> Vec<(Symbol, DefId)> {
+        let mut children = match self.kind() {
+            FullDefKind::Mod { items } => items
+                .iter()
+                .filter_map(|(opt_ident, def_id)| {
+                    Some((opt_ident.as_ref()?.0.clone(), def_id.clone()))
+                })
+                .collect(),
+            FullDefKind::Enum { def, .. } => def
+                .variants
+                .raw
+                .iter()
+                .map(|variant| (variant.name.clone(), variant.def_id.clone()))
+                .collect(),
+            FullDefKind::InherentImpl { items, .. } | FullDefKind::Trait { items, .. } => items
+                .iter()
+                .map(|(item, _)| (item.name.clone(), item.def_id.clone()))
+                .collect(),
+            FullDefKind::TraitImpl { items, .. } => items
+                .iter()
+                .map(|item| (item.name.clone(), item.def().def_id.clone()))
+                .collect(),
+            _ => vec![],
+        };
+        // Add inherent impl items if any.
+        let tcx = s.base().tcx;
+        for impl_def_id in tcx.inherent_impls(self.rust_def_id()) {
+            children.extend(
+                tcx.associated_items(impl_def_id)
+                    .in_definition_order()
+                    .map(|assoc| (assoc.name, assoc.def_id).sinto(s)),
+            );
+        }
+        children
+    }
 }
 
 impl<Body> ImplAssocItem<Body> {
@@ -566,7 +605,10 @@ fn get_def_attrs<'tcx>(
 
 /// Gets the children of a module.
 #[cfg(feature = "rustc")]
-fn get_mod_children<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Vec<RDefId> {
+fn get_mod_children<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    def_id: RDefId,
+) -> Vec<(Option<rustc_span::Ident>, RDefId)> {
     match def_id.as_local() {
         Some(ldid) => match tcx.hir_node_by_def_id(ldid) {
             rustc_hir::Node::Crate(m)
@@ -576,14 +618,18 @@ fn get_mod_children<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Vec<RDefId> 
             }) => m
                 .item_ids
                 .iter()
-                .map(|item_id| item_id.owner_id.to_def_id())
+                .map(|&item_id| {
+                    let opt_ident = tcx.hir_item(item_id).kind.ident();
+                    let def_id = item_id.owner_id.to_def_id();
+                    (opt_ident, def_id)
+                })
                 .collect(),
             node => panic!("DefKind::Module is an unexpected node: {node:?}"),
         },
         None => tcx
             .module_children(def_id)
             .iter()
-            .map(|child| child.res.def_id())
+            .map(|child| (Some(child.ident), child.res.def_id()))
             .collect(),
     }
 }
