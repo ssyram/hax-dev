@@ -125,24 +125,23 @@ def write_summary(results, stability):
 
 def run_tests(config, target, include_negative, check_stability, update_snapshots):
     results = []
-    all_targets = ["coq", "fstar", "fstar-lax"]
-    if not include_negative:
-        all_targets.append("json")
+    all_targets = ["coq", "fstar", "fstar-lax", "json"]
 
     applicable_targets = [target] if target != "all" else all_targets
     
     if "json" in applicable_targets:
-        result = run_json_target()
-        rc = result.returncode
+        json_result = run_json_target()
+        rc = json_result.returncode
         if rc != 0:
-            print(result.stdout)   
-        results.append({
-            "test": "cargo-hax-json",
-            "target": "json",
-            "expected": "✅ Pass",
-            "actual": "✅ Pass" if rc == 0 else "❌ Fail",
-            "result": "✅" if rc == 0 else "❌"
-        })
+            print(json_result.stdout)   
+            results.append({
+                "test": "cargo-hax-json",
+                "target": "json",
+                "expected": "✅ Pass",
+                "actual": "✅ Pass" if rc == 0 else "❌ Fail",
+                "result": "✅" if rc == 0 else "❌"
+            })
+            return results
 
     
     if target == "json":
@@ -160,6 +159,8 @@ def run_tests(config, target, include_negative, check_stability, update_snapshot
 
             if t == "fstar-lax":
                 command_result = run_fstar_lax(test_name, include_negative)
+            elif t == "json":
+                command_result = json_result
             else:
                 cmd = cargo_cmd(test_name, t, "json" if include_negative else t)
                 command_result = run_command(cmd)
