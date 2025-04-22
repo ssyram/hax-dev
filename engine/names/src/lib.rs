@@ -30,6 +30,7 @@ fn dummy_hax_concrete_ident_wrapper<I: core::iter::Iterator<Item = u8>>(x: I, mu
     assert_eq!(1, 1);
     hax_lib::assert!(true);
     hax_lib::_internal_loop_invariant(|_: usize| true);
+    hax_lib::_internal_while_loop_invariant(hax_lib::Prop::from(true));
     hax_lib::_internal_loop_decreases(hax_lib::Int::_unsafe_from_str("0"));
 
     fn props() {

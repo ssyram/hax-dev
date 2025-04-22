@@ -63,11 +63,20 @@ pub fn fstar_options(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenS
 /// `coq`...) are in scope.
 #[proc_macro]
 pub fn loop_invariant(predicate: pm::TokenStream) -> pm::TokenStream {
-    let predicate: TokenStream = predicate.into();
+    let predicate2: TokenStream = predicate.clone().into();
+    let predicate_expr: syn::Expr = parse_macro_input!(predicate);
+
+    let (invariant_f, predicate) = match predicate_expr {
+        syn::Expr::Closure(_) => (quote!(hax_lib::_internal_loop_invariant), predicate2),
+        _ => (
+            quote!(hax_lib::_internal_while_loop_invariant),
+            quote!(::hax_lib::Prop::from(#predicate2)),
+        ),
+    };
     let ts: pm::TokenStream = quote! {
         #[cfg(#HaxCfgOptionName)]
         {
-            hax_lib::_internal_loop_invariant({
+            #invariant_f({
                 #HaxQuantifiers
                 #predicate
             })
@@ -90,7 +99,8 @@ pub fn loop_decreases(predicate: pm::TokenStream) -> pm::TokenStream {
         {
             hax_lib::_internal_loop_decreases({
                 #HaxQuantifiers
-                #predicate
+                use ::hax_lib::int::ToInt;
+                (#predicate).to_int()
             })
         }
     }

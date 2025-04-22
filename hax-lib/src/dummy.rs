@@ -47,6 +47,9 @@ pub fn inline_unsafe<T>(_: &str) -> T {
 pub const fn _internal_loop_invariant<T, R: Into<Prop>, P: FnOnce(T) -> R>(_: &P) {}
 
 #[doc(hidden)]
+pub const fn _internal_while_loop_invariant(_: Prop) {}
+
+#[doc(hidden)]
 pub const fn _internal_loop_decreases(_: int::Int) {}
 
 pub trait Refinement {

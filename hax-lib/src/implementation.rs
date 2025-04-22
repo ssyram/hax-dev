@@ -143,6 +143,10 @@ pub fn any_to_unit<T>(_: T) -> () {
 #[doc(hidden)]
 pub fn _internal_loop_invariant<T, R: Into<Prop>, P: FnOnce(T) -> R>(_: P) {}
 
+/// A dummy function that holds a while loop invariant.
+#[doc(hidden)]
+pub const fn _internal_while_loop_invariant(_: Prop) {}
+
 /// A dummy function that holds a loop variant.
 #[doc(hidden)]
 pub fn _internal_loop_decreases(_: Int) {}

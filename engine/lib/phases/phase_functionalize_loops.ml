@@ -39,12 +39,16 @@ struct
       include Features.SUBTYPE.Id
     end
 
-    type body_and_invariant = {
+    type loop_annotation_kind =
+      | LoopInvariant of { index_pat : B.pat option; invariant : B.expr }
+      | LoopVariant of B.expr
+
+    type loop_annotation = {
       body : B.expr;
-      invariant : (B.pat * B.expr) option;
+      annotation : loop_annotation_kind option;
     }
 
-    let extract_loop_invariant (body : B.expr) : body_and_invariant =
+    let extract_loop_annotation (body : B.expr) : loop_annotation =
       match body.e with
       | Let
           {
@@ -71,37 +75,41 @@ struct
             body;
           }
         when Global_ident.eq_name Hax_lib___internal_loop_invariant f ->
-          { body; invariant = Some (pat, invariant) }
-      | _ -> { body; invariant = None }
-
-    let extract_loop_variant (body : B.expr) : B.expr * B.expr =
-      match body.e with
+          {
+            body;
+            annotation =
+              Some (LoopInvariant { index_pat = Some pat; invariant });
+          }
       | Let
           {
             monadic = None;
             lhs = { p = PWild; _ };
-            rhs = { e = App { f = { e = GlobalVar f; _ }; args = [ e ]; _ }; _ };
+            rhs =
+              {
+                e = App { f = { e = GlobalVar f; _ }; args = [ invariant ]; _ };
+                _;
+              };
+            body;
+          }
+        when Global_ident.eq_name Hax_lib___internal_while_loop_invariant f ->
+          {
+            body;
+            annotation = Some (LoopInvariant { index_pat = None; invariant });
+          }
+      | Let
+          {
+            monadic = None;
+            lhs = { p = PWild; _ };
+            rhs =
+              {
+                e = App { f = { e = GlobalVar f; _ }; args = [ invariant ]; _ };
+                _;
+              };
             body;
           }
         when Global_ident.eq_name Hax_lib___internal_loop_decreases f ->
-          (body, e)
-      | _ ->
-          let kind = { size = S32; signedness = Unsigned } in
-          let e =
-            UB.M.expr_Literal ~typ:(TInt kind) ~span:body.span
-              (Int { value = "0"; negative = false; kind })
-          in
-          let e =
-            UB.call Rust_primitives__hax__int__from_machine [ e ] e.span
-              (TApp
-                 {
-                   ident =
-                     `Concrete
-                       (Concrete_ident.of_name ~value:false Hax_lib__int__Int);
-                   args = [];
-                 })
-          in
-          (body, e)
+          { body; annotation = Some (LoopVariant invariant) }
+      | _ -> { body; annotation = None }
 
     type iterator =
       | Range of { start : B.expr; end_ : B.expr }
@@ -245,7 +253,7 @@ struct
                 (M.pat_PWild ~span ~typ:unit.typ, unit)
           in
           let body = dexpr body in
-          let { body; invariant } = extract_loop_invariant body in
+          let { body; annotation } = extract_loop_annotation body in
           let it = dexpr it in
           let pat = dpat pat in
           let fn : B.expr = UB.make_closure [ bpat; pat ] body body.span in
@@ -259,7 +267,13 @@ struct
                     let pat = MS.pat_PWild ~typ in
                     (pat, MS.expr_Literal ~typ:TBool (Bool true))
                   in
-                  let pat, invariant = Option.value ~default invariant in
+                  let pat, invariant =
+                    match annotation with
+                    | Some (LoopInvariant { index_pat = Some pat; invariant })
+                      ->
+                        (pat, invariant)
+                    | _ -> default
+                  in
                   UB.make_closure [ bpat; pat ] invariant invariant.span
                 in
                 (f, args @ [ invariant; init; fn ])
@@ -298,8 +312,39 @@ struct
                 (M.pat_PWild ~span ~typ:unit.typ, unit)
           in
           let body = dexpr body in
-          let { body; invariant } = extract_loop_invariant body in
-          let body, variant = extract_loop_variant body in
+          let { body; annotation = annotation1 } =
+            extract_loop_annotation body
+          in
+          let { body; annotation = annotation2 } =
+            extract_loop_annotation body
+          in
+          let invariant =
+            match (annotation1, annotation2) with
+            | Some (LoopInvariant { index_pat = None; invariant }), _
+            | _, Some (LoopInvariant { index_pat = None; invariant }) ->
+                invariant
+            | _ -> MS.expr_Literal ~typ:TBool (Bool true)
+          in
+          let variant =
+            match (annotation1, annotation2) with
+            | Some (LoopVariant variant), _ | _, Some (LoopVariant variant) ->
+                variant
+            | _ ->
+                let kind = { size = S32; signedness = Unsigned } in
+                let e =
+                  UB.M.expr_Literal ~typ:(TInt kind) ~span:body.span
+                    (Int { value = "0"; negative = false; kind })
+                in
+                UB.call Rust_primitives__hax__int__from_machine [ e ] e.span
+                  (TApp
+                     {
+                       ident =
+                         `Concrete
+                           (Concrete_ident.of_name ~value:false
+                              Hax_lib__int__Int);
+                       args = [];
+                     })
+          in
           let condition = dexpr condition in
           let condition : B.expr =
             M.expr_Closure ~params:[ bpat ] ~body:condition ~captures:[]
@@ -318,10 +363,6 @@ struct
             | None -> Rust_primitives__hax__while_loop
           in
           let invariant : B.expr =
-            let default = MS.expr_Literal ~typ:TBool (Bool true) in
-            let invariant =
-              invariant |> Option.map ~f:snd |> Option.value ~default
-            in
             UB.make_closure [ bpat ] invariant invariant.span
           in
           let variant = UB.make_closure [ bpat ] variant variant.span in

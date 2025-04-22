@@ -139,11 +139,19 @@ mod while_loops {
         x + 12
     }
     fn while_invariant_decr() -> u8 {
-        use hax_lib::ToInt;
         let mut x = 0;
         while x < 10 {
-            hax_lib::loop_invariant!(|_: usize| x <= 10);
-            hax_lib::loop_decreases!((10 - x).to_int());
+            hax_lib::loop_invariant!(x <= 10);
+            hax_lib::loop_decreases!(10 - x);
+            x = x + 3;
+        }
+        x + 12
+    }
+    fn while_invariant_decr_rev() -> u8 {
+        let mut x = 0;
+        while x < 10 {
+            hax_lib::loop_decreases!(10 - x);
+            hax_lib::loop_invariant!(x <= 10);
             x = x + 3;
         }
         x + 12
