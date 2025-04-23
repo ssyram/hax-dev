@@ -30,7 +30,7 @@ let impl_1
     =
     fun (self: t_Firework v_T) ->
       let _:Prims.unit =
-        Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+        Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
               (mk_usize 1)
               (let list = ["BOOM times "; "!!!\n"] in
                 FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);
@@ -56,7 +56,7 @@ let main (_: Prims.unit) : Core.Result.t_Result Prims.unit u8 =
   if true
   then
     let _:Prims.unit =
-      Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_const (mk_usize 1)
+      Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_const (mk_usize 1)
             (let list = ["Exiting with error...\n"] in
               FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
               Rust_primitives.Hax.array_of_list 1 list)

@@ -9,7 +9,7 @@ let live (v_B: bool) (_: Prims.unit) : u32 = if v_B then dead () else mk_u32 0
 
 let main (_: Prims.unit) : Prims.unit =
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list = [""; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);

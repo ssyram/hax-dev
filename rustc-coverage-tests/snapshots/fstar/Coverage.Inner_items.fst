@@ -15,7 +15,7 @@ let main__in_func (a: u32) : Prims.unit =
   let b:u32 = mk_u32 1 in
   let c:u32 = a +! b in
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list = ["c = "; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);
@@ -35,7 +35,7 @@ let main__v_IN_CONST: u32 = mk_u32 1234
 (* item error backend: (reject_TraitItemDefault) ExplicitRejection { reason: "a node of kind [Trait_item_default] have been found in the AST" }
 Last available AST for this item:
 
-#[cfg(any(feature = "json"))]#[allow(unused_assignments, unused_variables, dead_code)]#[feature(coverage_attribute)]#[allow(unused_attributes)]#[allow(dead_code)]#[allow(unreachable_code)]#[feature(register_tool)]#[register_tool(_hax)]trait main__t_InTrait<Self_>{#[_hax::json("\"TraitMethodNoPrePost\"")]fn main__f_trait_func_pre(_: Self,_: int) -> bool;
+#[<cfg>(any(feature = "json"))]#[allow(unused_assignments, unused_variables, dead_code)]#[feature(coverage_attribute)]#[allow(unused_attributes)]#[allow(dead_code)]#[allow(unreachable_code)]#[feature(register_tool)]#[register_tool(_hax)]trait main__t_InTrait<Self_>{#[_hax::json("\"TraitMethodNoPrePost\"")]fn main__f_trait_func_pre(_: Self,_: int) -> bool;
 #[_hax::json("\"TraitMethodNoPrePost\"")]fn main__f_trait_func_post(_: Self,_: int,_: Self) -> bool;
 fn main__f_trait_func(_: Self,_: int) -> Self;
 fn main__f_default_trait_func((self: Self)) -> Self{{let _: tuple0 = {coverage::inner_items::main__in_func(coverage::inner_items::main__v_IN_CONST)};{let self: Self = {coverage::inner_items::main__f_trait_func(self,coverage::inner_items::main__v_IN_CONST)};self}}}}
@@ -69,14 +69,15 @@ Last AST:
                                         }
                                       });
                               path =
-                              [{ Types.data = (Types.TypeNs "inner_items");
+                              [{ Types.data =
+                                 (Types.TypeNs (Some "inner_items"));
                                  disambiguator = 0 }
                                 ]
                               }
                             }
                           });
                   path =
-                  [{ Types.data = (Types.TypeNs "inner_items");
+                  [{ Types.data = (Types.TypeNs (Some "inner_items"));
                      disambiguator = 0 };
                     { Types.data = (Types.ValueNs "main"); disambiguator = 0
                       }
@@ -85,9 +86,10 @@ Last AST:
                 }
               });
       path =
-      [{ Types.data = (Types.TypeNs "inner_items"); disambiguator = 0 };
+      [{ Types.data = (Types.TypeNs (Some "inner_items")); disambiguator = 0
+         };
         { Types.data = (Types.ValueNs "main"); disambiguator = 0 };
-        { Types.data = (Types.TypeNs "InTrait"); disambiguator = 0 }]
+        { Types.data = (Types.TypeNs (Some "InTrait")); disambiguator = 0 }]
       }
     };
   moved = None; suffix = None }) */
