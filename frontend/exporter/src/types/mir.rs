@@ -324,6 +324,7 @@ pub struct MirBody<KIND> {
         }).collect()
     })]
     pub local_decls: IndexVec<Local, LocalDecl>,
+    pub arg_count: usize,
     pub basic_blocks: BasicBlocks,
     pub source_scopes: IndexVec<SourceScope, SourceScopeData>,
     pub tainted_by_errors: Option<ErrorGuaranteed>,
