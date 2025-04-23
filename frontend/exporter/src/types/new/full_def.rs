@@ -85,6 +85,16 @@ where
     }
 }
 
+/// The combination of type generics and related predicates.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub struct ParamEnv {
+    /// Generic parameters of the item.
+    pub generics: TyGenerics,
+    /// Required predicates for the item (see `traits::utils::required_predicates`).
+    pub predicates: GenericPredicates,
+}
+
 /// Imbues [`rustc_hir::def::DefKind`] with a lot of extra information.
 /// Important: the `owner_id()` must be the id of this definition.
 #[derive(AdtInto)]
@@ -95,39 +105,31 @@ pub enum FullDefKind<Body> {
     // Types
     /// Refers to the struct definition, [`DefKind::Ctor`] refers to its constructor if it exists.
     Struct {
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         #[value(s.base().tcx.adt_def(s.owner_id()).sinto(s))]
         def: AdtDef,
     },
     Union {
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         #[value(s.base().tcx.adt_def(s.owner_id()).sinto(s))]
         def: AdtDef,
     },
     Enum {
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         #[value(s.base().tcx.adt_def(s.owner_id()).sinto(s))]
         def: AdtDef,
     },
     /// Type alias: `type Foo = Bar;`
     TyAlias {
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         /// `Some` if the item is in the local crate.
-        #[value(s.base().tcx.hir().get_if_local(s.owner_id()).map(|node| {
+        #[value(s.base().tcx.hir_get_if_local(s.owner_id()).map(|node| {
             let rustc_hir::Node::Item(item) = node else { unreachable!() };
-            let rustc_hir::ItemKind::TyAlias(ty, _generics) = &item.kind else { unreachable!() };
+            let rustc_hir::ItemKind::TyAlias(_, ty, _generics) = &item.kind else { unreachable!() };
             let mut s = State::from_under_owner(s);
             s.base.ty_alias_mode = true;
             ty.sinto(&s)
@@ -140,11 +142,10 @@ pub enum FullDefKind<Body> {
     AssocTy {
         #[value(s.base().tcx.parent(s.owner_id()).sinto(s))]
         parent: DefId,
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_implied_predicates(s, s.owner_id()))]
-        // FIXME: clarify implied vs required predicates
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
+        #[value(implied_predicates(s.base().tcx, s.owner_id()).sinto(s))]
+        implied_predicates: GenericPredicates,
         #[value(s.base().tcx.associated_item(s.owner_id()).sinto(s))]
         associated_item: AssocItem,
         #[value({
@@ -162,10 +163,10 @@ pub enum FullDefKind<Body> {
 
     // Traits
     Trait {
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_implied_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
+        #[value(implied_predicates(s.base().tcx, s.owner_id()).sinto(s))]
+        implied_predicates: GenericPredicates,
         /// The special `Self: Trait` clause.
         #[value({
             use ty::Upcast;
@@ -198,8 +199,7 @@ pub enum FullDefKind<Body> {
         RDefKind::Impl { .. } => get_impl_contents(s),
     )]
     TraitImpl {
-        generics: TyGenerics,
-        predicates: GenericPredicates,
+        param_env: ParamEnv,
         /// The trait that is implemented by this impl block.
         trait_pred: TraitPredicate,
         /// The `ImplExpr`s required to satisfy the predicates on the trait declaration. E.g.:
@@ -207,14 +207,13 @@ pub enum FullDefKind<Body> {
         /// trait Foo: Bar {}
         /// impl Foo for () {} // would supply an `ImplExpr` for `Self: Bar`.
         /// ```
-        required_impl_exprs: Vec<ImplExpr>,
+        implied_impl_exprs: Vec<ImplExpr>,
         /// Associated items, in the order of the trait declaration. Includes defaulted items.
         items: Vec<ImplAssocItem<Body>>,
     },
     #[disable_mapping]
     InherentImpl {
-        generics: TyGenerics,
-        predicates: GenericPredicates,
+        param_env: ParamEnv,
         /// The type to which this block applies.
         ty: Ty,
         /// Associated items, in definition order.
@@ -223,10 +222,8 @@ pub enum FullDefKind<Body> {
 
     // Functions
     Fn {
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         #[value(s.base().tcx.codegen_fn_attrs(s.owner_id()).inline.sinto(s))]
         inline: InlineAttr,
         #[value(s.base().tcx.constness(s.owner_id()) == rustc_hir::Constness::Const)]
@@ -241,12 +238,10 @@ pub enum FullDefKind<Body> {
     AssocFn {
         #[value(s.base().tcx.parent(s.owner_id()).sinto(s))]
         parent: DefId,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         #[value(s.base().tcx.associated_item(s.owner_id()).sinto(s))]
         associated_item: AssocItem,
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
         #[value(s.base().tcx.codegen_fn_attrs(s.owner_id()).inline.sinto(s))]
         inline: InlineAttr,
         #[value(s.base().tcx.constness(s.owner_id()) == rustc_hir::Constness::Const)]
@@ -278,10 +273,8 @@ pub enum FullDefKind<Body> {
 
     // Constants
     Const {
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
         #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
@@ -291,32 +284,42 @@ pub enum FullDefKind<Body> {
     AssocConst {
         #[value(s.base().tcx.parent(s.owner_id()).sinto(s))]
         parent: DefId,
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         #[value(s.base().tcx.associated_item(s.owner_id()).sinto(s))]
         associated_item: AssocItem,
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
         #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
         body: Option<Body>,
     },
     /// Anonymous constant, e.g. the `1 + 2` in `[u8; 1 + 2]`
-    AnonConst,
+    AnonConst {
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
+        #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
+        ty: Ty,
+        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        body: Option<Body>,
+    },
     /// An inline constant, e.g. `const { 1 + 2 }`
-    InlineConst,
+    InlineConst {
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
+        #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
+        ty: Ty,
+        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        body: Option<Body>,
+    },
     Static {
+        #[value(get_param_env(s, s.owner_id()))]
+        param_env: ParamEnv,
         /// Whether it's a `unsafe static`, `safe static` (inside extern only) or just a `static`.
         safety: Safety,
         /// Whether it's a `static mut` or just a `static`.
         mutability: Mutability,
         /// Whether it's an anonymous static generated for nested allocations.
         nested: bool,
-        #[value(s.base().tcx.generics_of(s.owner_id()).sinto(s))]
-        generics: TyGenerics,
-        #[value(normalized_required_predicates(s, s.owner_id()))]
-        predicates: GenericPredicates,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
         #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
@@ -328,7 +331,7 @@ pub enum FullDefKind<Body> {
     Use,
     Mod {
         #[value(get_mod_children(s.base().tcx, s.owner_id()).sinto(s))]
-        items: Vec<DefId>,
+        items: Vec<(Option<Ident>, DefId)>,
     },
     /// An `extern` block.
     ForeignMod {
@@ -431,76 +434,65 @@ impl<Body> FullDef<Body> {
     }
 
     /// Returns the generics and predicates for definitions that have those.
-    pub fn generics(&self) -> Option<(&TyGenerics, &GenericPredicates)> {
+    pub fn param_env(&self) -> Option<&ParamEnv> {
         use FullDefKind::*;
         match &self.kind {
-            Struct {
-                generics,
-                predicates,
-                ..
-            }
-            | Union {
-                generics,
-                predicates,
-                ..
-            }
-            | Enum {
-                generics,
-                predicates,
-                ..
-            }
-            | Trait {
-                generics,
-                predicates,
-                ..
-            }
-            | TyAlias {
-                generics,
-                predicates,
-                ..
-            }
-            | AssocTy {
-                generics,
-                predicates,
-                ..
-            }
-            | Fn {
-                generics,
-                predicates,
-                ..
-            }
-            | AssocFn {
-                generics,
-                predicates,
-                ..
-            }
-            | Const {
-                generics,
-                predicates,
-                ..
-            }
-            | AssocConst {
-                generics,
-                predicates,
-                ..
-            }
-            | Static {
-                generics,
-                predicates,
-                ..
-            }
-            | TraitImpl {
-                generics,
-                predicates,
-                ..
-            }
-            | InherentImpl {
-                generics,
-                predicates,
-                ..
-            } => Some((generics, predicates)),
+            Struct { param_env, .. }
+            | Union { param_env, .. }
+            | Enum { param_env, .. }
+            | Trait { param_env, .. }
+            | TyAlias { param_env, .. }
+            | AssocTy { param_env, .. }
+            | Fn { param_env, .. }
+            | AssocFn { param_env, .. }
+            | Const { param_env, .. }
+            | AssocConst { param_env, .. }
+            | AnonConst { param_env, .. }
+            | InlineConst { param_env, .. }
+            | Static { param_env, .. }
+            | TraitImpl { param_env, .. }
+            | InherentImpl { param_env, .. } => Some(param_env),
             _ => None,
         }
+    }
+
+    /// Lists the children of this item that can be named, in the way of normal rust paths. For
+    /// types, this includes inherent items.
+    #[cfg(feature = "rustc")]
+    pub fn nameable_children<'tcx>(&self, s: &impl BaseState<'tcx>) -> Vec<(Symbol, DefId)> {
+        let mut children = match self.kind() {
+            FullDefKind::Mod { items } => items
+                .iter()
+                .filter_map(|(opt_ident, def_id)| {
+                    Some((opt_ident.as_ref()?.0.clone(), def_id.clone()))
+                })
+                .collect(),
+            FullDefKind::Enum { def, .. } => def
+                .variants
+                .raw
+                .iter()
+                .map(|variant| (variant.name.clone(), variant.def_id.clone()))
+                .collect(),
+            FullDefKind::InherentImpl { items, .. } | FullDefKind::Trait { items, .. } => items
+                .iter()
+                .map(|(item, _)| (item.name.clone(), item.def_id.clone()))
+                .collect(),
+            FullDefKind::TraitImpl { items, .. } => items
+                .iter()
+                .map(|item| (item.name.clone(), item.def().def_id.clone()))
+                .collect(),
+            _ => vec![],
+        };
+        // Add inherent impl items if any.
+        let tcx = s.base().tcx;
+        for impl_def_id in tcx.inherent_impls(self.rust_def_id()) {
+            children.extend(
+                tcx.associated_items(impl_def_id)
+                    .in_definition_order()
+                    .map(|assoc| (assoc.name, assoc.def_id).sinto(s)),
+            );
+        }
+        children
     }
 }
 
@@ -602,7 +594,7 @@ fn get_def_attrs<'tcx>(
     tcx: ty::TyCtxt<'tcx>,
     def_id: RDefId,
     def_kind: RDefKind,
-) -> &'tcx [rustc_ast::ast::Attribute] {
+) -> &'tcx [rustc_hir::Attribute] {
     use RDefKind::*;
     match def_kind {
         // These kinds cause `get_attrs_unchecked` to panic.
@@ -613,24 +605,31 @@ fn get_def_attrs<'tcx>(
 
 /// Gets the children of a module.
 #[cfg(feature = "rustc")]
-fn get_mod_children<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Vec<RDefId> {
+fn get_mod_children<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    def_id: RDefId,
+) -> Vec<(Option<rustc_span::Ident>, RDefId)> {
     match def_id.as_local() {
         Some(ldid) => match tcx.hir_node_by_def_id(ldid) {
             rustc_hir::Node::Crate(m)
             | rustc_hir::Node::Item(&rustc_hir::Item {
-                kind: rustc_hir::ItemKind::Mod(m),
+                kind: rustc_hir::ItemKind::Mod(_, m),
                 ..
             }) => m
                 .item_ids
                 .iter()
-                .map(|item_id| item_id.owner_id.to_def_id())
+                .map(|&item_id| {
+                    let opt_ident = tcx.hir_item(item_id).kind.ident();
+                    let def_id = item_id.owner_id.to_def_id();
+                    (opt_ident, def_id)
+                })
                 .collect(),
             node => panic!("DefKind::Module is an unexpected node: {node:?}"),
         },
         None => tcx
             .module_children(def_id)
             .iter()
-            .map(|child| child.res.def_id())
+            .map(|child| (Some(child.ident), child.res.def_id()))
             .collect(),
     }
 }
@@ -660,8 +659,7 @@ where
     use std::collections::HashMap;
     let tcx = s.base().tcx;
     let impl_def_id = s.owner_id();
-    let generics = tcx.generics_of(impl_def_id).sinto(s);
-    let predicates = normalized_required_predicates(s, impl_def_id);
+    let param_env = get_param_env(s, impl_def_id);
     match tcx.impl_subject(impl_def_id).instantiate_identity() {
         ty::ImplSubject::Inherent(ty) => {
             let items = tcx
@@ -671,8 +669,7 @@ where
                 .collect::<Vec<_>>()
                 .sinto(s);
             FullDefKind::InherentImpl {
-                generics,
-                predicates,
+                param_env,
                 ty: ty.sinto(s),
                 items,
             }
@@ -756,10 +753,9 @@ where
                 .collect();
             assert!(item_map.is_empty());
             FullDefKind::TraitImpl {
-                generics,
-                predicates,
+                param_env,
                 trait_pred,
-                required_impl_exprs,
+                implied_impl_exprs: required_impl_exprs,
                 items,
             }
         }
@@ -796,7 +792,7 @@ where
     let def_id = s.owner_id();
     let real_sig = tcx.fn_sig(def_id).instantiate_identity();
     let item = tcx.associated_item(def_id);
-    if !matches!(item.container, ty::AssocItemContainer::ImplContainer) {
+    if !matches!(item.container, ty::AssocItemContainer::Impl) {
         return real_sig;
     }
     let Some(decl_method_id) = item.trait_item_def_id else {
@@ -858,54 +854,12 @@ where
     }
 }
 
-/// This normalizes trait clauses before calling `sinto` on them. This is a bit of a hack required
-/// by charon for now. We can't normalize all clauses as this would lose region information in
-/// outlives clauses.
-/// TODO: clarify normalization in charon (https://github.com/AeneasVerif/charon/issues/300).
 #[cfg(feature = "rustc")]
-fn normalize_trait_clauses<'tcx, S: UnderOwnerState<'tcx>>(
-    s: &S,
-    predicates: ty::GenericPredicates<'tcx>,
-) -> GenericPredicates {
-    let clauses: Vec<_> = predicates
-        .predicates
-        .iter()
-        .map(|(clause, span)| {
-            let mut clause = *clause;
-            if matches!(&clause.kind().skip_binder(), ty::ClauseKind::Trait(_)) {
-                clause = s
-                    .base()
-                    .tcx
-                    .try_normalize_erasing_regions(s.param_env(), clause)
-                    .unwrap_or(clause);
-            }
-            (clause.as_predicate(), *span)
-        })
-        .collect();
-    GenericPredicates {
-        parent: predicates.parent.sinto(s),
-        predicates: clauses.sinto(s),
+fn get_param_env<'tcx, S: BaseState<'tcx>>(s: &S, def_id: RDefId) -> ParamEnv {
+    let tcx = s.base().tcx;
+    let s = &with_owner_id(s.base(), (), (), def_id);
+    ParamEnv {
+        generics: tcx.generics_of(def_id).sinto(s),
+        predicates: required_predicates(tcx, def_id).sinto(s),
     }
-}
-
-/// Get the `required_predicates` for the given `def_id` and process them with
-/// `normalize_trait_clauses`.
-#[cfg(feature = "rustc")]
-fn normalized_required_predicates<'tcx, S: UnderOwnerState<'tcx>>(
-    s: &S,
-    def_id: RDefId,
-) -> GenericPredicates {
-    let tcx = s.base().tcx;
-    normalize_trait_clauses(s, required_predicates(tcx, def_id))
-}
-
-/// Get the `implied_predicates` for the given `def_id` and process them with
-/// `normalize_trait_clauses`.
-#[cfg(feature = "rustc")]
-fn normalized_implied_predicates<'tcx, S: UnderOwnerState<'tcx>>(
-    s: &S,
-    def_id: RDefId,
-) -> GenericPredicates {
-    let tcx = s.base().tcx;
-    normalize_trait_clauses(s, implied_predicates(tcx, def_id))
 }

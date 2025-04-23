@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// in place with a simple reference (the `ItemUid` in stake).
 ///
 /// Morally, we expand `struct Foo { #[refine(x > 3)] x: u32 }` to:
-///  1. `#[uuid(A_UNIQUE_ID_123)] fn refinement(x: u32) -> bool {x > 3}`;
+///  1. `#[uuid(A_UNIQUE_ID_123)] fn refinement(x: u32) -> hax_lib::Prop {x > 3}`;
 ///  2. `struct Foo { #[refined_by(A_UNIQUE_ID_123)] x: u32 }`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -152,7 +152,7 @@ impl ToTokens for HaxCfgOptionName {
 }
 impl ToTokens for DebugOrHaxCfgExpr {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        quote! {any(#HaxCfgOptionName, debug_assertion)}.to_tokens(tokens)
+        quote! {any(#HaxCfgOptionName, debug_assertions)}.to_tokens(tokens)
     }
 }
 

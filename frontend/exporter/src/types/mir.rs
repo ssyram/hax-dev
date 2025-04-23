@@ -3,20 +3,10 @@
 //! or patterns; instead the control flow is entirely described by gotos and switches on integer
 //! values.
 use crate::prelude::*;
-use crate::sinto_as_usize;
 #[cfg(feature = "rustc")]
 use rustc_middle::{mir, ty};
 #[cfg(feature = "rustc")]
 use tracing::trace;
-
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<S>, from: rustc_middle::mir::MirPhase, state: S as s)]
-pub enum MirPhase {
-    Built,
-    Analysis(AnalysisPhase),
-    Runtime(RuntimePhase),
-}
 
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema)]
@@ -31,48 +21,10 @@ pub struct SourceInfo {
 #[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_middle::mir::LocalDecl<'tcx>, state: S as s)]
 pub struct LocalDecl {
     pub mutability: Mutability,
-    pub local_info: ClearCrossCrate<LocalInfo>,
     pub ty: Ty,
-    pub user_ty: Option<UserTypeProjections>,
     pub source_info: SourceInfo,
     #[value(None)]
     pub name: Option<String>, // This information is contextual, thus the SInto instance initializes it to None, and then we fill it while `SInto`ing MirBody
-}
-
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub enum ClearCrossCrate<T> {
-    Clear,
-    Set(T),
-}
-
-#[cfg(feature = "rustc")]
-impl<S, TT, T: SInto<S, TT>> SInto<S, ClearCrossCrate<TT>>
-    for rustc_middle::mir::ClearCrossCrate<T>
-{
-    fn sinto(&self, s: &S) -> ClearCrossCrate<TT> {
-        match self {
-            rustc_middle::mir::ClearCrossCrate::Clear => ClearCrossCrate::Clear,
-            rustc_middle::mir::ClearCrossCrate::Set(x) => ClearCrossCrate::Set(x.sinto(s)),
-        }
-    }
-}
-
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<S>, from: rustc_middle::mir::RuntimePhase, state: S as _s)]
-pub enum RuntimePhase {
-    Initial,
-    PostCleanup,
-    Optimized,
-}
-
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<S>, from: rustc_middle::mir::AnalysisPhase, state: S as _s)]
-pub enum AnalysisPhase {
-    Initial,
-    PostCleanup,
 }
 
 pub type BasicBlocks = IndexVec<BasicBlock, BasicBlockData>;
@@ -80,12 +32,12 @@ pub type BasicBlocks = IndexVec<BasicBlock, BasicBlockData>;
 #[cfg(feature = "rustc")]
 fn name_of_local(
     local: rustc_middle::mir::Local,
-    var_debug_info: &Vec<rustc_middle::mir::VarDebugInfo>,
+    var_debug_info: &Vec<mir::VarDebugInfo>,
 ) -> Option<String> {
     var_debug_info
         .iter()
         .find(|info| {
-            if let rustc_middle::mir::VarDebugInfoContents::Place(place) = info.value {
+            if let mir::VarDebugInfoContents::Place(place) = info.value {
                 place.projection.is_empty() && place.local == local
             } else {
                 false
@@ -209,24 +161,161 @@ pub use mir_kinds::IsMirKind;
 
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_middle::mir::ConstOperand<'tcx>, state: S as s)]
-pub struct Constant {
+#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::Promoted, state: S as _s)]
+pub struct PromotedId {
+    #[value(self.as_u32())]
+    pub id: u32,
+}
+
+/// Part of a MIR body that was promoted to be a constant.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub struct PromotedConstant {
+    /// The `def_id` of the body this was extracted from.
+    pub def_id: DefId,
+    /// The identifier for this sub-body. This is the contents of a `mir::Promoted` identifier.
+    pub promoted_id: PromotedId,
+    /// The generics applied to the definition corresponding to `def_id`.
+    pub args: Vec<GenericArg>,
+    /// The MIR for this sub-body.
+    pub mir: MirBody<()>,
+}
+
+/// The contents of `Operand::Const`.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub struct ConstOperand {
     pub span: Span,
-    pub user_ty: Option<UserTypeAnnotationIndex>,
-    pub const_: TypedConstantKind,
+    pub ty: Ty,
+    pub kind: ConstOperandKind,
+}
+
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub enum ConstOperandKind {
+    /// An evaluated constant represented as an expression.
+    Value(ConstantExpr),
+    /// A promoted constant, that may not be evaluatable because of generics.
+    Promoted(PromotedConstant, Option<ConstantExpr>),
+}
+
+#[cfg(feature = "rustc")]
+impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
+    for rustc_middle::mir::ConstOperand<'tcx>
+{
+    fn sinto(&self, s: &S) -> ConstOperand {
+        let kind = translate_mir_const(s, self.span, self.const_);
+        ConstOperand {
+            span: self.span.sinto(s),
+            ty: self.const_.ty().sinto(s),
+            kind,
+        }
+    }
+}
+
+/// Retrieve the MIR for a promoted body.
+#[cfg(feature = "rustc")]
+fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    uneval: mir::UnevaluatedConst<'tcx>,
+) -> PromotedConstant {
+    let tcx = s.base().tcx;
+    let promoted_id = uneval.promoted.unwrap();
+    let def_id = uneval.def;
+    let body = if let Some(local_def_id) = def_id.as_local() {
+        let (_, promoteds) = tcx.mir_promoted(local_def_id);
+        if !promoteds.is_stolen() {
+            promoteds.borrow()[promoted_id].clone()
+        } else {
+            tcx.promoted_mir(def_id)[promoted_id].clone()
+        }
+    } else {
+        tcx.promoted_mir(def_id)[promoted_id].clone()
+    };
+    let body = Rc::new(body);
+    let s = &State {
+        base: s.base(),
+        owner_id: s.owner_id(),
+        mir: body.clone(),
+        binder: (),
+        thir: (),
+    };
+    PromotedConstant {
+        def_id: def_id.sinto(s),
+        promoted_id: promoted_id.sinto(s),
+        args: uneval.args.sinto(s),
+        mir: body.sinto(s),
+    }
+}
+
+#[cfg(feature = "rustc")]
+/// Translate a MIR constant.
+fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    span: rustc_span::Span,
+    konst: mir::Const<'tcx>,
+) -> ConstOperandKind {
+    use rustc_middle::mir::Const;
+    use ConstOperandKind::{Promoted, Value};
+    let tcx = s.base().tcx;
+    match konst {
+        Const::Val(const_value, ty) => {
+            let evaluated = const_value_to_constant_expr(s, ty, const_value, span);
+            match evaluated.report_err() {
+                Ok(val) => Value(val),
+                Err(err) => fatal!(
+                    s[span], "Cannot convert constant back to an expression";
+                    {const_value, ty, err}
+                ),
+            }
+        }
+        Const::Ty(_ty, c) => Value(c.sinto(s)),
+        Const::Unevaluated(ucv, ty) => {
+            use crate::rustc_middle::query::Key;
+            let span = span.substitute_dummy(
+                tcx.def_ident_span(ucv.def)
+                    .unwrap_or_else(|| ucv.def.default_span(tcx)),
+            );
+            match ucv.promoted {
+                Some(_) => {
+                    let promoted = get_promoted_mir(s, ucv);
+                    let evaluated = eval_mir_constant(s, konst).sinto(s);
+                    Promoted(promoted, evaluated)
+                }
+                None => Value(match translate_constant_reference(s, span, ucv.shrink()) {
+                    Some(val) => val,
+                    None => match eval_mir_constant(s, konst) {
+                        Some(val) => val.sinto(s),
+                        // TODO: This is triggered when compiling using `generic_const_exprs`. We
+                        // might be able to get a MIR body from the def_id.
+                        None => ConstantExprKind::Todo("TranslateUneval".into())
+                            .decorate(ty.sinto(s), span.sinto(s)),
+                    },
+                }),
+            }
+        }
+    }
+}
+
+#[cfg(feature = "rustc")]
+/// This impl is used in THIR patterns.
+impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
+    fn sinto(&self, s: &S) -> ConstantExpr {
+        match translate_mir_const(s, rustc_span::DUMMY_SP, *self) {
+            ConstOperandKind::Value(val) | ConstOperandKind::Promoted(_, Some(val)) => val,
+            ConstOperandKind::Promoted(body, None) => fatal!(
+                s, "Cannot convert constant back to an expression";
+                {body}
+            ),
+        }
+    }
 }
 
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema)]
 #[args(<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>>, from: rustc_middle::mir::Body<'tcx>, state: S as s)]
 pub struct MirBody<KIND> {
-    #[map(x.clone().as_mut().sinto(s))]
-    pub basic_blocks: BasicBlocks,
-    pub phase: MirPhase,
-    pub pass_count: usize,
-    pub source: MirSource,
-    pub source_scopes: IndexVec<SourceScope, SourceScopeData>,
-    pub coroutine: Option<CoroutineInfo>,
+    pub span: Span,
     #[map({
         let mut local_decls: rustc_index::IndexVec<rustc_middle::mir::Local, LocalDecl> = x.iter().map(|local_decl| {
             local_decl.sinto(s)
@@ -238,13 +327,9 @@ pub struct MirBody<KIND> {
         local_decls.into()
     })]
     pub local_decls: IndexVec<Local, LocalDecl>,
-    pub user_type_annotations: CanonicalUserTypeAnnotations,
-    pub arg_count: usize,
-    pub spread_arg: Option<Local>,
-    pub var_debug_info: Vec<VarDebugInfo>,
-    pub span: Span,
-    pub is_polymorphic: bool,
-    pub injection_phase: Option<MirPhase>,
+    #[map(x.clone().as_mut().sinto(s))]
+    pub basic_blocks: BasicBlocks,
+    pub source_scopes: IndexVec<SourceScope, SourceScopeData>,
     pub tainted_by_errors: Option<ErrorGuaranteed>,
     #[value(std::marker::PhantomData)]
     pub _kind: std::marker::PhantomData<KIND>,
@@ -256,24 +341,7 @@ pub struct MirBody<KIND> {
 pub struct SourceScopeData {
     pub span: Span,
     pub parent_scope: Option<SourceScope>,
-    pub inlined: Option<(Instance, Span)>,
     pub inlined_parent_scope: Option<SourceScope>,
-    pub local_data: ClearCrossCrate<SourceScopeLocalData>,
-}
-
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_middle::ty::Instance<'tcx>, state: S as s)]
-pub struct Instance {
-    pub def: InstanceKind,
-    pub args: Vec<GenericArg>,
-}
-
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_middle::mir::SourceScopeLocalData, state: S as s)]
-pub struct SourceScopeLocalData {
-    pub lint_root: HirId,
 }
 
 #[derive_group(Serializers)]
@@ -282,7 +350,7 @@ pub struct SourceScopeLocalData {
 pub enum Operand {
     Copy(Place),
     Move(Place),
-    Constant(Constant),
+    Constant(ConstOperand),
 }
 
 #[cfg(feature = "rustc")]
@@ -290,7 +358,7 @@ impl Operand {
     pub(crate) fn ty(&self) -> &Ty {
         match self {
             Operand::Copy(p) | Operand::Move(p) => &p.ty,
-            Operand::Constant(c) => &c.const_.typ,
+            Operand::Constant(c) => &c.ty,
         }
     }
 }
@@ -351,12 +419,8 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         trace!("assoc: def_id: {:?}", assoc.def_id);
         // Retrieve the `DefId` of the trait declaration or the impl block.
         let container_def_id = match assoc.container {
-            rustc_middle::ty::AssocItemContainer::TraitContainer => {
-                tcx.trait_of_item(assoc.def_id).unwrap()
-            }
-            rustc_middle::ty::AssocItemContainer::ImplContainer => {
-                tcx.impl_of_method(assoc.def_id).unwrap()
-            }
+            rustc_middle::ty::AssocItemContainer::Trait => tcx.trait_of_item(assoc.def_id).unwrap(),
+            rustc_middle::ty::AssocItemContainer::Impl => tcx.impl_of_method(assoc.def_id).unwrap(),
         };
         // The generics are split in two: the arguments of the container (trait decl or impl block)
         // and the arguments of the method.
@@ -386,7 +450,7 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         // ```
         // The generics for `insert` are `<u32>` for the impl and `<bool>` for the method.
         match assoc.container {
-            rustc_middle::ty::AssocItemContainer::TraitContainer => {
+            rustc_middle::ty::AssocItemContainer::Trait => {
                 let num_container_generics = tcx.generics_of(container_def_id).own_params.len();
                 // Retrieve the trait information
                 let impl_expr = self_clause_for_item(s, &assoc, generics).unwrap();
@@ -394,7 +458,7 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
                 let method_generics = &generics[num_container_generics..];
                 (method_generics.sinto(s), Some(impl_expr))
             }
-            rustc_middle::ty::AssocItemContainer::ImplContainer => {
+            rustc_middle::ty::AssocItemContainer::Impl => {
                 // Solve the trait constraints of the impl block.
                 let container_generics = tcx.generics_of(container_def_id);
                 let container_generics = generics.truncate_to(tcx, container_generics);
@@ -505,9 +569,11 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
 // We don't use the LitIntType on purpose (we don't want the "unsuffixed" case)
 #[derive_group(Serializers)]
 #[derive(Clone, Copy, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum IntUintTy {
+pub enum ScalarTy {
+    Bool,
     Int(IntTy),
     Uint(UintTy),
+    Char,
 }
 
 #[derive_group(Serializers)]
@@ -515,71 +581,44 @@ pub enum IntUintTy {
 pub struct ScalarInt {
     /// Little-endian representation of the integer
     pub data_le_bytes: [u8; 16],
-    pub int_ty: IntUintTy,
+    pub int_ty: ScalarTy,
 }
 
-// TODO: naming conventions: is "translate" ok?
-/// Translate switch targets
+/// Translate a `SwitchInt` terminator.
 #[cfg(feature = "rustc")]
-fn translate_switch_targets<'tcx, S: UnderOwnerState<'tcx>>(
+fn translate_switchint<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>>(
     s: &S,
-    switch_ty: &Ty,
-    targets: &rustc_middle::mir::SwitchTargets,
-) -> SwitchTargets {
-    let targets_vec: Vec<(u128, BasicBlock)> =
-        targets.iter().map(|(v, b)| (v, b.sinto(s))).collect();
+    discr: &mir::Operand<'tcx>,
+    targets: &mir::SwitchTargets,
+) -> TerminatorKind {
+    let discr = discr.sinto(s);
+    let ty = match discr.ty().kind() {
+        TyKind::Bool => ScalarTy::Bool,
+        TyKind::Int(ty) => ScalarTy::Int(*ty),
+        TyKind::Uint(ty) => ScalarTy::Uint(*ty),
+        TyKind::Char => ScalarTy::Char,
+        ty => fatal!(s, "Unexpected switch_ty: {:?}", ty),
+    };
 
-    match switch_ty.kind() {
-        TyKind::Bool => {
-            // This is an: `if ... then ... else ...`
-            assert!(targets_vec.len() == 1);
-            // It seems the block targets are inverted
-            let (test_val, otherwise_block) = targets_vec[0];
-
-            assert!(test_val == 0);
-
-            // It seems the block targets are inverted
-            let if_block = targets.otherwise().sinto(s);
-
-            SwitchTargets::If(if_block, otherwise_block)
-        }
-        TyKind::Int(_) | TyKind::Uint(_) => {
-            let int_ty = match switch_ty.kind() {
-                TyKind::Int(ty) => IntUintTy::Int(*ty),
-                TyKind::Uint(ty) => IntUintTy::Uint(*ty),
-                _ => unreachable!(),
+    // Convert all the test values to the proper values.
+    let otherwise = targets.otherwise().sinto(s);
+    let targets_vec: Vec<(ScalarInt, BasicBlock)> = targets
+        .iter()
+        .map(|(v, b)| {
+            let v = ScalarInt {
+                data_le_bytes: v.to_le_bytes(),
+                int_ty: ty,
             };
+            (v, b.sinto(s))
+        })
+        .collect();
 
-            // This is a: switch(int).
-            // Convert all the test values to the proper values.
-            let mut targets_map: Vec<(ScalarInt, BasicBlock)> = Vec::new();
-            for (v, tgt) in targets_vec {
-                // We need to reinterpret the bytes (`v as i128` is not correct)
-                let v = ScalarInt {
-                    data_le_bytes: v.to_le_bytes(),
-                    int_ty,
-                };
-                targets_map.push((v, tgt));
-            }
-            let otherwise_block = targets.otherwise().sinto(s);
-
-            SwitchTargets::SwitchInt(int_ty, targets_map, otherwise_block)
-        }
-        _ => {
-            fatal!(s, "Unexpected switch_ty: {:?}", switch_ty)
-        }
+    TerminatorKind::SwitchInt {
+        discr,
+        ty,
+        targets: targets_vec,
+        otherwise,
     }
-}
-
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub enum SwitchTargets {
-    /// Gives the `if` block and the `else` block
-    If(BasicBlock, BasicBlock),
-    /// Gives the integer type, a map linking values to switch branches, and the
-    /// otherwise block. Note that matches over enumerations are performed by
-    /// switching over the discriminant, which is an integer.
-    SwitchInt(IntUintTy, Vec<(ScalarInt, BasicBlock)>, BasicBlock),
 }
 
 /// A value of type `fn<...> A -> B` that can be called.
@@ -612,17 +651,18 @@ pub enum TerminatorKind {
     },
     #[custom_arm(
         rustc_middle::mir::TerminatorKind::SwitchInt { discr, targets } => {
-          let discr = discr.sinto(s);
-          let targets = translate_switch_targets(s, discr.ty(), targets);
-          TerminatorKind::SwitchInt {
-              discr,
-              targets,
-          }
+            translate_switchint(s, discr, targets)
         }
     )]
     SwitchInt {
+        /// The value being switched one.
         discr: Operand,
-        targets: SwitchTargets,
+        /// The type that is being switched on.
+        ty: ScalarTy,
+        /// Possible success cases.
+        targets: Vec<(ScalarInt, BasicBlock)>,
+        /// If none of the `targets` match, branch to that block.
+        otherwise: BasicBlock,
     },
     Return,
     Unreachable,
@@ -717,6 +757,9 @@ pub enum StatementKind {
     Coverage(CoverageKind),
     Intrinsic(NonDivergingIntrinsic),
     ConstEvalCounter,
+    BackwardIncompatibleDropHint {
+        place: Place,
+    },
     Nop,
 }
 
@@ -805,31 +848,29 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
             let cur_ty = current_ty;
             let cur_kind = current_kind.clone();
             use rustc_middle::ty::TyKind;
-            let mk_field =
-                |index: &rustc_target::abi::FieldIdx,
-                 variant_idx: Option<rustc_target::abi::VariantIdx>| {
-                    ProjectionElem::Field(match cur_ty.kind() {
-                        TyKind::Adt(adt_def, _) => {
-                            assert!(
-                                ((adt_def.is_struct() || adt_def.is_union())
-                                    && variant_idx.is_none())
-                                    || (adt_def.is_enum() && variant_idx.is_some())
-                            );
-                            ProjectionElemFieldKind::Adt {
-                                typ: adt_def.did().sinto(s),
-                                variant: variant_idx.map(|id| id.sinto(s)),
-                                index: index.sinto(s),
-                            }
+            let mk_field = |index: &rustc_abi::FieldIdx,
+                            variant_idx: Option<rustc_abi::VariantIdx>| {
+                ProjectionElem::Field(match cur_ty.kind() {
+                    TyKind::Adt(adt_def, _) => {
+                        assert!(
+                            ((adt_def.is_struct() || adt_def.is_union()) && variant_idx.is_none())
+                                || (adt_def.is_enum() && variant_idx.is_some())
+                        );
+                        ProjectionElemFieldKind::Adt {
+                            typ: adt_def.did().sinto(s),
+                            variant: variant_idx.map(|id| id.sinto(s)),
+                            index: index.sinto(s),
                         }
-                        TyKind::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
-                        ty_kind => {
-                            supposely_unreachable_fatal!(
-                                s, "ProjectionElemFieldBadType";
-                                {index, ty_kind, variant_idx, &cur_ty, &cur_kind}
-                            );
-                        }
-                    })
-                };
+                    }
+                    TyKind::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
+                    ty_kind => {
+                        supposely_unreachable_fatal!(
+                            s, "ProjectionElemFieldBadType";
+                            {index, ty_kind, variant_idx, &cur_ty, &cur_kind}
+                        );
+                    }
+                })
+            };
             let elem_kind: ProjectionElem = match elems {
                 [Downcast(_, variant_idx), Field(index, ty), rest @ ..] => {
                     elems = rest;
@@ -917,6 +958,7 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
                         // and `fn(‘static ())` (according to @compiler-errors on Zulip).
                         Subtype { .. } => panic!("unexpected Subtype"),
                         Downcast { .. } => panic!("unexpected Downcast"),
+                        UnwrapUnsafeBinder { .. } => panic!("unsupported feature: unsafe binders"),
                     }
                 }
                 [] => break,
@@ -1005,8 +1047,9 @@ pub enum CoercionSource {
 pub enum NullOp {
     SizeOf,
     AlignOf,
-    OffsetOf(Vec<(usize, FieldIdx)>),
+    OffsetOf(Vec<(VariantIdx, FieldIdx)>),
     UbChecks,
+    ContractChecks,
 }
 
 #[derive_group(Serializers)]
@@ -1023,7 +1066,7 @@ pub enum Rvalue {
     Repeat(Operand, ConstantExpr),
     Ref(Region, BorrowKind, Place),
     ThreadLocalRef(DefId),
-    RawPtr(Mutability, Place),
+    RawPtr(RawPtrKind, Place),
     Len(Place),
     Cast(CastKind, Operand, Ty),
     BinaryOp(BinOp, (Operand, Operand)),
@@ -1033,6 +1076,16 @@ pub enum Rvalue {
     Aggregate(AggregateKind, IndexVec<FieldIdx, Operand>),
     ShallowInitBox(Operand, Ty),
     CopyForDeref(Place),
+    WrapUnsafeBinder(Operand, Ty),
+}
+
+#[derive_group(Serializers)]
+#[derive(AdtInto, Clone, Debug, JsonSchema)]
+#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::RawPtrKind, state: S as _s)]
+pub enum RawPtrKind {
+    Mut,
+    Const,
+    FakeForPtrMetadata,
 }
 
 #[derive_group(Serializers)]
@@ -1044,14 +1097,11 @@ pub struct BasicBlockData {
     pub is_cleanup: bool,
 }
 
-pub type CanonicalUserTypeAnnotations =
-    IndexVec<UserTypeAnnotationIndex, CanonicalUserTypeAnnotation>;
-
 make_idx_wrapper!(rustc_middle::mir, BasicBlock);
 make_idx_wrapper!(rustc_middle::mir, SourceScope);
 make_idx_wrapper!(rustc_middle::mir, Local);
 make_idx_wrapper!(rustc_middle::ty, UserTypeAnnotationIndex);
-make_idx_wrapper!(rustc_target::abi, FieldIdx);
+make_idx_wrapper!(rustc_abi, FieldIdx);
 
 /// Reflects [`rustc_middle::mir::UnOp`]
 #[derive_group(Serializers)]
@@ -1107,72 +1157,6 @@ pub enum BinOp {
     Offset,
 }
 
-/// Reflects [`rustc_middle::mir::ScopeData`]
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx> + HasThir<'tcx>>, from: rustc_middle::middle::region::ScopeData, state: S as gstate)]
-pub enum ScopeData {
-    Node,
-    CallSite,
-    Arguments,
-    Destruction,
-    IfThen,
-    IfThenRescope,
-    Remainder(FirstStatementIndex),
-}
-
-sinto_as_usize!(rustc_middle::middle::region, FirstStatementIndex);
-
-/// Reflects [`rustc_middle::mir::BinOp`]
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx> + HasThir<'tcx>>, from: rustc_middle::middle::region::Scope, state: S as gstate)]
-pub struct Scope {
-    pub id: ItemLocalId,
-    pub data: ScopeData,
-}
-
-sinto_as_usize!(rustc_hir::hir_id, ItemLocalId);
-
-#[cfg(feature = "rustc")]
-impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
-    fn sinto(&self, s: &S) -> ConstantExpr {
-        use rustc_middle::mir::Const;
-        let tcx = s.base().tcx;
-        match self {
-            Const::Val(const_value, ty) => {
-                const_value_to_constant_expr(s, *ty, *const_value, rustc_span::DUMMY_SP)
-            }
-            Const::Ty(_ty, c) => c.sinto(s),
-            Const::Unevaluated(ucv, _ty) => {
-                use crate::rustc_middle::query::Key;
-                let span = tcx
-                    .def_ident_span(ucv.def)
-                    .unwrap_or_else(|| ucv.def.default_span(tcx));
-                if ucv.promoted.is_some() {
-                    self.eval_constant(s)
-                        .unwrap_or_else(|| {
-                            supposely_unreachable_fatal!(s, "UnevalPromotedConstant"; {self, ucv});
-                        })
-                        .sinto(s)
-                } else {
-                    match self.translate_uneval(s, ucv.shrink(), span) {
-                        TranslateUnevalRes::EvaluatedConstant(c) => c.sinto(s),
-                        TranslateUnevalRes::GlobalName(c) => c,
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[cfg(feature = "rustc")]
-impl<S> SInto<S, u64> for rustc_middle::mir::interpret::AllocId {
-    fn sinto(&self, _: &S) -> u64 {
-        self.0.get()
-    }
-}
-
 /// Reflects [`rustc_middle::mir::BorrowKind`]
 #[derive(AdtInto)]
 #[args(<S>, from: rustc_middle::mir::BorrowKind, state: S as gstate)]
@@ -1212,18 +1196,11 @@ pub enum FakeBorrowKind {
 
 sinto_todo!(rustc_ast::ast, InlineAsmTemplatePiece);
 sinto_todo!(rustc_ast::ast, InlineAsmOptions);
-sinto_todo!(rustc_middle::ty, InstanceKind<'tcx>);
-sinto_todo!(rustc_middle::mir, UserTypeProjections);
-sinto_todo!(rustc_middle::mir, LocalInfo<'tcx>);
 sinto_todo!(rustc_middle::mir, InlineAsmOperand<'tcx>);
 sinto_todo!(rustc_middle::mir, AssertMessage<'tcx>);
 sinto_todo!(rustc_middle::mir, UnwindAction);
 sinto_todo!(rustc_middle::mir, FakeReadCause);
 sinto_todo!(rustc_middle::mir, RetagKind);
 sinto_todo!(rustc_middle::mir, UserTypeProjection);
-sinto_todo!(rustc_middle::mir, MirSource<'tcx>);
-sinto_todo!(rustc_middle::mir, CoroutineInfo<'tcx>);
-sinto_todo!(rustc_middle::mir, VarDebugInfo<'tcx>);
 sinto_todo!(rustc_middle::mir, UnwindTerminateReason);
 sinto_todo!(rustc_middle::mir::coverage, CoverageKind);
-sinto_todo!(rustc_middle::mir::interpret, ConstAllocation<'a>);

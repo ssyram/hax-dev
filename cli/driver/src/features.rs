@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use rustc_driver::{Callbacks, Compilation};
-use rustc_interface::{interface, Queries};
+use rustc_interface::interface;
+use rustc_middle::ty::TyCtxt;
 use rustc_span::symbol::Symbol;
 
 use crate::callbacks_wrapper::CallbacksWrapper;
@@ -22,11 +23,11 @@ pub struct Features {
 impl From<&rustc_feature::Features> for Features {
     fn from(rfeatures: &rustc_feature::Features) -> Self {
         Features {
-            adt_const_params: rfeatures.adt_const_params,
-            generic_const_exprs: rfeatures.generic_const_exprs,
-            register_tool: rfeatures.register_tool,
-            auto_traits: rfeatures.auto_traits,
-            negative_impls: rfeatures.negative_impls,
+            adt_const_params: rfeatures.adt_const_params(),
+            generic_const_exprs: rfeatures.generic_const_exprs(),
+            register_tool: rfeatures.register_tool(),
+            auto_traits: rfeatures.auto_traits(),
+            negative_impls: rfeatures.negative_impls(),
             registered_tools: HashSet::new(),
         }
     }
@@ -86,16 +87,14 @@ impl Features {
             fn after_expansion<'tcx>(
                 &mut self,
                 compiler: &interface::Compiler,
-                queries: &'tcx Queries<'tcx>,
+                tcx: TyCtxt<'tcx>,
             ) -> Compilation {
-                queries.global_ctxt().unwrap().enter(|tcx| {
-                    self.features = tcx.features().into();
-                    self.features.registered_tools = tcx
-                        .registered_tools(())
-                        .iter()
-                        .map(|x| x.name.to_ident_string())
-                        .collect();
-                });
+                self.features = tcx.features().into();
+                self.features.registered_tools = tcx
+                    .registered_tools(())
+                    .iter()
+                    .map(|x| x.name.to_ident_string())
+                    .collect();
                 rustc_driver::Compilation::Stop
             }
         }
@@ -103,14 +102,13 @@ impl Features {
             features: Features::default(),
         };
         let exit_code = rustc_driver::catch_with_exit_code(|| {
-            rustc_driver::RunCompiler::new(
+            rustc_driver::run_compiler(
                 rustc_args,
                 &mut CallbacksWrapper {
                     sub: &mut callbacks,
                     options: options.clone(),
                 },
             )
-            .run()
         });
         if exit_code != 0 {
             std::process::exit(exit_code);

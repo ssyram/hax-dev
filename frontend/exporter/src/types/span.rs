@@ -9,75 +9,6 @@ pub struct Loc {
     pub col: usize,
 }
 
-/// Reflects [`rustc_span::hygiene::DesugaringKind`]
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<S>, from: rustc_span::hygiene::DesugaringKind, state: S as _s)]
-pub enum DesugaringKind {
-    CondTemporary,
-    QuestionMark,
-    TryBlock,
-    YeetExpr,
-    OpaqueTy,
-    Async,
-    Await,
-    ForLoop,
-    WhileLoop,
-    BoundModifier,
-}
-
-/// Reflects [`rustc_span::hygiene::AstPass`]
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<S>, from: rustc_span::hygiene::AstPass, state: S as _s)]
-pub enum AstPass {
-    StdImports,
-    TestHarness,
-    ProcMacroHarness,
-}
-
-/// Reflects [`rustc_span::hygiene::ExpnKind`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_span::hygiene::ExpnKind, state: S as gstate)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub enum ExpnKind {
-    Root,
-    Macro(MacroKind, Symbol),
-    AstPass(AstPass),
-    Desugaring(DesugaringKind),
-}
-
-/// Reflects [`rustc_span::edition::Edition`]
-#[derive(AdtInto)]
-#[args(<S>, from: rustc_span::edition::Edition, state: S as _s)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub enum Edition {
-    Edition2015,
-    Edition2018,
-    Edition2021,
-    Edition2024,
-}
-
-/// Reflects [`rustc_span::hygiene::ExpnData`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_span::hygiene::ExpnData, state: S as state)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub struct ExpnData {
-    pub kind: ExpnKind,
-    // pub parent: Box<ExpnData>,
-    pub call_site: Span,
-    pub def_site: Span,
-    #[map(x.as_ref().map(|x| x.clone().iter().map(|x|x.sinto(state)).collect()))]
-    pub allow_internal_unstable: Option<Vec<Symbol>>,
-    pub edition: Edition,
-    pub macro_def_id: Option<DefId>,
-    pub parent_module: Option<DefId>,
-    pub local_inner_macros: bool,
-}
-
 /// Reflects [`rustc_span::Span`]
 #[derive(::serde::Serialize, ::serde::Deserialize, Clone, Debug, JsonSchema, Eq, Ord)]
 pub struct Span {
@@ -92,7 +23,6 @@ pub struct Span {
     #[cfg(not(feature = "rustc"))]
     #[serde(skip)]
     pub rust_span_data: Option<()>,
-    // expn_backtrace: Vec<ExpnData>,
 }
 
 const _: () = {
@@ -185,7 +115,7 @@ pub enum RealFileName {
 }
 
 #[cfg(feature = "rustc")]
-impl<S> SInto<S, u64> for rustc_data_structures::stable_hasher::Hash64 {
+impl<S> SInto<S, u64> for rustc_hashes::Hash64 {
     fn sinto(&self, _: &S) -> u64 {
         self.as_u64()
     }
@@ -198,7 +128,7 @@ impl<S> SInto<S, u64> for rustc_data_structures::stable_hasher::Hash64 {
 #[derive(Clone, Debug, JsonSchema, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FileName {
     Real(RealFileName),
-    QuoteExpansion(u64),
+    CfgSpec(u64),
     Anon(u64),
     MacroExpansion(u64),
     ProcMacroSourceCode(u64),

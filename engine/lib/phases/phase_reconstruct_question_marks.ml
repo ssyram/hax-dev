@@ -51,13 +51,22 @@ module%inlined_contents Make (FA : Features.T) = struct
       `std::ops::FromResidual` for the type [Result<_, _>], and
       extract its parent [From] impl expr *)
       let expect_residual_impl_result (impl : impl_expr) : impl_expr option =
-        match impl.kind with
-        | ImplApp
-            {
-              impl = { kind = Concrete { trait; _ }; _ };
-              args = [ _; _; _; from_impl ];
-            }
-          when Concrete_ident.eq_name Core__result__Impl_27 trait ->
+        match impl with
+        | {
+         kind = ImplApp { args = [ _; _; _; from_impl ]; _ };
+         goal =
+           {
+             trait;
+             args =
+               [
+                 GType (TApp { ident = arg1; _ });
+                 GType (TApp { ident = arg2; _ });
+               ];
+           };
+        }
+          when Concrete_ident.eq_name Core__ops__try_trait__FromResidual trait
+               && Global_ident.eq_name Core__result__Result arg1
+               && Global_ident.eq_name Core__result__Result arg2 ->
             Some from_impl
         | _ -> None
 
@@ -71,7 +80,7 @@ module%inlined_contents Make (FA : Features.T) = struct
 
       (** Construct [Result<S,E>] *)
       let make_result_type (success : ty) (error : ty) : ty =
-        let ident = Global_ident.of_name Type Core__result__Result in
+        let ident = Global_ident.of_name ~value:false Core__result__Result in
         TApp { ident; args = [ GType success; GType error ] }
 
       (** Retype a [Err::<_, E>(x)] literal, as [Err::<success, E>(x)] *)
@@ -92,8 +101,7 @@ module%inlined_contents Make (FA : Features.T) = struct
         else
           let from_typ = TArrow ([ error_src ], error_dest) in
           let from =
-            UA.call ~kind:(AssociatedItem Value) ~impl Core__convert__From__from
-              [] e.span from_typ
+            UA.call ~impl Core__convert__From__from [] e.span from_typ
           in
           let call =
             UA.call Core__result__Impl__map_err [ e; from ] e.span

@@ -109,8 +109,8 @@ module Make (F : Features.T) = struct
 
     let deref_mut_app = concrete_app1 Core__ops__deref__DerefMut__deref_mut
 
-    let local_var (e : expr) : expr option =
-      match e.e with LocalVar _ -> Some e | _ -> None
+    let local_var (e : expr) : local_ident option =
+      match e.e with LocalVar v -> Some v | _ -> None
 
     let arrow (typ : ty) : (ty list * ty) option =
       match typ with
@@ -341,6 +341,14 @@ module Make (F : Features.T) = struct
             super#visit_expr' ascribe_app e
 
           method! visit_expr (ascribe_app : bool) e =
+            let ascribe_app =
+              ascribe_app
+              && not
+                   (match e.typ with
+                   | TApp { ident; _ } ->
+                       Global_ident.eq_name Hax_lib__prop__Prop ident
+                   | _ -> false)
+            in
             let e = super#visit_expr ascribe_app e in
             let ascribe (e : expr) =
               if [%matches? Ascription _] e.e then e
@@ -704,7 +712,8 @@ module Make (F : Features.T) = struct
 
   let never_typ : ty =
     let ident =
-      `Concrete (Concrete_ident.of_name Type Rust_primitives__hax__Never)
+      `Concrete
+        (Concrete_ident.of_name ~value:false Rust_primitives__hax__Never)
     in
     TApp { ident; args = [] }
 
@@ -900,8 +909,7 @@ module Make (F : Features.T) = struct
   let call_Constructor (constructor_name : Concrete_ident.name)
       (is_struct : bool) (args : expr list) span ret_typ =
     call_Constructor'
-      (`Concrete
-        (Concrete_ident.of_name (Constructor { is_struct }) constructor_name))
+      (`Concrete (Concrete_ident.of_name ~value:true constructor_name))
       is_struct args span ret_typ
 
   let call' ?impl f ?(generic_args = []) ?(impl_generic_args = [])
@@ -922,11 +930,10 @@ module Make (F : Features.T) = struct
       span;
     }
 
-  let call ?(kind : Concrete_ident.Kind.t = Value) ?(generic_args = [])
-      ?(impl_generic_args = []) ?impl (f_name : Concrete_ident.name)
-      (args : expr list) span ret_typ =
+  let call ?(generic_args = []) ?(impl_generic_args = []) ?impl
+      (f_name : Concrete_ident.name) (args : expr list) span ret_typ =
     call' ?impl ~generic_args ~impl_generic_args
-      (`Concrete (Concrete_ident.of_name kind f_name))
+      (`Concrete (Concrete_ident.of_name ~value:true f_name))
       args span ret_typ
 
   let make_closure (params : pat list) (body : expr) (span : span) : expr =
@@ -942,6 +949,16 @@ module Make (F : Features.T) = struct
     { span; typ = TStr; e = Literal (String s) }
 
   let hax_failure_expr' span (typ : ty) (context, kind) (ast : string) =
+    let ast =
+      (* Remove consecutive withe spaces *)
+      String.split ~on:' ' ast
+      |> List.filter ~f:(String.is_empty >> not)
+      |> String.concat ~sep:" "
+    in
+    let ast =
+      if String.length ast > 200 then String.sub ~pos:0 ~len:200 ast ^ "..."
+      else ast
+    in
     let error = Diagnostics.pretty_print_context_kind context kind in
     let args = List.map ~f:(string_lit span) [ error; ast ] in
     call Rust_primitives__hax__failure args span typ
@@ -951,7 +968,8 @@ module Make (F : Features.T) = struct
 
   let hax_failure_typ =
     let ident =
-      `Concrete (Concrete_ident.of_name Type Rust_primitives__hax__failure)
+      `Concrete
+        (Concrete_ident.of_name ~value:false Rust_primitives__hax__failure)
     in
     TApp { ident; args = [] }
 
@@ -1270,37 +1288,14 @@ module Make (F : Features.T) = struct
       Option.value ~default:p (expect_deref_mut p)
   end
 
-  module StringList = struct
-    module U = struct
-      module T = struct
-        type t = string * string list
-        [@@deriving show, yojson, compare, sexp, eq, hash]
-      end
-
-      include T
-      module C = Base.Comparator.Make (T)
-      include C
-    end
-
-    include U
-    module Map = Map.M (U)
-  end
-end
-
-module MakeWithNamePolicy (F : Features.T) (NP : Concrete_ident.NAME_POLICY) =
-struct
-  include Make (F)
-  open AST
-  module Concrete_ident_view = Concrete_ident.MakeViewAPI (NP)
-
-  let group_items_by_namespace (items : item list) : item list StringList.Map.t
-      =
-    let h = Hashtbl.create (module StringList) in
+  let group_items_by_namespace (items : item list) :
+      item list Concrete_ident.View.ModPath.Map.t =
+    let h = Hashtbl.create (module Concrete_ident.View.ModPath) in
     List.iter items ~f:(fun item ->
-        let ns = Concrete_ident_view.to_namespace item.ident in
+        let ns = (Concrete_ident.to_view item.ident).mod_path in
         let items = Hashtbl.find_or_add h ns ~default:(fun _ -> ref []) in
         items := !items @ [ item ]);
     Map.of_iteri_exn
-      (module StringList)
+      (module Concrete_ident.View.ModPath)
       ~iteri:(Hashtbl.map h ~f:( ! ) |> Hashtbl.iteri)
 end

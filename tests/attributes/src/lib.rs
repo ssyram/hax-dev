@@ -6,7 +6,7 @@ const u32_max: u32 = 90000;
 /// A doc comment on `add3`
 #[doc = "another doc comment on add3"]
 #[hax::requires(x > 10 && y > 10 && z > 10 && x + y + z < u32_max)]
-#[hax::ensures(|result| hax_lib::implies(true, || result > 32))]
+#[hax::ensures(|result| hax_lib::implies(true, result > 32))]
 fn add3(x: u32, y: u32, z: u32) -> u32 {
     x + y + z
 }
@@ -47,6 +47,15 @@ pub fn f<'a, T>(c: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     }
 }
 
+#[hax::decreases(x)]
+fn fib(x: usize) -> usize {
+    if x <= 2 {
+        x
+    } else {
+        fib(x - 1).wrapping_add(fib(x - 2))
+    }
+}
+
 #[hax::attributes]
 pub struct Foo {
     pub x: u32,
@@ -64,6 +73,11 @@ impl Foo {
 impl Foo {
     #[hax::exclude]
     fn h(&self) {}
+}
+
+fn props() {
+    hax_lib::assume!(hax_lib::fstar::prop!("True"));
+    hax_lib::assert_prop!(hax_lib::fstar::prop!("True"));
 }
 
 #[hax::attributes]
@@ -154,8 +168,8 @@ mod newtype_pattern {
     }
 }
 
-#[hax::fstar::before(r#"let before_${inlined_code} = "example before""#)]
-#[hax::fstar::after(r#"let ${inlined_code}_after = "example after""#)]
+#[hax::fstar::before(r#"let before_inlined_code = "example before""#)]
+#[hax::fstar::after(r#"let inlined_code_after = "example after""#)]
 fn inlined_code(foo: Foo) {
     const V: u8 = 12;
     let v_a = 13;
@@ -167,13 +181,50 @@ fn inlined_code(foo: Foo) {
     );
 }
 
+#[hax::fstar::before(r#"let before_1 = "example before 1""#)]
+#[hax::fstar::before(r#"let before_2 = "example before 2""#)]
+#[hax::fstar::before(r#"let before_3 = "example before 3""#)]
+#[hax::fstar::after(r#"let after 1 = "example after 1""#)]
+#[hax::fstar::after(r#"let after 2 = "example after 2""#)]
+#[hax::fstar::after(r#"let after 3 = "example after 3""#)]
+fn mutliple_before_after() {}
+
 #[hax::fstar::replace(r#"unfold let $some_function _ = "hello from F*""#)]
 fn some_function() -> String {
     String::from("hello from Rust")
 }
 
+mod future_self {
+    #[derive(Eq, PartialEq)]
+    struct Dummy;
+
+    #[hax_lib::attributes]
+    impl Dummy {
+        #[hax_lib::ensures(|_| future(self) == self)]
+        fn f(&mut self) {}
+    }
+}
+
+mod replace_body {
+    #[hax_lib::fstar::replace_body("magic ${x}")]
+    fn f(x: u8, y: u8) -> u8 {
+        1 + 2
+    }
+    struct Foo;
+    impl Foo {
+        #[hax_lib::fstar::replace_body("(magic (${self} <: $:{Self})) ${x}")]
+        fn assoc_fn(&self, x: u8) {}
+    }
+    impl ToString for Foo {
+        #[hax_lib::fstar::replace_body(r#""The type was $:{Self}""#)]
+        fn to_string(&self) -> String {
+            "Hello".into()
+        }
+    }
+}
+
 mod pre_post_on_traits_and_impls {
-    use hax_lib::int::*;
+    use hax_lib::*;
 
     #[hax_lib::attributes]
     trait Operation {
@@ -351,7 +402,7 @@ mod verifcation_status {
 }
 
 mod requires_mut {
-    use hax_lib::int::*;
+    use hax_lib::*;
 
     #[hax_lib::attributes]
     trait Foo {
@@ -398,5 +449,25 @@ mod issue_1266 {
     trait T {
         #[hax_lib::ensures(|_|true)]
         fn v(x: &mut Self);
+    }
+}
+
+mod props {
+    use hax_lib::*;
+
+    fn f(x: Prop, y: bool) -> Prop {
+        let xprop: Prop = y.into();
+        let p = y.lift() & xprop & y & y.to_prop();
+        !(p | y).implies(forall(|x: u8| x <= u8::MAX) & exists(|x: u16| x > 300))
+    }
+}
+
+mod issue_1276 {
+    struct S(pub u8);
+
+    #[hax_lib::attributes]
+    impl S {
+        #[hax_lib::requires(self.0 == 0 && self_ == self_1 && self_2 == 9)]
+        fn f(&self, self_: u8, self_0: u8, self_1: u8, self_2: u8) {}
     }
 }

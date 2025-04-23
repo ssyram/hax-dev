@@ -79,19 +79,21 @@ module FStarNamePolicy = struct
 
   [@@@ocamlformat "disable"]
 
-  let index_field_transform index = "_" ^ index
+  let anonymous_field_transform index = "_" ^ index
 
-  let reserved_words = Hash_set.of_list (module String) ["attributes";"noeq";"unopteq";"and";"assert";"assume";"begin";"by";"calc";"class";"default";"decreases";"effect";"eliminate";"else";"end";"ensures";"exception";"exists";"false";"friend";"forall";"fun";"λ";"function";"if";"in";"include";"inline";"inline_for_extraction";"instance";"introduce";"irreducible";"let";"logic";"match";"returns";"as";"module";"new";"new_effect";"layered_effect";"polymonadic_bind";"polymonadic_subcomp";"noextract";"of";"open";"opaque";"private";"quote";"range_of";"rec";"reifiable";"reify";"reflectable";"requires";"set_range_of";"sub_effect";"synth";"then";"total";"true";"try";"type";"unfold";"unfoldable";"val";"when";"with";"_";"__SOURCE_FILE__";"__LINE__";"match";"if";"let";"and";"string"]
+  let reserved_words = Hash_set.of_list (module String) ["attributes";"noeq";"unopteq";"and";"assert";"assume";"begin";"by";"calc";"class";"default";"decreases";"b2t";"effect";"eliminate";"else";"end";"ensures";"exception";"exists";"false";"friend";"forall";"fun";"λ";"function";"if";"in";"include";"inline";"inline_for_extraction";"instance";"introduce";"irreducible";"let";"logic";"match";"returns";"as";"module";"new";"new_effect";"layered_effect";"polymonadic_bind";"polymonadic_subcomp";"noextract";"of";"open";"opaque";"private";"quote";"range_of";"rec";"reifiable";"reify";"reflectable";"requires";"set_range_of";"sub_effect";"synth";"then";"total";"true";"try";"type";"unfold";"unfoldable";"val";"when";"with";"_";"__SOURCE_FILE__";"__LINE__";"match";"if";"let";"and";"string"]
 end
 
-module U = Ast_utils.MakeWithNamePolicy (InputLanguage) (FStarNamePolicy)
+module RenderId = Concrete_ident.MakeRenderAPI (FStarNamePolicy)
+module U = Ast_utils.Make (InputLanguage)
 module Visitors = Ast_visitors.Make (InputLanguage)
 open AST
 module F = Fstar_ast
+module Destruct = Ast_destruct.Make (InputLanguage)
 
 module Context = struct
   type t = {
-    current_namespace : string * string list;
+    current_namespace : string list;
     items : item list;
     interface_mode : bool;
     line_width : int;
@@ -99,9 +101,8 @@ module Context = struct
 end
 
 (** Convers a namespace to a module name *)
-let module_name (ns : string * string list) : string =
-  String.concat ~sep:"."
-    (List.map ~f:(map_first_letter String.uppercase) (fst ns :: snd ns))
+let module_name (ns : string list) : string =
+  String.concat ~sep:"." (List.map ~f:(map_first_letter String.uppercase) ns)
 
 module Make
     (Attrs : Attrs.WITH_ITEMS)
@@ -152,53 +153,69 @@ struct
 
   let pnegative = function true -> "-" | false -> ""
 
-  let rec pliteral span (e : literal) =
+  let dummy_clone_impl =
+    StringToFStar.term Span.default "{f_clone = (fun x -> x);}"
+
+  (* Print a literal as an F* constant *)
+  let rec pliteral_as_const span (e : literal) =
     match e with
     | String s -> F.Const.Const_string (s, F.dummyRange)
     | Char c -> F.Const.Const_char (Char.to_int c)
     | Int { value; kind = { size; signedness }; negative } ->
-        let open F.Const in
-        let size =
-          match size with
-          | S8 -> Int8
-          | S16 -> Int16
-          | S32 -> Int32
-          | S64 -> Int64
-          | S128 ->
-              Error.unimplemented ~issue_id:464
-                ~details:
-                  "Matching on u128 or i128 literals is not yet supported." span
-          | SSize ->
-              Error.unimplemented ~issue_id:464
-                ~details:
-                  "Matching on usize or isize literals is not yet supported. \
-                   As a work-around, instead of `match expr { 0 => ... }`, \
-                   please cast for instance to `u64` before: `match expr as \
-                   u64 { 0 => ... }`."
-                span
+        Error.unimplemented
+          ~details:
+            "Integers cannot be printed as constants, they can only be printed \
+             as expressions."
+          span
+    | Float _ ->
+        Error.unimplemented
+          ~details:
+            "Floats cannot be printed as constants, they can only be printed \
+             as expressions."
+          span
+    | Bool b -> F.Const.Const_bool b
+
+  (* Print a literal appearing in a pattern as an F* pattern *)
+  let rec pliteral_as_pat span (e : literal) =
+    match e with
+    | Int { value; kind = { size; signedness }; negative } ->
+        let pat_name =
+          F.pat
+          @@ F.AST.PatName (F.lid [ "Rust_primitives"; "Integers"; "MkInt" ])
         in
-        F.Const.Const_int
-          ( pnegative negative ^ value,
-            Some
-              ( (match signedness with Signed -> Signed | Unsigned -> Unsigned),
-                size ) )
+        let mk_const c = F.AST.PatConst c |> F.pat in
+        let mk_int value negative =
+          mk_const (F.Const.Const_int (pnegative negative ^ value, None))
+        in
+        F.pat_app pat_name @@ [ mk_int value negative ]
     | Float _ ->
         Error.unimplemented ~issue_id:464
-          ~details:"Matching on f32 or f64 literals is not yet supported." span
-    | Bool b -> F.Const.Const_bool b
+          ~details:"Pattern matching on floats is not yet supported." span
+    | _ -> F.pat @@ F.AST.PatConst (pliteral_as_const span e)
 
   let pliteral_as_expr span (e : literal) =
     let mk_const c = F.AST.Const c |> F.term in
-    let mk_nat value negative =
+    let mk_int value negative =
       mk_const (F.Const.Const_int (pnegative negative ^ value, None))
     in
-    let wrap_app fn x n = F.mk_e_app (F.term_of_lid [ fn ]) [ mk_nat x n ] in
     match e with
-    | Int { value; kind = { size = SSize; signedness = sn }; negative = n } ->
-        wrap_app (match sn with Signed -> "isz" | Unsigned -> "sz") value n
-    | Int { value; kind = { size = S128; signedness = sn }; negative } ->
-        let prefix = match sn with Signed -> "i" | Unsigned -> "u" in
-        wrap_app ("pub_" ^ prefix ^ "128") value negative
+    | Int { value; kind = { size; signedness }; negative = n } ->
+        let f =
+          match (size, signedness) with
+          | S8, Signed -> F.lid [ "mk_i8" ]
+          | S16, Signed -> F.lid [ "mk_i16" ]
+          | S32, Signed -> F.lid [ "mk_i32" ]
+          | S64, Signed -> F.lid [ "mk_i64" ]
+          | S128, Signed -> F.lid [ "mk_i128" ]
+          | SSize, Signed -> F.lid [ "mk_isize" ]
+          | S8, Unsigned -> F.lid [ "mk_u8" ]
+          | S16, Unsigned -> F.lid [ "mk_u16" ]
+          | S32, Unsigned -> F.lid [ "mk_u32" ]
+          | S64, Unsigned -> F.lid [ "mk_u64" ]
+          | S128, Unsigned -> F.lid [ "mk_u128" ]
+          | SSize, Unsigned -> F.lid [ "mk_usize" ]
+        in
+        F.mk_e_app (F.term @@ F.AST.Name f) [ mk_int value n ]
     | Float { value; negative; _ } ->
         F.mk_e_app
           (F.term_of_lid [ "mk_float" ])
@@ -206,14 +223,13 @@ struct
             mk_const
               (F.Const.Const_string (pnegative negative ^ value, F.dummyRange));
           ]
-    | _ -> mk_const @@ pliteral span e
+    | _ -> mk_const @@ pliteral_as_const span e
 
   let pconcrete_ident (id : concrete_ident) =
-    let id = U.Concrete_ident_view.to_view id in
-    let ns_crate, ns_path = ctx.current_namespace in
-    if String.(ns_crate = id.crate) && [%eq: string list] ns_path id.path then
-      F.lid [ id.definition ]
-    else F.lid (id.crate :: (id.path @ [ id.definition ]))
+    let id = RenderId.render id in
+    let path = ctx.current_namespace in
+    if [%eq: string list] path id.path then F.lid [ id.name ]
+    else F.lid (id.path @ [ id.name ])
 
   let rec pglobal_ident (span : span) (id : global_ident) =
     match id with
@@ -240,7 +256,7 @@ struct
          ^ show_global_ident id)
 
   let plocal_ident_str (e : Local_ident.t) =
-    U.Concrete_ident_view.local_ident
+    RenderId.local_ident
       (match String.chop_prefix ~prefix:"impl " e.name with
       | Some name ->
           let name = "impl_" ^ Int.to_string ([%hash: string] name) in
@@ -261,8 +277,7 @@ struct
          ^ show_global_ident f)
 
   let index_of_field_concrete id =
-    try Some (Int.of_string @@ U.Concrete_ident_view.to_definition_name id)
-    with _ -> None
+    try Some (Int.of_string @@ (RenderId.render id).name) with _ -> None
 
   let index_of_field = function
     | `Concrete id -> index_of_field_concrete id
@@ -272,27 +287,30 @@ struct
   let is_field_an_index = index_of_field >> Option.is_some
 
   let operators =
-    let c = Global_ident.of_name Value in
+    let c = Global_ident.of_name ~value:true in
     [
       (c Rust_primitives__hax__array_of_list, (3, ".[]<-"));
       (c Core__ops__index__Index__index, (2, ".[]"));
-      (c Core__ops__bit__BitXor__bitxor, (2, "^."));
-      (c Core__ops__bit__BitAnd__bitand, (2, "&."));
-      (c Core__ops__bit__BitOr__bitor, (2, "|."));
       (c Core__ops__bit__Not__not, (1, "~."));
-      (c Core__ops__arith__Add__add, (2, "+!"));
-      (c Core__ops__arith__Sub__sub, (2, "-!"));
-      (c Core__ops__arith__Mul__mul, (2, "*!"));
-      (c Core__ops__arith__Div__div, (2, "/!"));
-      (c Core__ops__arith__Rem__rem, (2, "%!"));
-      (c Core__ops__bit__Shl__shl, (2, "<<!"));
-      (c Core__ops__bit__Shr__shr, (2, ">>!"));
+      (c Rust_primitives__hax__machine_int__not, (1, "~."));
+      (c Rust_primitives__hax__machine_int__add, (2, "+!"));
+      (c Rust_primitives__hax__machine_int__sub, (2, "-!"));
+      (c Rust_primitives__hax__machine_int__div, (2, "/!"));
+      (c Rust_primitives__hax__machine_int__mul, (2, "*!"));
+      (c Rust_primitives__hax__machine_int__rem, (2, "%!"));
+      (c Rust_primitives__hax__machine_int__shl, (2, "<<!"));
+      (c Rust_primitives__hax__machine_int__shr, (2, ">>!"));
+      (c Rust_primitives__hax__machine_int__bitxor, (2, "^."));
+      (c Rust_primitives__hax__machine_int__bitor, (2, "|."));
+      (c Rust_primitives__hax__machine_int__bitand, (2, "&."));
       (c Core__cmp__PartialEq__eq, (2, "=."));
-      (c Core__cmp__PartialOrd__lt, (2, "<."));
-      (c Core__cmp__PartialOrd__le, (2, "<=."));
+      (c Rust_primitives__hax__machine_int__eq, (2, "=."));
       (c Core__cmp__PartialEq__ne, (2, "<>."));
-      (c Core__cmp__PartialOrd__ge, (2, ">=."));
-      (c Core__cmp__PartialOrd__gt, (2, ">."));
+      (c Rust_primitives__hax__machine_int__ne, (2, "<>."));
+      (c Rust_primitives__hax__machine_int__le, (2, "<=."));
+      (c Rust_primitives__hax__machine_int__lt, (2, "<."));
+      (c Rust_primitives__hax__machine_int__gt, (2, ">."));
+      (c Rust_primitives__hax__machine_int__ge, (2, ">=."));
       (`Primitive (LogicalOp And), (2, "&&"));
       (`Primitive (LogicalOp Or), (2, "||"));
       (c Rust_primitives__hax__int__add, (2, "+"));
@@ -307,6 +325,12 @@ struct
       (c Rust_primitives__hax__int__lt, (2, "<"));
       (c Rust_primitives__hax__int__ne, (2, "<>"));
       (c Rust_primitives__hax__int__eq, (2, "="));
+      (c Hax_lib__prop__constructors__and, (2, "/\\"));
+      (c Hax_lib__prop__constructors__or, (2, "\\/"));
+      (c Hax_lib__prop__constructors__not, (1, "~"));
+      (c Hax_lib__prop__constructors__eq, (2, "=="));
+      (c Hax_lib__prop__constructors__ne, (2, "=!="));
+      (c Hax_lib__prop__constructors__implies, (2, "==>"));
     ]
     |> Map.of_alist_exn (module Global_ident)
 
@@ -343,14 +367,11 @@ struct
         F.mk_e_app (F.term_of_lid [ "t_Array" ]) [ pty span typ; pexpr length ]
     | TParam i -> F.term @@ F.AST.Var (F.lid_of_id @@ plocal_ident i)
     | TAssociatedType { impl = { kind = Self; _ }; item } ->
-        F.term
-        @@ F.AST.Var (F.lid [ U.Concrete_ident_view.to_definition_name item ])
+        F.term @@ F.AST.Var (F.lid [ (RenderId.render item).name ])
     | TAssociatedType { impl; item } -> (
         match pimpl_expr span impl with
         | Some impl ->
-            F.term
-            @@ F.AST.Project
-                 (impl, F.lid [ U.Concrete_ident_view.to_definition_name item ])
+            F.term @@ F.AST.Project (impl, F.lid [ (RenderId.render item).name ])
         | None -> F.term @@ F.AST.Wild)
     | TOpaque s -> F.term @@ F.AST.Wild
     | TDyn { goals; _ } ->
@@ -459,7 +480,7 @@ struct
           @@
           if is_record then [ pat_rec () ]
           else List.map ~f:(fun { field; pat } -> ppat pat) fields
-    | PConstant { lit } -> F.pat @@ F.AST.PatConst (pliteral p.span lit)
+    | PConstant { lit } -> pliteral_as_pat p.span lit
     | _ -> .
 
   and pfield_pat ({ field; pat } : field_pat) =
@@ -504,6 +525,52 @@ struct
         F.AST.unit_const F.dummyRange
     | GlobalVar global_ident ->
         F.term @@ F.AST.Var (pglobal_ident e.span @@ global_ident)
+    | App { f = { e = GlobalVar f; _ }; args = [ x ] }
+      when Global_ident.eq_name Hax_lib__prop__constructors__from_bool f ->
+        let x = pexpr x in
+        F.mk_e_app (F.term_of_lid [ "b2t" ]) [ x ]
+    | App
+        {
+          f = { e = GlobalVar f; _ };
+          args = [ { e = Closure { params = [ x ]; body = phi; _ }; _ } ];
+        }
+      when Global_ident.eq_name Hax_lib__prop__constructors__forall f ->
+        let phi = pexpr phi in
+        let binders =
+          let b = Destruct.pat_PBinding x |> Option.value_exn in
+          [
+            F.AST.
+              {
+                b = F.AST.Annotated (plocal_ident b.var, pty x.span b.typ);
+                brange = F.dummyRange;
+                blevel = Un;
+                aqual = None;
+                battributes = [];
+              };
+          ]
+        in
+        F.term @@ F.AST.QForall (binders, ([], []), phi)
+    | App
+        {
+          f = { e = GlobalVar f; _ };
+          args = [ { e = Closure { params = [ x ]; body = phi; _ }; _ } ];
+        }
+      when Global_ident.eq_name Hax_lib__prop__constructors__exists f ->
+        let phi = pexpr phi in
+        let binders =
+          let b = Destruct.pat_PBinding x |> Option.value_exn in
+          [
+            F.AST.
+              {
+                b = F.AST.Annotated (plocal_ident b.var, pty x.span b.typ);
+                brange = F.dummyRange;
+                blevel = Un;
+                aqual = None;
+                battributes = [];
+              };
+          ]
+        in
+        F.term @@ F.AST.QExists (binders, ([], []), phi)
     | App
         {
           f = { e = GlobalVar (`Projector (`TupleField (n, len))) };
@@ -518,7 +585,7 @@ struct
         let arity, op = Map.find_exn operators x in
         if List.length args <> arity then
           Error.assertion_failure e.span
-            "pexpr: bad arity for operator application";
+            ("pexpr: bad arity for operator application (" ^ op ^ ")");
         F.term @@ F.AST.Op (F.Ident.id_of_text op, List.map ~f:pexpr args)
     | App
         {
@@ -526,7 +593,7 @@ struct
           args = [ { e = Literal (String s); _ } ];
           generic_args = _;
         }
-      when Global_ident.eq_name Hax_lib__int__Impl_6___unsafe_from_str f ->
+      when Global_ident.eq_name Hax_lib__int__Impl_7___unsafe_from_str f ->
         (match
            String.chop_prefix ~prefix:"-" s
            |> Option.value ~default:s
@@ -555,7 +622,8 @@ struct
         let body = F.AST.mkConsList F.dummyRange (List.map ~f:pexpr l) in
         let array_of_list =
           let id =
-            Concrete_ident.of_name Value Rust_primitives__hax__array_of_list
+            Concrete_ident.of_name ~value:true
+              Rust_primitives__hax__array_of_list
           in
           F.term @@ F.AST.Name (pconcrete_ident id)
         in
@@ -803,16 +871,48 @@ struct
         F.mk_refined binder_name (pty span ty) (fun ~x -> pexpr refinement)
     | None -> pty span ty
 
-  (* let prefined_ty span (binder : string) (ty : ty) (refinement : expr) : *)
-  (*     F.AST.term = *)
-  (*   F.mk_refined binder (pty span ty) (pexpr refinement) *)
-
-  let add_clauses_effect_type ~no_tot_abbrev (attrs : attrs) typ : F.AST.typ =
-    let attr_term ?keep_last_args kind f =
+  let add_clauses_effect_type ~self ~no_tot_abbrev (attrs : attrs) typ :
+      F.AST.typ =
+    let attr_term ?keep_last_args ?map_expr kind f =
+      (* A clause on a method with a `self` produces a function whose first argument is `self_`.
+         `subst_self` will substitute that first argument `self_` into the provided local identifier `self`.
+      *)
+      let subst_self : (expr -> expr) option =
+        (* If `self` was present on the original function.  *)
+        let* self = self in
+        (* Lookup the pre/post/decreases function, get the first argument: that is `self`. *)
+        let* self' =
+          let* _, params, _ = Attrs.associated_fn kind attrs in
+          let* first_param = List.hd params in
+          let* { var; _ } = Destruct.pat_PBinding first_param.pat in
+          Some var
+        in
+        let f id = if [%eq: local_ident] self' id then self else id in
+        Some ((U.Mappers.rename_local_idents f)#visit_expr ())
+      in
       Attrs.associated_expr ?keep_last_args kind attrs
-      |> Option.map ~f:(pexpr >> f >> F.term)
+      |> Option.map
+           ~f:
+             (Option.value ~default:Fn.id subst_self
+             >> Option.value ~default:Fn.id map_expr
+             >> pexpr >> f >> F.term)
     in
-    let decreases = attr_term Decreases (fun t -> F.AST.Decreases (t, None)) in
+    let decreases =
+      let visitor =
+        object
+          inherit [_] U.Visitors.map as super
+
+          method! visit_expr () e =
+            match e.e with
+            | App { f = { e = GlobalVar f; _ }; args = [ e ]; _ }
+              when Global_ident.eq_name Hax_lib__any_to_unit f ->
+                e
+            | _ -> super#visit_expr () e
+        end
+      in
+      attr_term Decreases ~map_expr:(visitor#visit_expr ()) (fun t ->
+          F.AST.Decreases (t, None))
+    in
     let is_lemma = Attrs.lemma attrs in
     let prepost_bundle =
       let trivial_pre = F.term_of_lid [ "Prims"; "l_True" ] in
@@ -847,7 +947,7 @@ struct
             if is_lemma then mk [] "Lemma" else prims "Pure"
           else prims "Tot"
         in
-        F.mk_e_app effect (if is_lemma then args else typ :: args)
+        F.mk_e_app effect (if is_lemma then List.drop args 1 else typ :: args)
 
   (** Prints doc comments out of a list of attributes *)
   let pdoc_comments attrs =
@@ -914,7 +1014,11 @@ struct
       [
         F.decl ~quals:[ Assumption ] ~fsti:false ~attrs
         @@ F.AST.Assume (name', ty);
-        F.decl ~fsti:false
+        F.decl
+          ~quals:
+            (if ctx.interface_mode then []
+             else [ Unfold_for_unification_and_vcgen ])
+          ~fsti:false
         @@ F.AST.TopLevelLet (NoLetQualifier, [ (F.pat @@ pat, term) ]);
       ]
     in
@@ -922,16 +1026,15 @@ struct
     | Alias { name; item } ->
         (* These should come from bundled items (in the case of cyclic module dependencies).
            We make use of this f* feature: https://github.com/FStarLang/FStar/pull/3369 *)
-        let bundle = U.Concrete_ident_view.to_namespace item |> module_name in
+        let bundle = (RenderId.render item).path |> module_name in
         [
           `VerbatimImpl
             ( Printf.sprintf "include %s {%s as %s}" bundle
-                (U.Concrete_ident_view.to_definition_name item)
-                (U.Concrete_ident_view.to_definition_name name),
+                (RenderId.render item).name (RenderId.render name).name,
               `Newline );
         ]
     | Fn { name; generics; body; params } ->
-        let name = F.id @@ U.Concrete_ident_view.to_definition_name name in
+        let name = F.id @@ (RenderId.render name).name in
         let pat = F.pat @@ F.AST.PatVar (name, None, []) in
         let generics = FStarBinder.of_generics e.span generics in
         let pat_args =
@@ -951,6 +1054,11 @@ struct
         let is_const = List.is_empty params in
         let ty =
           add_clauses_effect_type
+            ~self:
+              (let* hd = List.hd params in
+               let* { var; _ } = Destruct.pat_PBinding hd.pat in
+               let*? () = String.equal var.name "self" in
+               Some var)
             ~no_tot_abbrev:(ctx.interface_mode && not is_const)
             e.attrs (pty body.span body.typ)
         in
@@ -963,7 +1071,7 @@ struct
                        let name =
                          match pat.p with
                          | PBinding { var; _ } ->
-                             Some (U.Concrete_ident_view.local_ident var)
+                             Some (RenderId.local_ident var)
                          | _ ->
                              (* TODO: this might generate bad code,
                                 see
@@ -992,9 +1100,7 @@ struct
         else full
     | TyAlias { name; generics; ty } ->
         let pat =
-          F.pat
-          @@ F.AST.PatVar
-               (F.id @@ U.Concrete_ident_view.to_definition_name name, None, [])
+          F.pat @@ F.AST.PatVar (F.id @@ (RenderId.render name).name, None, [])
         in
         let ty, quals =
           (* Adds a refinement if a refinement attribute is detected *)
@@ -1032,7 +1138,7 @@ struct
           F.term
           @@ F.AST.Product (List.map ~f:FStarBinder.to_binder generics, ty)
         in
-        let name = F.id @@ U.Concrete_ident_view.to_definition_name name in
+        let name = F.id @@ (RenderId.render name).name in
         let erased = erased_impl name arrow_typ [] generics in
         let intf = F.decl ~fsti:true (F.AST.Val (name, arrow_typ)) in
         if ctx.interface_mode then intf :: erased else erased
@@ -1049,7 +1155,7 @@ struct
                false,
                [
                  F.AST.TyconRecord
-                   ( F.id @@ U.Concrete_ident_view.to_definition_name name,
+                   ( F.id @@ (RenderId.render name).name,
                      FStarBinder.of_generics e.span generics
                      |> List.map ~f:FStarBinder.implicit_to_explicit
                      |> List.map ~f:FStarBinder.to_binder,
@@ -1057,12 +1163,10 @@ struct
                      [],
                      List.map
                        ~f:(fun (prev, (field, ty, attrs)) ->
-                         let fname : string =
-                           U.Concrete_ident_view.to_definition_name field
-                         in
+                         let fname : string = (RenderId.render field).name in
                          let fvars =
                            List.map prev ~f:(fun (field, _, _) ->
-                               U.Concrete_ident_view.to_definition_name field)
+                               (RenderId.render field).name)
                          in
                          ( F.id fname,
                            None,
@@ -1073,7 +1177,7 @@ struct
     | Type { name; generics; variants; _ } ->
         let self =
           F.mk_e_app
-            (F.term_of_lid [ U.Concrete_ident_view.to_definition_name name ])
+            (F.term_of_lid [ (RenderId.render name).name ])
             (List.map
                ~f:FStarBinder.(of_generic_param e.span >> to_ident)
                generics.params
@@ -1083,7 +1187,7 @@ struct
         let constructors =
           List.map
             ~f:(fun { name; arguments; is_record; _ } ->
-              ( F.id (U.Concrete_ident_view.to_definition_name name),
+              ( F.id (RenderId.render name).name,
                 Some
                   (let field_indexes =
                      List.map ~f:(fst3 >> index_of_field_concrete) arguments
@@ -1093,7 +1197,7 @@ struct
                        ( List.map
                            ~f:(fun (field, ty, attrs) ->
                              let fname : string =
-                               U.Concrete_ident_view.to_definition_name field
+                               (RenderId.render field).name
                              in
                              (F.id fname, None, [], pty e.span ty))
                            arguments,
@@ -1116,7 +1220,7 @@ struct
                false,
                [
                  F.AST.TyconVariant
-                   ( F.id @@ U.Concrete_ident_view.to_definition_name name,
+                   ( F.id @@ (RenderId.render name).name,
                      FStarBinder.of_generics e.span generics
                      |> List.map ~f:FStarBinder.implicit_to_explicit
                      |> List.map ~f:FStarBinder.to_binder,
@@ -1132,8 +1236,8 @@ struct
                span = e.span;
              }
         in
-        match U.Concrete_ident_view.to_view macro with
-        | { crate = "hacspec_lib"; path = _; definition = name } -> (
+        match RenderId.render macro with
+        | { path = "hacspec_lib" :: _; name } -> (
             let unwrap r =
               match r with
               | Ok r -> r
@@ -1195,12 +1299,12 @@ struct
             | _ -> unsupported_macro ())
         | _ -> unsupported_macro ())
     | Trait { name; generics; items } ->
-        let name_str = U.Concrete_ident_view.to_definition_name name in
+        let name_str = (RenderId.render name).name in
         let name_id = F.id @@ name_str in
         let fields =
           List.concat_map
             ~f:(fun i ->
-              let name = U.Concrete_ident_view.to_definition_name i.ti_ident in
+              let name = (RenderId.render i.ti_ident).name in
               let generics = FStarBinder.of_generics i.ti_span i.ti_generics in
               let bds = generics |> List.map ~f:FStarBinder.to_binder in
               let fields =
@@ -1373,8 +1477,9 @@ struct
                       in
                       let add_pre n = n ^ "_pre" in
                       let pre_name_str =
-                        U.Concrete_ident_view.to_definition_name
-                          (Concrete_ident.Create.map_last ~f:add_pre i.ti_ident)
+                        (RenderId.render
+                           (Concrete_ident.with_suffix `Pre i.ti_ident))
+                          .name
                       in
                       let pre =
                         F.mk_app (F.term_of_lid [ pre_name_str ]) inputs
@@ -1382,8 +1487,9 @@ struct
                       let result = F.term_of_lid [ "result" ] in
                       let add_post n = n ^ "_post" in
                       let post_name_str =
-                        U.Concrete_ident_view.to_definition_name
-                          (Concrete_ident.Create.map_last ~f:add_post i.ti_ident)
+                        (RenderId.render
+                           (Concrete_ident.with_suffix `Post i.ti_ident))
+                          .name
                       in
                       let post =
                         F.mk_app
@@ -1458,7 +1564,7 @@ struct
           items;
           parent_bounds;
         } ->
-        let name = U.Concrete_ident_view.to_definition_name e.ident |> F.id in
+        let name = (RenderId.render e.ident).name |> F.id in
         let pat = F.pat @@ F.AST.PatVar (name, None, []) in
         let generics = FStarBinder.of_generics e.span generics in
         let pat =
@@ -1474,7 +1580,7 @@ struct
         let fields =
           List.concat_map
             ~f:(fun { ii_span; ii_generics; ii_v; ii_ident } ->
-              let name = U.Concrete_ident_view.to_definition_name ii_ident in
+              let name = (RenderId.render ii_ident).name in
 
               match ii_v with
               | IIFn { body; params } ->
@@ -1527,8 +1633,20 @@ struct
               ~fsti:(ctx.interface_mode && has_type)
               ~attrs:[ tcinst ] let_impl
         in
+        let is_auto_clone =
+          List.exists
+            ~f:(function
+              | { kind = Tool { path = "automatically_derived"; _ }; _ } -> true
+              | _ -> false)
+            e.attrs
+          && Concrete_ident.eq_name Core__clone__Clone trait
+        in
         let intf = if has_type && not is_erased then [] else intf in
-        if ctx.interface_mode then intf @ impl else impl
+        if is_erased && is_auto_clone then
+          F.decls ~fsti:ctx.interface_mode
+            (F.AST.TopLevelLet (NoLetQualifier, [ (pat, dummy_clone_impl) ]))
+        else if ctx.interface_mode then intf @ impl
+        else impl
     | Quote { quote; _ } ->
         let fstar_opts =
           Attrs.find_unique_attr e.attrs ~f:(function
@@ -1597,7 +1715,7 @@ let strings_of_item (bo : BackendOptions.t) m items (item : item) :
   let (module Print) =
     make m
       {
-        current_namespace = U.Concrete_ident_view.to_namespace item.ident;
+        current_namespace = (RenderId.render item.ident).path;
         interface_mode;
         items;
         line_width = bo.line_width;
@@ -1639,7 +1757,7 @@ let string_of_items ~mod_name ~bundles (bo : BackendOptions.t) m items :
       |> Set.union_list (module Concrete_ident)
       |> Set.map
            (module String)
-           ~f:(fun i -> U.Concrete_ident_view.to_namespace i |> module_name)
+           ~f:(fun i -> (RenderId.render i).path |> module_name)
       |> Fn.flip Set.remove mod_name
       |> Set.to_list
       |> List.filter ~f:(fun m ->
@@ -1663,13 +1781,16 @@ let string_of_items ~mod_name ~bundles (bo : BackendOptions.t) m items :
           |> String.concat ~sep:"")
         ^ "\n\n"
   in
-  let map_string ~f (str, space) =
-    ((match str with `Impl s -> `Impl (f s) | `Intf s -> `Intf (f s)), space)
+  let map_string ~f ?(map_intf = true) (str, space) =
+    ( (match str with
+      | `Impl s -> `Impl (f s)
+      | `Intf s -> `Intf (if map_intf then f s else s)),
+      space )
   in
   let replace_in_strs ~pattern ~with_ =
     List.map
       ~f:
-        (map_string ~f:(fun str ->
+        (map_string ~map_intf:false ~f:(fun str ->
              String.substr_replace_first ~pattern ~with_ str))
   in
 
@@ -1743,11 +1864,11 @@ let fstar_headers (bo : BackendOptions.t) =
 (** Translate as F* (the "legacy" printer) *)
 let translate_as_fstar m (bo : BackendOptions.t) ~(bundles : AST.item list list)
     (items : AST.item list) : Types.file list =
-  let show_view Concrete_ident.{ crate; path; definition } =
-    crate :: (path @ [ definition ]) |> String.concat ~sep:"::"
-  in
   U.group_items_by_namespace items
   |> Map.to_alist
+  |> List.filter_map ~f:(fun (_, items) ->
+         let* first_item = List.hd items in
+         Some ((RenderId.render first_item.ident).path, items))
   |> List.concat_map ~f:(fun (ns, items) ->
          let mod_name = module_name ns in
          let impl, intf = string_of_items ~mod_name ~bundles bo m items in
@@ -1808,6 +1929,7 @@ module TransformToInputLanguage =
   |> Phases.Newtype_as_refinement
   |> Phases.Reject.Trait_item_default
   |> Phases.Bundle_cycles
+  |> Phases.Sort_items
   |> SubtypeToInputLanguage
   |> Identity
   ]

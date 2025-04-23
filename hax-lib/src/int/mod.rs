@@ -1,8 +1,11 @@
+use core::fmt;
 use core::ops::*;
 use num_traits::cast::ToPrimitive;
 
 mod bigint;
 use bigint::*;
+
+use super::abstraction::*;
 
 #[cfg(feature = "macros")]
 pub use hax_lib_macros::int;
@@ -10,8 +13,14 @@ pub use hax_lib_macros::int;
 /// Mathematical integers for writting specifications. Mathematical
 /// integers are unbounded and arithmetic operation on them never over
 /// or underflow.
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct Int(BigInt);
+
+impl fmt::Display for Int {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.get())
+    }
+}
 
 impl Int {
     fn new(x: impl Into<num_bigint::BigInt>) -> Self {
@@ -76,25 +85,16 @@ impl Int {
         use core::str::FromStr;
         Self::new(num_bigint::BigInt::from_str(s).unwrap())
     }
+
+    pub fn rem_euclid(&self, v: Self) -> Self {
+        use num_traits::Euclid;
+        Self::new(self.get().rem_euclid(&v.get()))
+    }
 }
 
-/// Marks a type as abstractable: its values can be mapped to an
-/// idealized version of the type. For instance, machine integers,
-/// which have bounds, can be mapped to mathematical integers.
-///
-/// Each type can have only one abstraction.
-pub trait Abstraction {
-    /// What is the ideal type values should be mapped to?
-    type AbstractType;
-    /// Maps a concrete value to its abstract counterpart
-    fn lift(self) -> Self::AbstractType;
-}
-
-/// Marks a type as abstract: its values can be lowered to concrete
-/// values. This might panic.
-pub trait Concretization<T> {
-    /// Maps an abstract value and lowers it to its concrete counterpart.
-    fn concretize(self) -> T;
+#[cfg(feature = "macros")]
+pub trait ToInt {
+    fn to_int(self) -> Int;
 }
 
 /// Instead of defining one overloaded instance, which relies
@@ -118,6 +118,11 @@ macro_rules! implement_abstraction {
             type AbstractType = Int;
             fn lift(self) -> Self::AbstractType {
                 Int::new(num_bigint::BigInt::from(self))
+            }
+        }
+        impl ToInt for $ty {
+            fn to_int(self) -> Int {
+                self.lift()
             }
         }
     };

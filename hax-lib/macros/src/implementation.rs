@@ -10,7 +10,7 @@ mod prelude {
     pub use crate::syn_ext::*;
     pub use proc_macro as pm;
     pub use proc_macro2::*;
-    pub use proc_macro_error::*;
+    pub use proc_macro_error2::*;
     pub use quote::*;
     pub use std::collections::HashSet;
     pub use syn::spanned::Spanned;
@@ -45,7 +45,7 @@ pub fn fstar_options(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenS
 /// Add an invariant to a loop which deals with an index. The
 /// invariant cannot refer to any variable introduced within the
 /// loop. An invariant is a closure that takes one argument, the
-/// index, and returns a boolean.
+/// index, and returns a proposition.
 ///
 /// Note that loop invariants are unstable (this will be handled in a
 /// better way in the future, see
@@ -175,7 +175,7 @@ pub fn modeled_by(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStre
 */
 
 /// Mark a `Proof<{STATEMENT}>`-returning function as a lemma, where
-/// `STATEMENT` is a boolean expression capturing any input
+/// `STATEMENT` is a `Prop` expression capturing any input
 /// variable.
 /// In the backends, this will generate a lemma with an empty proof.
 ///
@@ -245,16 +245,13 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
         } {
             abort!(
                 item.sig.output.span(),
-                "A lemma is expected to return a `Proof<{STATEMENT}>`, where {STATEMENT} is a boolean expression."
+                "A lemma is expected to return a `Proof<{STATEMENT}>`, where {STATEMENT} is a `Prop` expression."
             );
         }
     }
     use AttrPayload::NeverErased;
     quote! { #attr #NeverErased #item }.into()
 }
-
-/*
-TODO: this is disabled for now, we need `dyn` types (see issue #296)
 
 /// Provide a measure for a function: this measure will be used once
 /// extracted in a backend for checking termination. The expression
@@ -288,7 +285,6 @@ pub fn decreases(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStrea
     );
     quote! {#requires #attr #item}.into()
 }
-*/
 
 /// Add a logical precondition to a function.
 // Note you can use the `forall` and `exists` operators. (TODO: commented out for now, see #297)
@@ -596,7 +592,7 @@ pub fn attributes(_attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStr
                                 const _: () = {
                                     #uid_attr
                                     #status_attr
-                                    fn refinement(#binders) -> bool { #refine }
+                                    fn refinement(#binders) -> ::hax_lib::Prop { ::hax_lib::Prop::from(#refine) }
                                 };
                             })
                         }
@@ -755,7 +751,7 @@ macro_rules! make_quoting_item_proc_macro {
                         r#impl: ident_str == "impl" || ident_str == "both",
                     });
                     if !matches!(ident_str.as_str(), "impl" | "both" | "interface") {
-                        proc_macro_error::abort!(
+                        proc_macro_error2::abort!(
                             ident.span(),
                             "Expected `impl`, `both` or `interface`"
                         );
@@ -786,73 +782,108 @@ macro_rules! make_quoting_item_proc_macro {
 
 macro_rules! make_quoting_proc_macro {
     ($backend:ident) => {
-        paste::paste! {
-            #[doc = concat!("Embed ", stringify!($backend), " expression inside a Rust expression. This macro takes only one argument: some raw ", stringify!($backend), " code as a string literal.")]
-            ///
+        #[doc = concat!("Embed ", stringify!($backend), " expression inside a Rust expression. This macro takes only one argument: some raw ", stringify!($backend), " code as a string literal.")]
+        ///
 
-            /// While it is possible to directly write raw backend code,
-            /// sometimes it can be inconvenient. For example, referencing
-            /// Rust names can be a bit cumbersome: for example, the name
-            /// `my_crate::my_module::CONSTANT` might be translated
-            /// differently in a backend (e.g. in the F* backend, it will
-            /// probably be `My_crate.My_module.v_CONSTANT`).
-            ///
+        /// While it is possible to directly write raw backend code,
+        /// sometimes it can be inconvenient. For example, referencing
+        /// Rust names can be a bit cumbersome: for example, the name
+        /// `my_crate::my_module::CONSTANT` might be translated
+        /// differently in a backend (e.g. in the F* backend, it will
+        /// probably be `My_crate.My_module.v_CONSTANT`).
+        ///
 
-            /// To facilitate this, you can write Rust names directly,
-            /// using the prefix `$`: `f $my_crate::my_module__CONSTANT + 3`
-            /// will be replaced with `f My_crate.My_module.v_CONSTANT + 3`
-            /// in the F* backend for instance.
+        /// To facilitate this, you can write Rust names directly,
+        /// using the prefix `$`: `f $my_crate::my_module__CONSTANT + 3`
+        /// will be replaced with `f My_crate.My_module.v_CONSTANT + 3`
+        /// in the F* backend for instance.
 
-            /// If you want to refer to the Rust constructor
-            /// `Enum::Variant`, you should write `$$Enum::Variant` (note
-            /// the double dollar).
+        /// If you want to refer to the Rust constructor
+        /// `Enum::Variant`, you should write `$$Enum::Variant` (note
+        /// the double dollar).
 
-            /// If the name refers to something polymorphic, you need to
-            /// signal it by adding _any_ type informations,
-            /// e.g. `${my_module::function<()>}`. The curly braces are
-            /// needed for such more complex expressions.
+        /// If the name refers to something polymorphic, you need to
+        /// signal it by adding _any_ type informations,
+        /// e.g. `${my_module::function<()>}`. The curly braces are
+        /// needed for such more complex expressions.
 
-            /// You can also write Rust patterns with the `$?{SYNTAX}`
-            /// syntax, where `SYNTAX` is a Rust pattern. The syntax
-            /// `${EXPR}` also allows any Rust expressions
-            /// `EXPR` to be embedded.
+        /// You can also write Rust patterns with the `$?{SYNTAX}`
+        /// syntax, where `SYNTAX` is a Rust pattern. The syntax
+        /// `${EXPR}` also allows any Rust expressions
+        /// `EXPR` to be embedded.
 
-            /// Types can be refered to with the syntax `$:{TYPE}`.
-            #[proc_macro]
-            pub fn [<$backend _expr>](payload: pm::TokenStream) -> pm::TokenStream {
-                let ts: TokenStream = quote::expression(true, payload).into();
-                quote!{
-                    #[cfg([< hax_backend_ $backend >])]
-                    {
-                        #ts
-                    }
-                }.into()
-            }
+        /// Types can be refered to with the syntax `$:{TYPE}`.
+        #[proc_macro]
+        pub fn ${concat($backend, _expr)}(payload: pm::TokenStream) -> pm::TokenStream {
+            let ts: TokenStream = quote::expression(quote::InlineExprType::Unit, payload).into();
+            quote!{{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                {
+                    #ts
+                }
+            }}.into()
+        }
 
-            #[doc = concat!("The unsafe (because polymorphic: even computationally relevant code can be inlined!) version of `", stringify!($backend), "_expr`.")]
-            #[proc_macro]
-            #[doc(hidden)]
-            pub fn [<$backend _unsafe_expr>](payload: pm::TokenStream) -> pm::TokenStream {
-                let ts: TokenStream = quote::expression(false, payload).into();
-                quote!{
-                    #[cfg([< hax_backend_ $backend >])]
-                    {
-                        #ts
-                    }
-                }.into()
-            }
+        #[doc = concat!("The `Prop` version of `", stringify!($backend), "_expr`.")]
+        #[proc_macro]
+        pub fn ${concat($backend, _prop_expr)}(payload: pm::TokenStream) -> pm::TokenStream {
+            let ts: TokenStream = quote::expression(quote::InlineExprType::Prop, payload).into();
+            quote!{{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                {
+                    #ts
+                }
+                #[cfg(not(${concat(hax_backend_, $backend)}))]
+                {
+                    ::hax_lib::Prop::from_bool(true)
+                }
+            }}.into()
+        }
 
-            make_quoting_item_proc_macro!($backend, [< $backend _before >], ItemQuotePosition::Before, [< hax_backend_ $backend >]);
-            make_quoting_item_proc_macro!($backend, [< $backend _after >], ItemQuotePosition::After, [< hax_backend_ $backend >]);
+        #[doc = concat!("The unsafe (because polymorphic: even computationally relevant code can be inlined!) version of `", stringify!($backend), "_expr`.")]
+        #[proc_macro]
+        #[doc(hidden)]
+        pub fn ${concat($backend, _unsafe_expr)}(payload: pm::TokenStream) -> pm::TokenStream {
+            let ts: TokenStream = quote::expression(quote::InlineExprType::Anything, payload).into();
+            quote!{{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                {
+                    #ts
+                }
+            }}.into()
+        }
 
-            #[doc = concat!("Replaces a Rust expression with some verbatim ", stringify!($backend)," code.")]
-            #[proc_macro_error]
-            #[proc_macro_attribute]
-            pub fn [< $backend _replace >](payload: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
-                let item: TokenStream = item.into();
-                let attr = AttrPayload::ItemStatus(ItemStatus::Included { late_skip: true });
-                [< $backend _before >](payload, quote!{#attr #item}.into())
-            }
+        make_quoting_item_proc_macro!($backend, ${concat($backend, _before)}, ItemQuotePosition::Before, ${concat(hax_backend_, $backend)});
+        make_quoting_item_proc_macro!($backend, ${concat($backend, _after)}, ItemQuotePosition::After, ${concat(hax_backend_, $backend)});
+
+        #[doc = concat!("Replaces a Rust item with some verbatim ", stringify!($backend)," code.")]
+        #[proc_macro_error]
+        #[proc_macro_attribute]
+        pub fn ${concat($backend, _replace)}(payload: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+            let item: TokenStream = item.into();
+            let attr = AttrPayload::ItemStatus(ItemStatus::Included { late_skip: true });
+            ${concat($backend, _before)}(payload, quote!{#attr #item}.into())
+        }
+
+        #[doc = concat!("Replaces the body of a Rust function with some verbatim ", stringify!($backend)," code.")]
+        #[proc_macro_error]
+        #[proc_macro_attribute]
+        pub fn ${concat($backend, _replace_body)}(payload: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+            let payload: TokenStream = payload.into();
+            let item: ItemFn = parse_macro_input!(item);
+            let mut hax_item = item.clone();
+            *hax_item.block.as_mut() = parse_quote!{
+                {
+                    ::hax_lib::$backend::unsafe_expr!(#payload)
+                }
+            };
+            quote!{
+                #[cfg(${concat(hax_backend_, $backend)})]
+                #hax_item
+
+                #[cfg(not(${concat(hax_backend_, $backend)}))]
+                #item
+            }.into()
         }
     };
     ($($backend:ident)*) => {
@@ -865,7 +896,7 @@ make_quoting_proc_macro!(fstar coq proverif);
 /// Marks a newtype `struct RefinedT(T);` as a refinement type. The
 /// struct should have exactly one unnamed private field.
 ///
-/// This macro takes one argument: a boolean predicate that refines
+/// This macro takes one argument: a `Prop` proposition that refines
 /// values of type `SomeType`.
 ///
 /// For example, the following type defines bounded `u64` integers.
@@ -898,7 +929,7 @@ pub fn refinement_type(mut attr: pm::TokenStream, item: pm::TokenStream) -> pm::
     let mut item = parse_macro_input!(item as syn::ItemStruct);
 
     let syn::Fields::Unnamed(fields) = &item.fields else {
-        proc_macro_error::abort!(
+        proc_macro_error2::abort!(
             item.generics.span(),
             "Expected a newtype (a struct with one unnamed field), got one or more named field"
         );
@@ -906,14 +937,14 @@ pub fn refinement_type(mut attr: pm::TokenStream, item: pm::TokenStream) -> pm::
     let paren_token = fields.paren_token;
     let fields = fields.unnamed.iter().collect::<Vec<_>>();
     let [field] = &fields[..] else {
-        proc_macro_error::abort!(
+        proc_macro_error2::abort!(
             item.generics.span(),
             "Expected a newtype (a struct with one unnamed field), got {} fields",
             fields.len()
         );
     };
     if !matches!(field.vis, syn::Visibility::Inherited) {
-        proc_macro_error::abort!(field.vis.span(), "This field was expected to be private");
+        proc_macro_error2::abort!(field.vis.span(), "This field was expected to be private");
     }
 
     let no_debug_assert = {
@@ -922,10 +953,10 @@ pub fn refinement_type(mut attr: pm::TokenStream, item: pm::TokenStream) -> pm::
             (tokens.next(), tokens.next())
         {
             if ident.to_string() != "no_debug_runtime_check" {
-                proc_macro_error::abort!(ident.span(), "Expected 'no_debug_runtime_check'");
+                proc_macro_error2::abort!(ident.span(), "Expected 'no_debug_runtime_check'");
             }
             if comma.as_char() != ',' {
-                proc_macro_error::abort!(ident.span(), "Expected a comma");
+                proc_macro_error2::abort!(ident.span(), "Expected a comma");
             }
             attr = pm::TokenStream::from_iter(tokens);
             true
@@ -1015,8 +1046,8 @@ pub fn refinement_type(mut attr: pm::TokenStream, item: pm::TokenStream) -> pm::
                 fn get_mut(&mut self) -> &mut Self::InnerType {
                     &mut self.0
                 }
-                fn invariant(#ret_binder: Self::InnerType) -> bool {
-                    #phi
+                fn invariant(#ret_binder: Self::InnerType) -> ::hax_lib::Prop {
+                    ::hax_lib::Prop::from(#phi)
                 }
             }
 

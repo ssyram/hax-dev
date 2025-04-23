@@ -13,7 +13,7 @@ use rustc_trait_selection::traits::ImplSource;
 
 use crate::{self_predicate, traits::utils::erase_and_norm};
 
-use super::utils::{implied_predicates, required_predicates};
+use super::utils::{implied_predicates, required_predicates, ToPolyTraitRef};
 
 #[derive(Debug, Clone)]
 pub enum PathChunk<'tcx> {
@@ -197,7 +197,7 @@ struct Candidate<'tcx> {
 /// Stores a set of predicates along with where they came from.
 pub struct PredicateSearcher<'tcx> {
     tcx: TyCtxt<'tcx>,
-    param_env: rustc_middle::ty::ParamEnv<'tcx>,
+    typing_env: rustc_middle::ty::TypingEnv<'tcx>,
     /// Local clauses available in the current context.
     candidates: HashMap<PolyTraitPredicate<'tcx>, Candidate<'tcx>>,
 }
@@ -207,7 +207,10 @@ impl<'tcx> PredicateSearcher<'tcx> {
     pub fn new_for_owner(tcx: TyCtxt<'tcx>, owner_id: DefId) -> Self {
         let mut out = Self {
             tcx,
-            param_env: tcx.param_env(owner_id).with_reveal_all_normalized(tcx),
+            typing_env: TypingEnv {
+                param_env: tcx.param_env(owner_id),
+                typing_mode: TypingMode::PostAnalysis,
+            },
             candidates: Default::default(),
         };
         out.extend(
@@ -230,7 +233,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
         let mut new_candidates = Vec::new();
         for mut candidate in candidates {
             // Normalize and erase all lifetimes.
-            candidate.pred = erase_and_norm(tcx, self.param_env, candidate.pred);
+            candidate.pred = erase_and_norm(tcx, self.typing_env, candidate.pred);
             if let Entry::Vacant(entry) = self.candidates.entry(candidate.pred) {
                 entry.insert(candidate.clone());
                 new_candidates.push(candidate);
@@ -366,10 +369,10 @@ impl<'tcx> PredicateSearcher<'tcx> {
             BuiltinImplSource, ImplSource, ImplSourceUserDefinedData,
         };
 
-        let erased_tref = erase_and_norm(self.tcx, self.param_env, *tref);
+        let erased_tref = erase_and_norm(self.tcx, self.typing_env, *tref);
 
         let tcx = self.tcx;
-        let impl_source = shallow_resolve_trait_ref(tcx, self.param_env, erased_tref);
+        let impl_source = shallow_resolve_trait_ref(tcx, self.typing_env.param_env, erased_tref);
         let atom = match impl_source {
             Ok(ImplSource::UserDefined(ImplSourceUserDefinedData {
                 impl_def_id,
@@ -428,15 +431,19 @@ impl<'tcx> PredicateSearcher<'tcx> {
                     .in_definition_order()
                     .filter(|assoc| matches!(assoc.kind, AssocKind::Type))
                     .filter_map(|assoc| {
-                        let ty = AliasTy::new(tcx, assoc.def_id, erased_tref.skip_binder().args)
-                            .to_ty(tcx);
-                        let ty = erase_and_norm(tcx, self.param_env, ty);
+                        let ty =
+                            Ty::new_projection(tcx, assoc.def_id, erased_tref.skip_binder().args);
+                        let ty = erase_and_norm(tcx, self.typing_env, ty);
                         if let TyKind::Alias(_, alias_ty) = ty.kind() {
                             if alias_ty.def_id == assoc.def_id {
-                                warn(&format!("Failed to compute associated type {ty}"));
+                                // Couldn't normalize the type to anything different than itself;
+                                // this must be a built-in associated type such as
+                                // `DiscriminantKind::Discriminant`.
                                 // We can't return the unnormalized associated type as that would
                                 // make the trait ref contain itself, which would make hax's
-                                // `sinto` infrastructure loop.
+                                // `sinto` infrastructure loop. That's ok because we can't provide
+                                // a value for this type other than the associate type alias
+                                // itself.
                                 return None;
                             }
                         }
@@ -532,7 +539,10 @@ pub fn shallow_resolve_trait_ref<'tcx>(
     };
     // Do the initial selection for the obligation. This yields the
     // shallow result we are looking for -- that is, what specific impl.
-    let infcx = tcx.infer_ctxt().ignoring_regions().build();
+    let infcx = tcx
+        .infer_ctxt()
+        .ignoring_regions()
+        .build(TypingMode::PostAnalysis);
     let mut selcx = SelectionContext::new(&infcx);
 
     let obligation_cause = ObligationCause::dummy();
@@ -542,7 +552,7 @@ pub fn shallow_resolve_trait_ref<'tcx>(
         Ok(Some(selection)) => selection,
         Ok(None) => return Err(CodegenObligationError::Ambiguity),
         Err(Unimplemented) => return Err(CodegenObligationError::Unimplemented),
-        Err(_) => return Err(CodegenObligationError::FulfillmentError),
+        Err(_) => return Err(CodegenObligationError::Ambiguity),
     };
 
     // Currently, we use a fulfillment context to completely resolve
@@ -557,7 +567,7 @@ pub fn shallow_resolve_trait_ref<'tcx>(
 
     let errors = ocx.select_all_or_error();
     if !errors.is_empty() {
-        return Err(CodegenObligationError::FulfillmentError);
+        return Err(CodegenObligationError::Ambiguity);
     }
 
     let impl_source = infcx.resolve_vars_if_possible(impl_source);
@@ -565,7 +575,7 @@ pub fn shallow_resolve_trait_ref<'tcx>(
 
     if impl_source.has_infer() {
         // Unused lifetimes on an impl get replaced with inference vars, but never resolved.
-        return Err(CodegenObligationError::FulfillmentError);
+        return Err(CodegenObligationError::Ambiguity);
     }
 
     Ok(impl_source)

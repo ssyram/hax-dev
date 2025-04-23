@@ -122,9 +122,9 @@ sinto_as_usize!(rustc_middle::ty, BoundVar);
 #[derive(AdtInto, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[args(<'tcx, S: UnderOwnerState<'tcx>>, from: ty::BoundRegionKind, state: S as gstate)]
 pub enum BoundRegionKind {
-    BrAnon,
-    BrNamed(DefId, Symbol),
-    BrEnv,
+    Anon,
+    Named(DefId, Symbol),
+    ClosureEnv,
 }
 
 /// Reflects [`ty::BoundRegion`]
@@ -198,7 +198,6 @@ pub enum CanonicalVarInfo {
     PlaceholderRegion(PlaceholderRegion),
     Const(UniverseIndex),
     PlaceholderConst(PlaceholderConst),
-    Effect,
 }
 
 /// Reflects [`ty::UserSelfTy`]
@@ -383,7 +382,17 @@ pub struct EarlyParamRegion {
 #[args(<'tcx, S: UnderOwnerState<'tcx>>, from: ty::LateParamRegion, state: S as gstate)]
 pub struct LateParamRegion {
     pub scope: DefId,
-    pub bound_region: BoundRegionKind,
+    pub kind: LateParamRegionKind,
+}
+
+/// Reflects [`ty::LateParamRegionKind`]
+#[derive_group(Serializers)]
+#[derive(AdtInto, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: ty::LateParamRegionKind, state: S as gstate)]
+pub enum LateParamRegionKind {
+    Anon(u32),
+    Named(DefId, Symbol),
+    ClosureEnv,
 }
 
 /// Reflects [`ty::RegionKind`]
@@ -605,9 +614,9 @@ pub struct GenericParamDef {
         match self.kind {
             ty::GenericParamDefKind::Lifetime => GenericParamDefKind::Lifetime,
             ty::GenericParamDefKind::Type { has_default, synthetic } => GenericParamDefKind::Type { has_default, synthetic },
-            ty::GenericParamDefKind::Const { has_default, is_host_effect, .. } => {
+            ty::GenericParamDefKind::Const { has_default, .. } => {
                 let ty = s.base().tcx.type_of(self.def_id).instantiate_identity().sinto(s);
-                GenericParamDefKind::Const { has_default, is_host_effect, ty }
+                GenericParamDefKind::Const { has_default, ty }
             },
         }
     )]
@@ -619,15 +628,8 @@ pub struct GenericParamDef {
 #[derive(Clone, Debug, JsonSchema)]
 pub enum GenericParamDefKind {
     Lifetime,
-    Type {
-        has_default: bool,
-        synthetic: bool,
-    },
-    Const {
-        has_default: bool,
-        is_host_effect: bool,
-        ty: Ty,
-    },
+    Type { has_default: bool, synthetic: bool },
+    Const { has_default: bool, ty: Ty },
 }
 
 /// Reflects [`ty::Generics`]
@@ -702,7 +704,7 @@ impl Alias {
                 // yet we dont have a binder around (could even be several). Binding this correctly
                 // is therefore difficult. Since our trait resolution ignores lifetimes anyway, we
                 // just erase them. See also https://github.com/hacspec/hax/issues/747.
-                let trait_ref = crate::traits::erase_and_norm(tcx, s.param_env(), trait_ref);
+                let trait_ref = crate::traits::erase_and_norm(tcx, s.typing_env(), trait_ref);
                 AliasKind::Projection {
                     assoc_item: tcx.associated_item(alias_ty.def_id).sinto(s),
                     impl_expr: solve_trait(s, ty::Binder::dummy(trait_ref)),
@@ -910,7 +912,7 @@ sinto_todo!(rustc_middle::ty, AdtFlags);
 /// Reflects [`ty::ReprOptions`]
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: ty::ReprOptions, state: S as s)]
+#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_abi::ReprOptions, state: S as s)]
 pub struct ReprOptions {
     pub int: Option<IntegerType>,
     #[value({
@@ -986,7 +988,7 @@ pub struct TyFnSig {
     pub output: Ty,
     pub c_variadic: bool,
     pub safety: Safety,
-    pub abi: Abi,
+    pub abi: ExternAbi,
 }
 
 /// Reflects [`ty::PolyFnSig`]
@@ -1116,7 +1118,10 @@ pub enum ClauseKind {
     ConstArgHasType(ConstantExpr, Ty),
     WellFormed(GenericArg),
     ConstEvaluatable(ConstantExpr),
+    HostEffect(HostEffectPredicate),
 }
+
+sinto_todo!(rustc_middle::ty, HostEffectPredicate<'tcx>);
 
 /// Reflects [`ty::Clause`] and adds a hash-consed predicate identifier.
 #[derive_group(Serializers)]
@@ -1219,10 +1224,8 @@ impl<T> Binder<T> {
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GenericPredicates {
-    pub parent: Option<DefId>,
-    // FIXME: Switch from `Predicate` to `Clause` (will require correct handling of binders).
-    #[value(self.predicates.iter().map(|(clause, span)| (clause.as_predicate().sinto(s), span.sinto(s))).collect())]
-    pub predicates: Vec<(Predicate, Span)>,
+    #[value(self.predicates.iter().map(|x| x.sinto(s)).collect())]
+    pub predicates: Vec<(Clause, Span)>,
 }
 
 #[cfg(feature = "rustc")]
@@ -1315,10 +1318,9 @@ impl ClosureArgs {
             parent_args: from.parent_args().sinto(s),
             // The solved predicates from the parent (i.e., the item which defines the closure).
             parent_trait_refs: {
-                // TODO: handle nested closures
                 let parent = tcx.generics_of(def_id).parent.unwrap();
                 let parent_generics_ref = tcx.mk_args(from.parent_args());
-                solve_item_required_traits(s, parent, parent_generics_ref)
+                solve_item_and_parents_required_traits(s, parent, parent_generics_ref)
             },
             tupled_sig: sig.sinto(s),
             untupled_sig: tcx
@@ -1424,11 +1426,11 @@ fn get_container_for_assoc_item<'tcx, S: BaseState<'tcx>>(
     let state_with_id = &with_owner_id(s.base(), (), (), item.def_id);
     let container_id = item.container_id(tcx);
     match item.container {
-        ty::AssocItemContainer::TraitContainer => {
+        ty::AssocItemContainer::Trait => {
             let trait_ref = ty::TraitRef::identity(tcx, container_id).sinto(state_with_id);
             AssocItemContainer::TraitContainer { trait_ref }
         }
-        ty::AssocItemContainer::ImplContainer => {
+        ty::AssocItemContainer::Impl => {
             if let Some(implemented_trait_item) = item.trait_item_def_id {
                 let impl_generics = ty::GenericArgs::identity_for_item(tcx, container_id);
                 let impl_required_impl_exprs =

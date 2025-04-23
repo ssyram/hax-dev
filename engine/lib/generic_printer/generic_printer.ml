@@ -171,7 +171,7 @@ module Make (F : Features.T) = struct
     object (self)
       inherit Gen.base as super
       inherit span_helper
-      val mutable current_namespace : (string * string list) option = None
+      val mutable current_namespace : string list option = None
 
       method private catch_exn (handle : string -> document)
           (f : unit -> document) : document =
@@ -192,7 +192,7 @@ module Make (F : Features.T) = struct
       method virtual printer_name : string
       (** Mark a path as unreachable *)
 
-      val concrete_ident_view : (module Concrete_ident.VIEW_API) =
+      val concrete_ident_view : (module Concrete_ident.RENDER_API) =
         (module Concrete_ident.DefaultViewAPI)
       (** The concrete ident view to be used *)
 
@@ -221,12 +221,13 @@ module Make (F : Features.T) = struct
         |> string
       (** {2:specialize-expr Printers for special types} *)
 
-      method concrete_ident ~local (id : Concrete_ident.view) : document =
+      method concrete_ident ~local (id : Concrete_ident_render_sig.rendered)
+          : document =
         string
-          (if local then id.definition
+          (if local then id.name
            else
              String.concat ~sep:self#module_path_separator
-               (id.crate :: (id.path @ [ id.definition ])))
+               (id.path @ [ id.name ]))
       (** [concrete_ident ~local id] prints a name without path if
       [local] is true, otherwise it prints the full path, separated by
       `module_path_separator`. *)
@@ -344,15 +345,18 @@ module Make (F : Features.T) = struct
 
       method virtual item'_Type_struct
           : super:item ->
-            name:concrete_ident lazy_doc ->
+            type_name:concrete_ident lazy_doc ->
+            constructor_name:concrete_ident lazy_doc ->
             generics:generics lazy_doc ->
             tuple_struct:bool ->
             arguments:
               (concrete_ident lazy_doc * ty lazy_doc * attr list lazy_doc) list ->
             document
-      (** [item'_Type_struct ~super ~name ~generics ~tuple_struct ~arguments] prints the struct definition [struct name<generics> arguments]. `tuple_struct` says whether we are dealing with a tuple struct
+      (** [item'_Type_struct ~super ~type_name ~constructor_name ~generics ~tuple_struct ~arguments] prints the struct definition [struct name<generics> arguments]. `tuple_struct` says whether we are dealing with a tuple struct
             (e.g. [struct Foo(T1, T2)]) or a named struct
-            (e.g. [struct Foo {field: T1, other: T2}])? *)
+            (e.g. [struct Foo {field: T1, other: T2}])?
+            
+            `type_name` is the identifier of the type itself, while `constructor_name` is the identifier of the constructor of the struct. Depending on the naming policy, those can be rendered as the same name or not. *)
 
       method virtual item'_Type_enum
           : super:item ->
@@ -577,8 +581,12 @@ module Make (F : Features.T) = struct
                         attrs ))
                   variant#v.arguments
               in
-              self#item'_Type_struct ~super ~name ~generics
-                ~tuple_struct:(not variant#v.is_record)
+              let constructor_name =
+                self#_do_not_override_lazy_of_concrete_ident
+                  AstPos_variant__name variant#v.name
+              in
+              self#item'_Type_struct ~super ~type_name:name ~constructor_name
+                ~generics ~tuple_struct:(not variant#v.is_record)
                 ~arguments:variant_arguments
           | _ -> self#unreachable ()
         else self#item'_Type_enum ~super ~name ~generics ~variants
@@ -601,13 +609,9 @@ module Make (F : Features.T) = struct
         lazy_doc
           (fun (id : concrete_ident) ->
             let module View = (val concrete_ident_view) in
-            let id = View.to_view id in
-            let ns_crate, ns_path =
-              Option.value ~default:("", []) current_namespace
-            in
-            let local =
-              String.(ns_crate = id.crate) && [%eq: string list] ns_path id.path
-            in
+            let id = View.render id in
+            let ns_path = Option.value ~default:[] current_namespace in
+            let local = [%eq: string list] ns_path id.path in
             self#concrete_ident ~local id)
           ast_position id
 
@@ -630,7 +634,7 @@ module Make (F : Features.T) = struct
       method! _do_not_override_lazy_of_item ast_position (value : item)
           : item lazy_doc =
         let module View = (val concrete_ident_view) in
-        current_namespace <- View.to_namespace value.ident |> Option.some;
+        current_namespace <- Some (View.render value.ident).path;
         super#_do_not_override_lazy_of_item ast_position value
 
       method _do_not_override_lazy_of_generics ast_position (value : generics)

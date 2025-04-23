@@ -49,8 +49,17 @@ val fold_enumerated_slice
                  -> acc':acc_t    {v (fst i) < v (length s) /\ inv acc' (fst i)}))
   : result: acc_t {inv result (length s)}
 
+val fold_enumerated_slice_return
+  (#t: Type0) (#acc_t: Type0) (#ret: Type0)
+  (s: t_Slice t)
+  (inv: acc_t -> (i:usize{v i <= v (length s)}) -> Type0)
+  (init: acc_t {inv init (sz 0)})
+  (f: (acc:acc_t -> i:(usize & t) {v (fst i) < v (length s) /\ snd i == Seq.index s (v (fst i)) (*/\ inv acc  (fst i)*)}
+                 -> Core.Ops.Control_flow.t_ControlFlow (Core.Ops.Control_flow.t_ControlFlow ret (unit & acc_t)) (acc':acc_t)    (*{v (fst i) < v (length s) /\ inv acc' (fst i)}*)))
+  : result: Core.Ops.Control_flow.t_ControlFlow ret acc_t(* {inv result (length s)} *)
+
 (**** `(start..end_).step_by(step)` *)
-unfold let fold_range_step_by_wf_index (#u: Lib.IntTypes.inttype)
+unfold let fold_range_step_by_wf_index (#u: inttype)
   (start: int_t u) (end_: int_t u)
   (step: usize {v step > 0}) (strict: bool) (i: int)
   = v start < v end_ ==> (let end_step = v end_ - 1 - ((v end_ - 1 - v start) % v step) in
@@ -59,7 +68,7 @@ unfold let fold_range_step_by_wf_index (#u: Lib.IntTypes.inttype)
   // /\ i % v step == v start % v step
 
 #push-options "--z3rlimit 80"
-unfold let fold_range_step_by_upper_bound (#u: Lib.IntTypes.inttype)
+unfold let fold_range_step_by_upper_bound (#u: inttype)
   (start: int_t u) (end_: int_t u)
   (step: usize {v step > 0})
   : end':int {fold_range_step_by_wf_index start end_ step false end'}
@@ -76,7 +85,7 @@ unfold let fold_range_step_by_upper_bound (#u: Lib.IntTypes.inttype)
 /// Fold function that is generated for `for` loops iterating on
 /// `s.enumerate()`-like iterators
 val fold_range_step_by
-  (#acc_t: Type0) (#u: Lib.IntTypes.inttype)
+  (#acc_t: Type0) (#u: inttype)
   (start: int_t u)
   (end_: int_t u)
   (step: usize {v step > 0 /\ range (v end_ + v step) u})
@@ -87,7 +96,7 @@ val fold_range_step_by
   : result: acc_t {inv result (mk_int (fold_range_step_by_upper_bound start end_ step))}
 
 (**** `start..end_` *)
-unfold let fold_range_wf_index (#u: Lib.IntTypes.inttype)
+unfold let fold_range_wf_index (#u: inttype)
   (start: int_t u) (end_: int_t u)
   (strict: bool) (i: int)
   = v start <= v end_
@@ -95,7 +104,7 @@ unfold let fold_range_wf_index (#u: Lib.IntTypes.inttype)
      /\ (if strict then i < v end_ else i <= v end_))
 
 let rec fold_range
-  (#acc_t: Type0) (#u: Lib.IntTypes.inttype)
+  (#acc_t: Type0) (#u: inttype)
   (start: int_t u)
   (end_: int_t u)
   (inv: acc_t -> (i:int_t u{fold_range_wf_index start end_ false (v i)}) -> Type0)
@@ -109,7 +118,7 @@ let rec fold_range
     else init
 
 let rec fold_range_cf
-  (#acc_t: Type0) (#u: Lib.IntTypes.inttype)
+  (#acc_t: Type0) (#u: inttype)
   (start: int_t u)
   (end_: int_t u)
   (inv: acc_t -> (i:int_t u{fold_range_wf_index start end_ false (v i)}) -> Type0)
@@ -131,7 +140,7 @@ let rec fold_range_cf
   else acc
 
 let rec fold_range_return
-  (#acc_t: Type0) (#ret_t: Type0) (#u: Lib.IntTypes.inttype)
+  (#acc_t: Type0) (#ret_t: Type0) (#u: inttype)
   (start: int_t u)
   (end_: int_t u)
   (inv: acc_t -> (i:int_t u{fold_range_wf_index start end_ false (v i)}) -> Type0)
@@ -149,3 +158,10 @@ let rec fold_range_return
        | Core.Ops.Control_flow.ControlFlow_Continue acc ->
          fold_range_return (start +! mk_int 1) end_ inv acc f
   else Core.Ops.Control_flow.ControlFlow_Continue acc
+
+val fold_return #it #acc #ret #item (i: it) (init: acc) 
+  (f: acc -> item -> 
+    Core.Ops.Control_flow.t_ControlFlow  
+    (Core.Ops.Control_flow.t_ControlFlow ret (unit & acc)) acc): 
+  Core.Ops.Control_flow.t_ControlFlow ret acc
+  

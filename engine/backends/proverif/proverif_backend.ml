@@ -98,20 +98,13 @@ module ProVerifNamePolicy = struct
 
   [@@@ocamlformat "disable"]
 
-  let index_field_transform index = Fn.id index
-
   let reserved_words = Hash_set.of_list (module String) [
   "among"; "axiom"; "channel"; "choice"; "clauses"; "const"; "def"; "diff"; "do"; "elimtrue"; "else"; "equation"; "equivalence"; "event"; "expand"; "fail"; "for"; "forall"; "foreach"; "free"; "fun"; "get"; "if"; "implementation"; "in"; "inj-event"; "insert"; "lemma"; "let"; "letfun"; "letproba"; "new"; "noninterf"; "noselect"; "not"; "nounif"; "or"; "otherwise"; "out"; "param"; "phase"; "pred"; "proba"; "process"; "proof"; "public vars"; "putbegin"; "query"; "reduc"; "restriction"; "secret"; "select"; "set"; "suchthat"; "sync"; "table"; "then"; "type"; "weaksecret"; "yield"
   ]
-
-  let field_name_transform ~struct_name field_name = struct_name ^ "_" ^ field_name
-
-  let enum_constructor_name_transform ~enum_name constructor_name = enum_name ^ "_" ^ constructor_name ^ "_c"
-
-  let struct_constructor_name_transform constructor_name =  constructor_name ^ "_c"
 end
 
-module U = Ast_utils.MakeWithNamePolicy (InputLanguage) (ProVerifNamePolicy)
+module U = Ast_utils.Make (InputLanguage)
+module RenderId = Concrete_ident.MakeRenderAPI (ProVerifNamePolicy)
 open AST
 
 module type OPTS = sig
@@ -135,7 +128,7 @@ end
 module Make (Options : OPTS) : MAKE = struct
   module Print = struct
     module GenericPrint =
-      Deprecated_generic_printer.Make (InputLanguage) (U.Concrete_ident_view)
+      Deprecated_generic_printer.Make (InputLanguage) (RenderId)
 
     open Deprecated_generic_printer_base.Make (InputLanguage)
     open PPrint
@@ -227,17 +220,19 @@ module Make (Options : OPTS) : MAKE = struct
         method default_letfun_name type_name = type_name ^^ string "_default"
         method error_letfun_name type_name = type_name ^^ string "_err"
 
-        method field_accessor field_name =
-          string "accessor" ^^ underscore ^^ print#concrete_ident field_name
+        method field_accessor_prefix field_name prefix =
+          string "accessor" ^^ underscore ^^ prefix ^^ underscore
+          ^^ print#concrete_ident field_name
 
-        method match_arm scrutinee { arm_pat; body } =
-          let body_typ = print#ty AlreadyPar body.typ in
+        method match_arm arms_typ scrutinee { arm_pat; body } =
           let body = print#expr_at Arm_body body in
           match arm_pat with
           | { p = PWild; _ } -> body
           | { p = PConstruct { constructor; _ } }
             when Global_ident.eq_name Core__result__Result__Err constructor ->
-              print#pv_letfun_call (print#error_letfun_name body_typ) []
+              print#pv_letfun_call
+                (print#error_letfun_name (print#ty AlreadyPar arms_typ))
+                []
           | _ ->
               let pat =
                 match arm_pat with
@@ -413,13 +408,21 @@ module Make (Options : OPTS) : MAKE = struct
                       | Some (name, translation) -> translation args
                       | None -> (
                           match name with
-                          | `Projector (`Concrete name) ->
-                              print#field_accessor name
-                              ^^ iblock parens
-                                   (separate_map
-                                      (comma ^^ break 1)
-                                      (fun arg -> print#expr AlreadyPar arg)
-                                      args)
+                          | `Projector (`Concrete name) -> (
+                              (* A projector should always have an argument. *)
+                              let arg = Option.value_exn (List.hd args) in
+                              match arg.typ with
+                              | TApp { ident = `Concrete concrete_ident; _ } ->
+                                  let base_name =
+                                    print#concrete_ident concrete_ident
+                                  in
+                                  print#field_accessor_prefix name base_name
+                                  ^^ iblock parens
+                                       (separate_map
+                                          (comma ^^ break 1)
+                                          (fun arg -> print#expr AlreadyPar arg)
+                                          args)
+                              | _ -> super#expr' ctx e)
                           | _ -> super#expr' ctx e)))
             | Construct { constructor; fields; _ }
               when Global_ident.eq_name Core__option__Option__None constructor
@@ -443,9 +446,11 @@ module Make (Options : OPTS) : MAKE = struct
                 | Some (name, translation) -> translation fields
                 | None -> super#expr' ctx e)
             | Match { scrutinee; arms } ->
+                let first_arm = Option.value_exn (List.hd arms) in
+                let arms_typ = first_arm.arm.body.typ in
                 separate_map
                   (hardline ^^ string "else ")
-                  (fun { arm; span } -> print#match_arm scrutinee arm)
+                  (fun { arm; span } -> print#match_arm arms_typ scrutinee arm)
                   arms
             | If { cond; then_; else_ } -> (
                 let if_then =
@@ -481,10 +486,8 @@ module Make (Options : OPTS) : MAKE = struct
             |> Option.value ~default:false
           in
           let fun_and_reduc base_name constructor =
-            let field_prefix =
-              if constructor.is_record then empty
-              else print#concrete_ident base_name
-            in
+            let constructor_name = print#concrete_ident constructor.name in
+            let field_prefix = print#concrete_ident base_name in
             let fun_args = constructor.arguments in
             let fun_args_full =
               separate_map
@@ -503,7 +506,6 @@ module Make (Options : OPTS) : MAKE = struct
             let fun_args_types =
               List.map ~f:(snd3 >> print#ty_at Param_typ) fun_args
             in
-            let constructor_name = print#concrete_ident constructor.name in
             let fun_line =
               print#pv_constructor ~is_data:true constructor_name fun_args_types
                 (print#concrete_ident base_name)
@@ -512,7 +514,7 @@ module Make (Options : OPTS) : MAKE = struct
               string "reduc forall " ^^ iblock Fn.id fun_args_full ^^ semi
             in
             let build_accessor (ident, ty, attr) =
-              print#field_accessor ident
+              print#field_accessor_prefix ident field_prefix
               ^^ iblock parens (constructor_name ^^ iblock parens fun_args_names)
               ^^ blank 1 ^^ equals ^^ blank 1 ^^ print#concrete_ident ident
             in
@@ -642,7 +644,7 @@ module Make (Options : OPTS) : MAKE = struct
             string "let" ^^ space
             ^^ iblock Fn.id (print#pat_at Expr_Let_lhs lhs)
             ^^ space ^^ equals ^^ space
-            ^^ iblock Fn.id (print#expr_at Expr_Let_rhs rhs)
+            ^^ iblock parens (print#expr_at Expr_Let_rhs rhs |> group)
             ^^ space ^^ string "in" ^^ hardline
             ^^ (print#expr_at Expr_Let_body body |> group)
 
@@ -650,9 +652,8 @@ module Make (Options : OPTS) : MAKE = struct
           fun id ->
             if under_current_ns then print#name_of_concrete_ident id
             else
-              let crate, path = print#namespace_of_concrete_ident id in
-              let full_path = crate :: path in
-              separate_map (underscore ^^ underscore) utf8string full_path
+              let path = print#namespace_of_concrete_ident id in
+              separate_map (underscore ^^ underscore) utf8string path
               ^^ underscore ^^ underscore
               ^^ print#name_of_concrete_ident id
 
@@ -900,6 +901,7 @@ module TransformToInputLanguage =
   |> Phases.Reject.Continue
   |> Phases.Reject.Dyn
   |> Phases.Bundle_cycles
+  |> Phases.Sort_items
   |> SubtypeToInputLanguage
   |> Identity
   ]

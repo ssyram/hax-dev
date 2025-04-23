@@ -31,6 +31,34 @@ fn dummy_hax_concrete_ident_wrapper<I: core::iter::Iterator<Item = u8>>(x: I, mu
     hax_lib::assert!(true);
     hax_lib::_internal_loop_invariant(|_: usize| true);
 
+    fn props() {
+        use hax_lib::prop::*;
+        let x = Prop::from_bool(true);
+        constructors::from_bool(true);
+        constructors::and(x, x);
+        constructors::or(x, x);
+        constructors::not(x);
+        constructors::eq(x, x);
+        constructors::ne(x, x);
+        constructors::implies(x, x);
+        constructors::forall(|_: ()| x);
+        constructors::exists(|_: ()| x);
+
+        Prop::from_bool(true);
+        Prop::and(x, x);
+        Prop::or(x, x);
+        Prop::not(x);
+        Prop::eq(x, x);
+        Prop::ne(x, x);
+        Prop::implies(x, x);
+
+        true.to_prop();
+
+        forall(|_: ()| x);
+        exists(|_: ()| x);
+        implies(x, x);
+    }
+
     let _ = [()].into_iter();
     let _: u16 = 6u8.into();
     let _ = 1..2;
@@ -52,8 +80,9 @@ fn dummy_hax_concrete_ident_wrapper<I: core::iter::Iterator<Item = u8>>(x: I, mu
     }
 
     {
-        use hax_lib::int::*;
+        use hax_lib::*;
         let a: Int = 3u8.lift();
+        let _: Int = 3u8.to_int();
         let _ = a.clone().pow2();
         let _ = Int::_unsafe_from_str("1");
         let _: u32 = a.concretize();
@@ -66,6 +95,7 @@ fn dummy_hax_concrete_ident_wrapper<I: core::iter::Iterator<Item = u8>>(x: I, mu
 
     let _ = hax_lib::inline("");
     let _: () = hax_lib::inline_unsafe("");
+    let _: () = hax_lib::any_to_unit(());
     use hax_lib::{RefineAs, Refinement};
 
     fn refinements<T: Refinement + Clone, U: RefineAs<T>>(x: T, y: U) -> T {
@@ -147,9 +177,8 @@ macro_rules! impl_arith {
     }
 }
 
-impl_arith!(u128);
-// impl_arith!(u8, u16, u32, u64, u128, usize);
-// impl_arith!(i8, i16, i32, i64, i128, isize);
+impl_arith!(u8, u16, u32, u64, u128, usize);
+impl_arith!(i8, i16, i32, i64, i128, isize);
 
 fn offset() {}
 
@@ -219,6 +248,28 @@ mod hax {
 
         fn from_machine() {}
         fn into_machine() {}
+    }
+
+    mod machine_int {
+        fn add() {}
+        fn sub() {}
+        fn div() {}
+        fn mul() {}
+        fn rem() {}
+
+        fn not() {}
+        fn bitxor() {}
+        fn bitor() {}
+        fn bitand() {}
+        fn shl() {}
+        fn shr() {}
+
+        fn eq() {}
+        fn ne() {}
+        fn le() {}
+        fn lt() {}
+        fn ge() {}
+        fn gt() {}
     }
 
     mod control_flow_monad {

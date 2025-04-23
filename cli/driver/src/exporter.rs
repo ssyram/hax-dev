@@ -3,7 +3,7 @@ use hax_frontend_exporter::SInto;
 use hax_types::cli_options::{Backend, PathOrDash, ENV_VAR_OPTIONS_FRONTEND};
 use rustc_driver::{Callbacks, Compilation};
 use rustc_interface::interface;
-use rustc_interface::{interface::Compiler, Queries};
+use rustc_interface::interface::Compiler;
 use rustc_middle::middle::region::Scope;
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::{
@@ -36,7 +36,10 @@ fn dummy_thir_body(
             neg: false,
         },
         ty,
-        temp_lifetime: None,
+        temp_lifetime: TempLifetime {
+            temp_lifetime: None,
+            backwards_incompatible: None,
+        },
         span,
     });
     (Rc::new(thir), expr)
@@ -65,7 +68,7 @@ fn precompute_local_thir_bodies(
             Const | ConstParam | AssocConst | AnonConst | InlineConst
         ) {
             ConstLevel::Const
-        } else if tcx.is_const_fn_raw(ldid.to_def_id()) {
+        } else if tcx.is_const_fn(ldid.to_def_id()) {
             ConstLevel::ConstFn
         } else {
             ConstLevel::NotConst
@@ -73,27 +76,35 @@ fn precompute_local_thir_bodies(
     }
 
     use itertools::Itertools;
-    tcx.hir().body_owners()
-        .filter(|ldid| {
-            match tcx.def_kind(ldid.to_def_id()) {
-                InlineConst | AnonConst => {
-                    fn is_fn(tcx: TyCtxt<'_>, did: rustc_span::def_id::DefId) -> bool {
-                        use rustc_hir::def::DefKind;
-                        matches!(
-                            tcx.def_kind(did),
-                            DefKind::Fn | DefKind::AssocFn | DefKind::Ctor(..) | DefKind::Closure
-                        )
-                    }
-                    !is_fn(tcx, tcx.local_parent(*ldid).to_def_id())
-                },
-                _ => true
+    tcx.hir_body_owners()
+        .filter(|ldid| match tcx.def_kind(ldid.to_def_id()) {
+            InlineConst | AnonConst => {
+                fn is_fn(tcx: TyCtxt<'_>, did: rustc_span::def_id::DefId) -> bool {
+                    use rustc_hir::def::DefKind;
+                    matches!(
+                        tcx.def_kind(did),
+                        DefKind::Fn | DefKind::AssocFn | DefKind::Ctor(..) | DefKind::Closure
+                    )
+                }
+                !is_fn(tcx, tcx.local_parent(*ldid).to_def_id())
             }
+            _ => true,
         })
         .sorted_by_key(|ldid| const_level_of(tcx, *ldid))
-        .filter(move |ldid| tcx.hir().maybe_body_owned_by(*ldid).is_some())
+        .filter(move |ldid| tcx.hir_maybe_body_owned_by(*ldid).is_some())
         .map(move |ldid| {
             tracing::debug!("⏳ Type-checking THIR body for {:#?}", ldid);
-            let span = tcx.hir().span(tcx.local_def_id_to_hir_id(ldid));
+            let hir_id = tcx.local_def_id_to_hir_id(ldid);
+            // The `type_of` anon constants isn't available directly, it needs to be fed by some
+            // other query. This hack ensures this happens, otherwise `thir_body` returns an error.
+            // See https://rust-lang.zulipchat.com/#narrow/channel/182449-t-compiler.2Fhelp/topic/Change.20in.20THIR.20of.20anonymous.20constants.3F/near/509764021 .
+            for (parent_id, parent) in tcx.hir_parent_iter(hir_id) {
+                if let rustc_hir::Node::Item(..) = parent {
+                    let _ = tcx.check_well_formed(parent_id.owner.def_id);
+                    break;
+                }
+            }
+            let span = tcx.hir().span(hir_id);
             let (thir, expr) = match tcx.thir_body(ldid) {
                 Ok(x) => x,
                 Err(e) => {
@@ -104,15 +115,21 @@ fn precompute_local_thir_bodies(
                     return (ldid, dummy_thir_body(tcx, span, guar));
                 }
             };
-            let thir = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                thir.borrow().clone()
-            })) {
-                Ok(x) => x,
-                Err(e) => {
-                    let guar = tcx.dcx().span_err(span, format!("The THIR body of item {:?} was stolen.\nThis is not supposed to happen.\nThis is a bug in Hax's frontend.\nThis is discussed in issue https://github.com/hacspec/hax/issues/27.\nPlease comment this issue if you see this error message!", ldid));
-                    return (ldid, dummy_thir_body(tcx, span, guar));
-                }
-            };
+            if thir.is_stolen() {
+                let guar = tcx.dcx().span_err(
+                    span,
+                    format!(
+                        "The THIR body of item {:?} was stolen.\n\
+                        This is not supposed to happen.\n\
+                        This is a bug in Hax's frontend.\n\
+                        This is discussed in issue https://github.com/hacspec/hax/issues/27.\n\
+                        Please comment this issue if you see this error message!",
+                        ldid
+                    ),
+                );
+                return (ldid, dummy_thir_body(tcx, span, guar));
+            }
+            let thir = thir.borrow().clone();
             tracing::debug!("✅ Type-checked THIR body for {:#?}", ldid);
             (ldid, (Rc::new(thir), expr))
         })
@@ -124,7 +141,6 @@ fn precompute_local_thir_bodies(
 #[tracing::instrument(skip_all)]
 fn convert_thir<'tcx, Body: hax_frontend_exporter::IsBody>(
     options: &hax_frontend_exporter_options::Options,
-    macro_calls: HashMap<hax_frontend_exporter::Span, hax_frontend_exporter::Span>,
     tcx: TyCtxt<'tcx>,
 ) -> (
     Vec<rustc_span::Span>,
@@ -137,13 +153,15 @@ fn convert_thir<'tcx, Body: hax_frontend_exporter::IsBody>(
     hax_frontend_exporter::id_table::Table,
 ) {
     use hax_frontend_exporter::WithGlobalCacheExt;
-    let mut state = hax_frontend_exporter::state::State::new(tcx, options.clone());
-    state.base.macro_infos = Rc::new(macro_calls);
+    let state = hax_frontend_exporter::state::State::new(tcx, options.clone());
     for (def_id, thir) in precompute_local_thir_bodies(tcx) {
         state.with_item_cache(def_id, |caches| caches.thir = Some(thir));
     }
 
-    let result = hax_frontend_exporter::inline_macro_invocations(tcx.hir().items(), &state);
+    let result = tcx
+        .hir_free_items()
+        .map(|id| tcx.hir_item(id).sinto(&state))
+        .collect();
     let impl_infos = hax_frontend_exporter::impl_def_ids_to_impled_types_and_bounds(&state)
         .into_iter()
         .collect();
@@ -166,151 +184,102 @@ fn convert_thir<'tcx, Body: hax_frontend_exporter::IsBody>(
     )
 }
 
-/// Collect a map from spans to macro calls
-#[tracing::instrument(skip_all)]
-fn collect_macros(
-    crate_ast: &rustc_ast::ast::Crate,
-) -> HashMap<rustc_span::Span, rustc_ast::ast::MacCall> {
-    use {rustc_ast::ast::*, rustc_ast::visit::*};
-    struct MacroCollector {
-        macro_calls: HashMap<rustc_span::Span, MacCall>,
-    }
-    impl<'ast> Visitor<'ast> for MacroCollector {
-        fn visit_mac_call(&mut self, mac: &'ast rustc_ast::ast::MacCall) {
-            self.macro_calls.insert(mac.span(), mac.clone());
-        }
-    }
-    let mut v = MacroCollector {
-        macro_calls: HashMap::new(),
-    };
-    v.visit_crate(crate_ast);
-    v.macro_calls
-}
-
 /// Callback for extraction
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ExtractionCallbacks {
-    pub inline_macro_calls: Vec<hax_types::cli_options::Namespace>,
-    pub macro_calls: HashMap<hax_frontend_exporter::Span, hax_frontend_exporter::Span>,
     pub body_types: Vec<hax_types::cli_options::ExportBodyKind>,
 }
 
 impl From<ExtractionCallbacks> for hax_frontend_exporter_options::Options {
     fn from(opts: ExtractionCallbacks) -> hax_frontend_exporter_options::Options {
         hax_frontend_exporter_options::Options {
-            inline_macro_calls: opts.inline_macro_calls,
+            inline_anon_consts: true,
         }
     }
 }
 
 impl Callbacks for ExtractionCallbacks {
-    fn after_crate_root_parsing<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
-        let parse_ast = queries.parse().unwrap();
-        let parse_ast = parse_ast.borrow();
-        self.macro_calls = collect_macros(&parse_ast)
-            .into_iter()
-            .map(|(k, v)| {
-                use hax_frontend_exporter::*;
-                let sess = &compiler.sess;
-                (
-                    translate_span(k, sess),
-                    translate_span(argument_span_of_mac_call(&v), sess),
-                )
-            })
-            .collect();
-        Compilation::Continue
-    }
-    fn after_expansion<'tcx>(
-        &mut self,
-        compiler: &Compiler,
-        queries: &'tcx Queries<'tcx>,
-    ) -> Compilation {
+    fn after_expansion<'tcx>(&mut self, compiler: &Compiler, tcx: TyCtxt<'tcx>) -> Compilation {
         use std::ops::{Deref, DerefMut};
 
-        queries.global_ctxt().unwrap().enter(|tcx| {
-            use hax_frontend_exporter::ThirBody;
-            use hax_types::cli_options::Command;
-            use rustc_session::config::CrateType;
-            use serde::{Deserialize, Serialize};
-            use std::fs::File;
-            use std::io::BufWriter;
+        use hax_frontend_exporter::ThirBody;
+        use hax_types::cli_options::Command;
+        use rustc_session::config::CrateType;
+        use serde::{Deserialize, Serialize};
+        use std::fs::File;
+        use std::io::BufWriter;
 
-            use std::path::PathBuf;
+        use std::path::PathBuf;
 
-            let opts = &compiler.sess.opts;
-            let externs: Vec<_> = opts
-                .externs
-                .iter()
-                .flat_map(|(_, ext)| match &ext.location {
-                    rustc_session::config::ExternLocation::ExactPaths(set) => set
+        let opts = &compiler.sess.opts;
+        let externs: Vec<_> = opts
+            .externs
+            .iter()
+            .flat_map(|(_, ext)| match &ext.location {
+                rustc_session::config::ExternLocation::ExactPaths(set) => set
+                    .iter()
+                    .map(|cp| cp.canonicalized())
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+                _ => vec![].into_iter(),
+            })
+            .map(|path| path.with_extension("haxmeta"))
+            .collect();
+
+        let cg_metadata = opts.cg.metadata[0].clone();
+        let crate_name = opts.crate_name.clone().unwrap();
+
+        let output_dir = compiler.sess.io.output_dir.clone().unwrap();
+        let haxmeta_path = output_dir.join(format!("{crate_name}-{cg_metadata}.haxmeta",));
+
+        let mut file = BufWriter::new(File::create(&haxmeta_path).unwrap());
+
+        use hax_types::driver_api::{with_kind_type, HaxMeta};
+        with_kind_type!(
+            self.body_types.clone(),
+            <Body>|| {
+                let (spans, def_ids, impl_infos, items, cache_map) =
+                    convert_thir(&self.clone().into(), tcx);
+                let files: HashSet<PathBuf> = HashSet::from_iter(
+                    items
                         .iter()
-                        .map(|cp| cp.canonicalized())
-                        .collect::<Vec<_>>()
-                        .into_iter(),
-                    _ => vec![].into_iter(),
-                })
-                .map(|path| path.with_extension("haxmeta"))
-                .collect();
+                        .flat_map(|item| item.span.filename.to_path().map(|path| path.to_path_buf()))
+                );
+                let haxmeta: HaxMeta<Body> = HaxMeta {
+                    crate_name,
+                    cg_metadata,
+                    externs,
+                    impl_infos,
+                    items,
+                    comments: files.into_iter()
+                        .flat_map(|path|hax_frontend_exporter::comments::comments_of_file(path).ok())
+                        .flatten()
+                        .collect(),
+                    def_ids,
+                    hax_version: hax_types::HAX_VERSION.into(),
+                };
+                haxmeta.write(&mut file, cache_map);
+            }
+        );
 
-            let cg_metadata = opts.cg.metadata[0].clone();
-            let crate_name = opts.crate_name.clone().unwrap();
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let manifest_dir = std::path::Path::new(&manifest_dir);
 
-            let output_dir = compiler.sess.io.output_dir.clone().unwrap();
-            let haxmeta_path = output_dir.join(format!("{crate_name}-{cg_metadata}.haxmeta",));
+        let data = hax_types::driver_api::EmitHaxMetaMessage {
+            manifest_dir: manifest_dir.to_path_buf(),
+            working_dir: opts
+                .working_dir
+                .to_path(rustc_span::FileNameDisplayPreference::Local)
+                .to_path_buf(),
+            path: haxmeta_path,
+        };
+        eprintln!(
+            "{}{}",
+            hax_types::driver_api::HAX_DRIVER_STDERR_PREFIX,
+            &serde_json::to_string(&hax_types::driver_api::HaxDriverMessage::EmitHaxMeta(data))
+                .unwrap()
+        );
 
-            let mut file = BufWriter::new(File::create(&haxmeta_path).unwrap());
-
-            use hax_types::driver_api::{with_kind_type, HaxMeta};
-            with_kind_type!(
-                self.body_types.clone(),
-                <Body>|| {
-                    let (spans, def_ids, impl_infos, items, cache_map) =
-                        convert_thir(&self.clone().into(), self.macro_calls.clone(), tcx);
-                    let files: HashSet<PathBuf> = HashSet::from_iter(
-                        items
-                            .iter()
-                            .flat_map(|item| item.span.filename.to_path().map(|path| path.to_path_buf()))
-                    );
-                    let haxmeta: HaxMeta<Body> = HaxMeta {
-                        crate_name,
-                        cg_metadata,
-                        externs,
-                        impl_infos,
-                        items,
-                        comments: files.into_iter()
-                            .flat_map(|path|hax_frontend_exporter::comments::comments_of_file(path).ok())
-                            .flatten()
-                            .collect(),
-                        def_ids,
-                        hax_version: hax_types::HAX_VERSION.into(),
-                    };
-                    haxmeta.write(&mut file, cache_map);
-                }
-            );
-
-            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-            let manifest_dir = std::path::Path::new(&manifest_dir);
-
-            let data = hax_types::driver_api::EmitHaxMetaMessage {
-                manifest_dir: manifest_dir.to_path_buf(),
-                working_dir: opts
-                    .working_dir
-                    .to_path(rustc_span::FileNameDisplayPreference::Local)
-                    .to_path_buf(),
-                path: haxmeta_path,
-            };
-            eprintln!(
-                "{}{}",
-                hax_types::driver_api::HAX_DRIVER_STDERR_PREFIX,
-                &serde_json::to_string(&hax_types::driver_api::HaxDriverMessage::EmitHaxMeta(data))
-                    .unwrap()
-            );
-
-            Compilation::Stop
-        })
+        Compilation::Stop
     }
 }
