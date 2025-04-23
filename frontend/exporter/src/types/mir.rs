@@ -270,7 +270,7 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
             }
         }
         Const::Ty(_ty, c) => Value(c.sinto(s)),
-        Const::Unevaluated(ucv, _ty) => {
+        Const::Unevaluated(ucv, ty) => {
             use crate::rustc_middle::query::Key;
             let span = span.substitute_dummy(
                 tcx.def_ident_span(ucv.def)
@@ -288,7 +288,8 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
                         Some(val) => val.sinto(s),
                         // TODO: This is triggered when compiling using `generic_const_exprs`. We
                         // might be able to get a MIR body from the def_id.
-                        None => supposely_unreachable_fatal!(s, "TranslateUneval"; {konst, ucv}),
+                        None => ConstantExprKind::Todo("TranslateUneval".into())
+                            .decorate(ty.sinto(s), span.sinto(s)),
                     },
                 }),
             }

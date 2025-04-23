@@ -169,6 +169,17 @@ let cast_mod (#t:inttype) (#t':inttype)
     (u1:int_t t) = 
     mk_int #t' (v u1 @%. t')
 
+#push-options "--split_queries always --z3rlimit 150 --z3version 4.13.3"
+/// Simplifies double casts when possible.
+/// For example, with `x` a i32, this lemma rewrites `x as i64 as i32` into `x`.
+let cast_identity_lemma
+  (a: inttype) (b: inttype {bits b >= bits a})
+  (n: int_t a)
+  : Lemma (cast_mod #b #a (cast_mod #a #b n) == n)
+    [SMTPat (cast_mod #b #a (cast_mod #a #b n))]
+  = ()
+#pop-options
+
 /// Arithmetic operations
 /// 
 
@@ -294,8 +305,12 @@ unfold type shiftval (t:inttype) (t':inttype) =
 unfold type rotval (t:inttype) (t':inttype) =
      b:int_t t'{v b > 0 /\ v b < bits t}
 
-val shift_right (#t:inttype) (#t':inttype)
-    (a:int_t t) (b:shiftval t t') : int_t t 
+#push-options "--z3version 4.13.3"
+[@@"opaque_to_smt"]
+let shift_right (#t:inttype) (#t':inttype)
+    (a:int_t t) (b:shiftval t t') : int_t t
+    = mk_int #t (v a / pow2 (v b))
+#pop-options
 
 val shift_right_lemma (#t:inttype) (#t':inttype)
     (a:int_t t) (b:shiftval t t'):

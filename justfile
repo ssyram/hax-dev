@@ -20,7 +20,7 @@ alias b := build
 # `cargo expand` a crate, but sets flags and crate attributes so that the expansion is exactly what hax receives. This is useful to debug hax macros.
 [no-cd]
 expand *FLAGS:
-  RUSTFLAGS='-Zcrate-attr=register_tool(_hax) -Zcrate-attr=feature(register_tool) --cfg hax_compilation --cfg _hax --cfg hax --cfg hax_backend_fstar --cfg hax' cargo expand {{FLAGS}}
+  RUSTFLAGS='-Zcrate-attr=register_tool(_hax) -Zcrate-attr=feature(register_tool) --cfg hax_compilation --cfg _hax --cfg hax --cfg hax_backend_fstar --cfg hax' cargo +nightly expand {{FLAGS}}
 
 # Show the generated module `concrete_ident_generated.ml`, that contains all the Rust names the engine knows about. Those names are declared in the `./engine/names` crate.
 @list-names:

@@ -318,6 +318,7 @@ struct
       (c Rust_primitives__hax__int__mul, (2, "*"));
       (c Rust_primitives__hax__int__div, (2, "/"));
       (c Rust_primitives__hax__int__rem, (2, "%"));
+      (c Rust_primitives__hax__int__neg, (1, "-"));
       (c Rust_primitives__hax__int__ge, (2, ">="));
       (c Rust_primitives__hax__int__le, (2, "<="));
       (c Rust_primitives__hax__int__gt, (2, ">"));
@@ -592,7 +593,7 @@ struct
           args = [ { e = Literal (String s); _ } ];
           generic_args = _;
         }
-      when Global_ident.eq_name Hax_lib__int__Impl_6___unsafe_from_str f ->
+      when Global_ident.eq_name Hax_lib__int__Impl_7___unsafe_from_str f ->
         (match
            String.chop_prefix ~prefix:"-" s
            |> Option.value ~default:s
