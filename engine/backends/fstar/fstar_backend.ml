@@ -153,6 +153,9 @@ struct
 
   let pnegative = function true -> "-" | false -> ""
 
+  let dummy_clone_impl =
+    StringToFStar.term Span.default "{f_clone = (fun x -> x);}"
+
   (* Print a literal as an F* constant *)
   let rec pliteral_as_const span (e : literal) =
     match e with
@@ -1010,7 +1013,11 @@ struct
       [
         F.decl ~quals:[ Assumption ] ~fsti:false ~attrs
         @@ F.AST.Assume (name', ty);
-        F.decl ~fsti:false
+        F.decl
+          ~quals:
+            (if ctx.interface_mode then []
+             else [ Unfold_for_unification_and_vcgen ])
+          ~fsti:false
         @@ F.AST.TopLevelLet (NoLetQualifier, [ (F.pat @@ pat, term) ]);
       ]
     in
@@ -1625,8 +1632,20 @@ struct
               ~fsti:(ctx.interface_mode && has_type)
               ~attrs:[ tcinst ] let_impl
         in
+        let is_auto_clone =
+          List.exists
+            ~f:(function
+              | { kind = Tool { path = "automatically_derived"; _ }; _ } -> true
+              | _ -> false)
+            e.attrs
+          && Concrete_ident.eq_name Core__clone__Clone trait
+        in
         let intf = if has_type && not is_erased then [] else intf in
-        if ctx.interface_mode then intf @ impl else impl
+        if is_erased && is_auto_clone then
+          F.decls ~fsti:ctx.interface_mode
+            (F.AST.TopLevelLet (NoLetQualifier, [ (pat, dummy_clone_impl) ]))
+        else if ctx.interface_mode then intf @ impl
+        else impl
     | Quote { quote; _ } ->
         let fstar_opts =
           Attrs.find_unique_attr e.attrs ~f:(function

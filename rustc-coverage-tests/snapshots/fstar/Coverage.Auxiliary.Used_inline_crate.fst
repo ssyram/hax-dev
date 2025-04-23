@@ -15,7 +15,7 @@ let used_only_from_bin_crate_generic_function
       (arg: v_T)
     : Prims.unit =
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list = ["used_only_from_bin_crate_generic_function with "; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);
@@ -35,7 +35,7 @@ let used_only_from_this_lib_crate_generic_function
       (arg: v_T)
     : Prims.unit =
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list = ["used_only_from_this_lib_crate_generic_function with "; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);
@@ -55,7 +55,7 @@ let used_from_bin_crate_and_lib_crate_generic_function
       (arg: v_T)
     : Prims.unit =
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list = ["used_from_bin_crate_and_lib_crate_generic_function with "; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);
@@ -75,7 +75,7 @@ let used_with_same_type_from_bin_crate_and_lib_crate_generic_function
       (arg: v_T)
     : Prims.unit =
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list =
               ["used_with_same_type_from_bin_crate_and_lib_crate_generic_function with "; "\n"]
@@ -97,7 +97,7 @@ let unused_generic_function
       (arg: v_T)
     : Prims.unit =
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list = ["unused_generic_function with "; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);

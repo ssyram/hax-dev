@@ -9,18 +9,21 @@ type t_Foo = | Foo : u32 -> t_Foo
 assume
 val impl': Core.Fmt.t_Debug t_Foo
 
+unfold
 let impl = impl'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_1': Core.Marker.t_StructuralPartialEq t_Foo
 
+unfold
 let impl_1 = impl_1'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_2': Core.Cmp.t_PartialEq t_Foo t_Foo
 
+unfold
 let impl_2 = impl_2'
 
 let main (_: Prims.unit) : Prims.unit =

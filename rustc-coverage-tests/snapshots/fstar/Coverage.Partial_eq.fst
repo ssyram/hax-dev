@@ -9,46 +9,48 @@ type t_Version = {
   f_patch:usize
 }
 
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-assume
-val impl_1': Core.Clone.t_Clone t_Version
-
-let impl_1 = impl_1'
+let impl_1: Core.Clone.t_Clone t_Version = { f_clone = (fun x -> x) }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_2': Core.Fmt.t_Debug t_Version
 
+unfold
 let impl_2 = impl_2'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_3': Core.Marker.t_StructuralPartialEq t_Version
 
+unfold
 let impl_3 = impl_3'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_4': Core.Cmp.t_PartialEq t_Version t_Version
 
+unfold
 let impl_4 = impl_4'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_5': Core.Cmp.t_Eq t_Version
 
+unfold
 let impl_5 = impl_5'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_6': Core.Cmp.t_PartialOrd t_Version t_Version
 
+unfold
 let impl_6 = impl_6'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 assume
 val impl_7': Core.Cmp.t_Ord t_Version
 
+unfold
 let impl_7 = impl_7'
 
 let impl_Version__new (major minor patch: usize) : t_Version =
@@ -58,7 +60,7 @@ let main (_: Prims.unit) : Prims.unit =
   let version_3_2_1_:t_Version = impl_Version__new (mk_usize 3) (mk_usize 2) (mk_usize 1) in
   let version_3_3_0_:t_Version = impl_Version__new (mk_usize 3) (mk_usize 3) (mk_usize 0) in
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_2__new_v1 (mk_usize 4)
+    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 4)
           (mk_usize 3)
           (let list = [""; " < "; " = "; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 4);
