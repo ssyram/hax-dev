@@ -49,67 +49,42 @@ struct
     }
 
     let extract_loop_annotation (body : B.expr) : loop_annotation =
-      match body.e with
-      | Let
-          {
-            monadic = None;
-            lhs = { p = PWild; _ };
-            rhs =
-              {
-                e =
-                  App
-                    {
-                      f = { e = GlobalVar f; _ };
-                      args =
-                        [
-                          {
-                            e =
-                              Closure { params = [ pat ]; body = invariant; _ };
-                            _;
-                          };
-                        ];
-                      _;
-                    };
-                _;
-              };
-            body;
-          }
+      let rhs_body =
+        let* (e_let : UB.D.expr_Let) = UB.D.expr_Let body in
+        let*? _ = Option.is_none e_let.monadic in
+        let* _ = UB.D.pat_PWild e_let.lhs in
+        let* app = UB.D.expr_App e_let.rhs in
+        let* f = UB.D.expr_GlobalVar app.f in
+        Some (f, app.args, e_let.body)
+      in
+      match rhs_body with
+      | Some
+          ( f,
+            [ { e = Closure { params = [ pat ]; body = invariant; _ }; _ } ],
+            body )
         when Global_ident.eq_name Hax_lib___internal_loop_invariant f ->
           {
             body;
             annotation =
               Some (LoopInvariant { index_pat = Some pat; invariant });
           }
-      | Let
-          {
-            monadic = None;
-            lhs = { p = PWild; _ };
-            rhs =
-              {
-                e = App { f = { e = GlobalVar f; _ }; args = [ invariant ]; _ };
-                _;
-              };
-            body;
-          }
+      | Some (f, [ invariant ], body)
         when Global_ident.eq_name Hax_lib___internal_while_loop_invariant f ->
           {
             body;
             annotation = Some (LoopInvariant { index_pat = None; invariant });
           }
-      | Let
-          {
-            monadic = None;
-            lhs = { p = PWild; _ };
-            rhs =
-              {
-                e = App { f = { e = GlobalVar f; _ }; args = [ invariant ]; _ };
-                _;
-              };
-            body;
-          }
+      | Some (f, [ invariant ], body)
         when Global_ident.eq_name Hax_lib___internal_loop_decreases f ->
           { body; annotation = Some (LoopVariant invariant) }
       | _ -> { body; annotation = None }
+
+    let expect_invariant_variant (annotation1 : loop_annotation_kind option)
+        (annotation2 : loop_annotation_kind option) :
+        loop_annotation_kind option * loop_annotation_kind option =
+      match annotation1 with
+      | Some (LoopVariant _) -> (annotation2, annotation1)
+      | _ -> (annotation1, annotation2)
 
     type iterator =
       | Range of { start : B.expr; end_ : B.expr }
@@ -318,17 +293,17 @@ struct
           let { body; annotation = annotation2 } =
             extract_loop_annotation body
           in
+          let invariant, variant =
+            expect_invariant_variant annotation1 annotation2
+          in
           let invariant =
-            match (annotation1, annotation2) with
-            | Some (LoopInvariant { index_pat = None; invariant }), _
-            | _, Some (LoopInvariant { index_pat = None; invariant }) ->
-                invariant
+            match invariant with
+            | Some (LoopInvariant { index_pat = None; invariant }) -> invariant
             | _ -> MS.expr_Literal ~typ:TBool (Bool true)
           in
           let variant =
-            match (annotation1, annotation2) with
-            | Some (LoopVariant variant), _ | _, Some (LoopVariant variant) ->
-                variant
+            match variant with
+            | Some (LoopVariant variant) -> variant
             | _ ->
                 let kind = { size = S32; signedness = Unsigned } in
                 let e =
