@@ -317,17 +317,13 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mi
 pub struct MirBody<KIND> {
     pub span: Span,
     #[map({
-        let mut local_decls: rustc_index::IndexVec<rustc_middle::mir::Local, LocalDecl> = x.iter().map(|local_decl| {
-            local_decl.sinto(s)
-        }).collect();
-        local_decls.iter_enumerated_mut().for_each(|(local, local_decl)| {
+        x.iter_enumerated().map(|(local, local_decl)| {
+            let mut local_decl = local_decl.sinto(s);
             local_decl.name = name_of_local(local, &self.var_debug_info);
-        });
-        let local_decls: rustc_index::IndexVec<Local, LocalDecl> = local_decls.into_iter().collect();
-        local_decls.into()
+            local_decl
+        }).collect()
     })]
     pub local_decls: IndexVec<Local, LocalDecl>,
-    #[map(x.clone().as_mut().sinto(s))]
     pub basic_blocks: BasicBlocks,
     pub source_scopes: IndexVec<SourceScope, SourceScopeData>,
     pub tainted_by_errors: Option<ErrorGuaranteed>,
