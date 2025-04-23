@@ -294,8 +294,10 @@ unfold type shiftval (t:inttype) (t':inttype) =
 unfold type rotval (t:inttype) (t':inttype) =
      b:int_t t'{v b > 0 /\ v b < bits t}
 
-val shift_right (#t:inttype) (#t':inttype)
-    (a:int_t t) (b:shiftval t t') : int_t t 
+[@@"opaque_to_smt"]
+let shift_right (#t:inttype) (#t':inttype)
+    (a:int_t t) (b:shiftval t t') : int_t t
+    = v a / pow2 (v b)
 
 val shift_right_lemma (#t:inttype) (#t':inttype)
     (a:int_t t) (b:shiftval t t'):
