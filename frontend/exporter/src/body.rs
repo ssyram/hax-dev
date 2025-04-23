@@ -105,6 +105,18 @@ mod module {
         rustc_middle::thir::ExprId,
     ) {
         let tcx = s.base().tcx;
+
+        // The `type_of` anon constants isn't available directly, it needs to be fed by some
+        // other query. This hack ensures this happens, otherwise `thir_body` returns an error.
+        // See https://rust-lang.zulipchat.com/#narrow/channel/182449-t-compiler.2Fhelp/topic/Change.20in.20THIR.20of.20anonymous.20constants.3F/near/509764021 .
+        let hir_id = tcx.local_def_id_to_hir_id(did);
+        for (parent_id, parent) in tcx.hir_parent_iter(hir_id) {
+            if let rustc_hir::Node::Item(..) = parent {
+                let _ = tcx.check_well_formed(parent_id.owner.def_id);
+                break;
+            }
+        }
+
         let msg = |_| fatal!(s[tcx.def_span(did)], "THIR not found for {:?}", did);
         tcx.thir_body_safe(did).as_ref().unwrap_or_else(msg).clone()
     }
