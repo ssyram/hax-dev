@@ -80,7 +80,7 @@ impl DefId {
         match &self.kind {
             // These kinds cause `def_span` to panic.
             ForeignMod => rustc_span::DUMMY_SP,
-            _ => s.base().tcx.def_span(self.to_rust_def_id()),
+            _ => s.base().tcx.def_span(self.underlying_rust_def_id()),
         }
         .sinto(s)
     }
@@ -91,13 +91,16 @@ impl DefId {
         Body: IsBody + TypeMappable,
         S: BaseState<'tcx>,
     {
-        let def_id = self.to_rust_def_id();
-        if let Some(def) = s.with_item_cache(def_id, |cache| cache.full_def.get().cloned()) {
-            return def;
+        if let Some(def_id) = self.as_rust_def_id() {
+            if let Some(def) = s.with_item_cache(def_id, |cache| cache.full_def.get().cloned()) {
+                return def;
+            }
+            let def = Arc::new(translate_full_def(s, def_id));
+            s.with_item_cache(def_id, |cache| cache.full_def.insert(def.clone()));
+            def
+        } else {
+            todo!("full_def for promoted constants")
         }
-        let def = Arc::new(translate_full_def(s, def_id));
-        s.with_item_cache(def_id, |cache| cache.full_def.insert(def.clone()));
-        def
     }
 }
 
@@ -501,13 +504,15 @@ impl<Body> FullDef<Body> {
             _ => vec![],
         };
         // Add inherent impl items if any.
-        let tcx = s.base().tcx;
-        for impl_def_id in tcx.inherent_impls(self.def_id.to_rust_def_id()) {
-            children.extend(
-                tcx.associated_items(impl_def_id)
-                    .in_definition_order()
-                    .map(|assoc| (assoc.name, assoc.def_id).sinto(s)),
-            );
+        if let Some(rust_def_id) = self.def_id.as_rust_def_id() {
+            let tcx = s.base().tcx;
+            for impl_def_id in tcx.inherent_impls(rust_def_id) {
+                children.extend(
+                    tcx.associated_items(impl_def_id)
+                        .in_definition_order()
+                        .map(|assoc| (assoc.name, assoc.def_id).sinto(s)),
+                );
+            }
         }
         children
     }

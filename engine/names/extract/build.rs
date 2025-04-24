@@ -67,6 +67,7 @@ fn def_path_item_to_str(path_item: DefPathItem) -> String {
         DefPathItem::Closure => "Closure".into(),
         DefPathItem::Ctor => "Ctor".into(),
         DefPathItem::AnonConst => "AnonConst".into(),
+        DefPathItem::PromotedConst => "PromotedConst".into(),
         DefPathItem::TypeNs(None) | DefPathItem::OpaqueTy => "OpaqueTy".into(),
     }
 }

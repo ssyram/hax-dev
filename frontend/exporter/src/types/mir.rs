@@ -159,22 +159,13 @@ pub mod mir_kinds {
 #[cfg(feature = "rustc")]
 pub use mir_kinds::IsMirKind;
 
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::Promoted, state: S as _s)]
-pub struct PromotedId {
-    #[value(self.as_u32())]
-    pub id: u32,
-}
-
 /// Part of a MIR body that was promoted to be a constant.
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
 pub struct PromotedConstant {
-    /// The `def_id` of the body this was extracted from.
+    /// The `def_id` of the constant. Note that rustc does not give a DefId to promoted constants,
+    /// but we do in hax.
     pub def_id: DefId,
-    /// The identifier for this sub-body. This is the contents of a `mir::Promoted` identifier.
-    pub promoted_id: PromotedId,
     /// The generics applied to the definition corresponding to `def_id`.
     pub args: Vec<GenericArg>,
     /// The MIR for this sub-body.
@@ -240,9 +231,14 @@ fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
         binder: (),
         thir: (),
     };
+    // Construct a def_id for the promoted constant.
+    let def_id = {
+        let parent_def_id: DefId = def_id.sinto(s);
+        let promoted_id: PromotedId = promoted_id.sinto(s);
+        parent_def_id.make_promoted_child(s, promoted_id)
+    };
     PromotedConstant {
-        def_id: def_id.sinto(s),
-        promoted_id: promoted_id.sinto(s),
+        def_id,
         args: uneval.args.sinto(s),
         mir: body.sinto(s),
     }
