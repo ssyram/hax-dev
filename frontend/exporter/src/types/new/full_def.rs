@@ -39,21 +39,23 @@ where
     Body: IsBody + TypeMappable,
 {
     let tcx = s.base().tcx;
+    let hax_def_id: DefId = def_id.sinto(s);
     let def_kind = get_def_kind(tcx, def_id);
     let kind = {
         let state_with_id = with_owner_id(s.base(), (), (), def_id);
         def_kind.sinto(&state_with_id)
     };
 
+    let def_span = hax_def_id.def_span(s);
     let source_span = def_id.as_local().map(|ldid| tcx.source_span(ldid));
     let source_text = source_span
         .filter(|source_span| source_span.ctxt().is_root())
         .and_then(|source_span| tcx.sess.source_map().span_to_snippet(source_span).ok());
 
     FullDef {
-        def_id: def_id.sinto(s),
+        def_id: hax_def_id,
         parent: tcx.opt_parent(def_id).sinto(s),
-        span: get_def_span(tcx, def_id, def_kind).sinto(s),
+        span: def_span,
         source_span: source_span.sinto(s),
         source_text,
         attributes: get_def_attrs(tcx, def_id, def_kind).sinto(s),
@@ -70,17 +72,31 @@ where
 }
 
 #[cfg(feature = "rustc")]
-impl<'tcx, S, Body> SInto<S, Arc<FullDef<Body>>> for RDefId
-where
-    Body: IsBody + TypeMappable,
-    S: BaseState<'tcx>,
-{
-    fn sinto(&self, s: &S) -> Arc<FullDef<Body>> {
-        if let Some(def) = s.with_item_cache(*self, |cache| cache.full_def.get().cloned()) {
+impl DefId {
+    /// Get the span of the definition of this item. This is the span used in diagnostics when
+    /// referring to the item.
+    pub fn def_span<'tcx>(&self, s: &impl BaseState<'tcx>) -> Span {
+        use DefKind::*;
+        match &self.kind {
+            // These kinds cause `def_span` to panic.
+            ForeignMod => rustc_span::DUMMY_SP,
+            _ => s.base().tcx.def_span(self.to_rust_def_id()),
+        }
+        .sinto(s)
+    }
+
+    /// Get the full definition of this item.
+    pub fn full_def<'tcx, S, Body>(&self, s: &S) -> Arc<FullDef<Body>>
+    where
+        Body: IsBody + TypeMappable,
+        S: BaseState<'tcx>,
+    {
+        let def_id = self.to_rust_def_id();
+        if let Some(def) = s.with_item_cache(def_id, |cache| cache.full_def.get().cloned()) {
             return def;
         }
-        let def = Arc::new(translate_full_def(s, *self));
-        s.with_item_cache(*self, |cache| cache.full_def.insert(def.clone()));
+        let def = Arc::new(translate_full_def(s, def_id));
+        s.with_item_cache(def_id, |cache| cache.full_def.insert(def.clone()));
         def
     }
 }
@@ -186,9 +202,11 @@ pub enum FullDefKind<Body> {
                 .tcx
                 .associated_items(s.owner_id())
                 .in_definition_order()
-                .map(|assoc| (assoc, assoc.def_id))
+                .map(|assoc| {
+                    let def_id = assoc.def_id.sinto(s);
+                    (assoc.sinto(s), def_id.full_def(s))
+                })
                 .collect::<Vec<_>>()
-                .sinto(s)
         )]
         items: Vec<(AssocItem, Arc<FullDef<Body>>)>,
     },
@@ -517,21 +535,6 @@ impl<Body> ImplAssocItem<Body> {
     }
 }
 
-/// Gets the span of the definition.
-#[cfg(feature = "rustc")]
-pub fn get_def_span<'tcx>(
-    tcx: ty::TyCtxt<'tcx>,
-    def_id: RDefId,
-    def_kind: RDefKind,
-) -> rustc_span::Span {
-    use RDefKind::*;
-    match def_kind {
-        // These kinds cause `def_span` to panic.
-        ForeignMod => rustc_span::DUMMY_SP,
-        _ => tcx.def_span(def_id),
-    }
-}
-
 /// Gets the visibility (`pub` or not) of the definition. Returns `None` for defs that don't have a
 /// meaningful visibility.
 #[cfg(feature = "rustc")]
@@ -654,9 +657,11 @@ where
             let items = tcx
                 .associated_items(impl_def_id)
                 .in_definition_order()
-                .map(|assoc| (assoc, assoc.def_id))
-                .collect::<Vec<_>>()
-                .sinto(s);
+                .map(|assoc| {
+                    let def_id = assoc.def_id.sinto(s);
+                    (assoc.sinto(s), def_id.full_def(s))
+                })
+                .collect::<Vec<_>>();
             FullDefKind::InherentImpl {
                 param_env,
                 ty: ty.sinto(s),
@@ -684,7 +689,7 @@ where
                 .in_definition_order()
                 .map(|decl_assoc| {
                     let decl_def_id = decl_assoc.def_id;
-                    let decl_def = decl_def_id.sinto(s);
+                    let decl_def = decl_def_id.sinto(s).full_def(s);
                     // Impl exprs required by the item.
                     let required_impl_exprs;
                     let value = match item_map.remove(&decl_def_id) {
@@ -700,7 +705,7 @@ where
                             };
 
                             ImplAssocItemValue::Provided {
-                                def: impl_assoc.def_id.sinto(s),
+                                def: impl_assoc.def_id.sinto(s).full_def(s),
                                 is_override: decl_assoc.defaultness(tcx).has_value(),
                             }
                         }
