@@ -16,7 +16,7 @@ members = [
      "hax-types",
      "rust-printer",
 ]
-exclude = ["tests", "rust-printer/tests"]
+exclude = ["tests", "rustc-coverage-tests", "rust-printer/tests"]
 default-members = [
      "frontend/exporter",
      "frontend/exporter/options",

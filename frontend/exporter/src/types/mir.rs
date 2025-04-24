@@ -159,6 +159,14 @@ pub mod mir_kinds {
 #[cfg(feature = "rustc")]
 pub use mir_kinds::IsMirKind;
 
+#[derive_group(Serializers)]
+#[derive(AdtInto, Clone, Debug, JsonSchema)]
+#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::Promoted, state: S as _s)]
+pub struct PromotedId {
+    #[value(self.as_u32())]
+    pub id: u32,
+}
+
 /// Part of a MIR body that was promoted to be a constant.
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
@@ -166,23 +174,29 @@ pub struct PromotedConstant {
     /// The `def_id` of the body this was extracted from.
     pub def_id: DefId,
     /// The identifier for this sub-body. This is the contents of a `mir::Promoted` identifier.
-    pub promoted_id: u32,
-    /// The MIR for this sub-body. This MIR is only present in the current crate; for foreign
-    /// crates, only the evaluated constant is stored in the rlib.
-    // Note: `tcx.mir_promoted` returns MIRs in the promoted phase; `tcx.promoted_mir` returns it
-    // as in `tcx.mir_drops_elaborated_etc`. We use `mir_promoted` here.
-    pub mir: Option<MirBody<mir_kinds::Promoted>>,
+    pub promoted_id: PromotedId,
+    /// The generics applied to the definition corresponding to `def_id`.
+    pub args: Vec<GenericArg>,
+    /// The MIR for this sub-body.
+    pub mir: MirBody<()>,
 }
 
+/// The contents of `Operand::Const`.
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
 pub struct ConstOperand {
     pub span: Span,
     pub ty: Ty,
-    /// The final evaluated value.
-    pub evaluated: ConstantExpr,
-    /// A MIR constant may come from a part of the MIR body that was promoted to be a constant.
-    pub promoted: Option<PromotedConstant>,
+    pub kind: ConstOperandKind,
+}
+
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub enum ConstOperandKind {
+    /// An evaluated constant represented as an expression.
+    Value(ConstantExpr),
+    /// A promoted constant, that may not be evaluatable because of generics.
+    Promoted(PromotedConstant, Option<ConstantExpr>),
 }
 
 #[cfg(feature = "rustc")]
@@ -190,13 +204,47 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
     for rustc_middle::mir::ConstOperand<'tcx>
 {
     fn sinto(&self, s: &S) -> ConstOperand {
-        let (evaluated, promoted) = translate_mir_const(s, self.span, self.const_);
+        let kind = translate_mir_const(s, self.span, self.const_);
         ConstOperand {
             span: self.span.sinto(s),
             ty: self.const_.ty().sinto(s),
-            evaluated,
-            promoted,
+            kind,
         }
+    }
+}
+
+/// Retrieve the MIR for a promoted body.
+#[cfg(feature = "rustc")]
+fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    uneval: mir::UnevaluatedConst<'tcx>,
+) -> PromotedConstant {
+    let tcx = s.base().tcx;
+    let promoted_id = uneval.promoted.unwrap();
+    let def_id = uneval.def;
+    let body = if let Some(local_def_id) = def_id.as_local() {
+        let (_, promoteds) = tcx.mir_promoted(local_def_id);
+        if !promoteds.is_stolen() {
+            promoteds.borrow()[promoted_id].clone()
+        } else {
+            tcx.promoted_mir(def_id)[promoted_id].clone()
+        }
+    } else {
+        tcx.promoted_mir(def_id)[promoted_id].clone()
+    };
+    let body = Rc::new(body);
+    let s = &State {
+        base: s.base(),
+        owner_id: s.owner_id(),
+        mir: body.clone(),
+        binder: (),
+        thir: (),
+    };
+    PromotedConstant {
+        def_id: def_id.sinto(s),
+        promoted_id: promoted_id.sinto(s),
+        args: uneval.args.sinto(s),
+        mir: body.sinto(s),
     }
 }
 
@@ -206,19 +254,22 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     span: rustc_span::Span,
     konst: mir::Const<'tcx>,
-) -> (ConstantExpr, Option<PromotedConstant>) {
+) -> ConstOperandKind {
     use rustc_middle::mir::Const;
+    use ConstOperandKind::{Promoted, Value};
     let tcx = s.base().tcx;
-    let mut promoted = None;
-    let evaluated = match konst {
-        Const::Val(const_value, ty) => const_value_to_constant_expr(s, ty, const_value, span)
-            .unwrap_or_else(|err| {
-                fatal!(
+    match konst {
+        Const::Val(const_value, ty) => {
+            let evaluated = const_value_to_constant_expr(s, ty, const_value, span);
+            match evaluated.report_err() {
+                Ok(val) => Value(val),
+                Err(err) => fatal!(
                     s[span], "Cannot convert constant back to an expression";
                     {const_value, ty, err}
-                )
-            }),
-        Const::Ty(_ty, c) => c.sinto(s),
+                ),
+            }
+        }
+        Const::Ty(_ty, c) => Value(c.sinto(s)),
         Const::Unevaluated(ucv, _ty) => {
             use crate::rustc_middle::query::Key;
             let span = span.substitute_dummy(
@@ -226,52 +277,36 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
                     .unwrap_or_else(|| ucv.def.default_span(tcx)),
             );
             match ucv.promoted {
-                Some(promoted_id) => {
-                    let (_, promoteds) = tcx.mir_promoted(ucv.def.as_local().unwrap());
-                    // TODO: also fallback to `promoted_mir`
-                    let mir = if promoteds.is_stolen() {
-                        None
-                    } else {
-                        let promoteds = promoteds.borrow();
-                        let body = &promoteds[promoted_id];
-                        let body = body.sinto(&State {
-                            base: s.base(),
-                            owner_id: s.owner_id(),
-                            mir: Rc::new(body.clone()),
-                            binder: (),
-                            thir: (),
-                        });
-                        Some(body)
-                    };
-                    promoted = Some(PromotedConstant {
-                        def_id: ucv.def.sinto(s),
-                        promoted_id: promoted_id.as_u32(),
-                        mir,
-                    });
-                    eval_mir_constant(s, konst)
-                        .unwrap_or_else(|| {
-                            supposely_unreachable_fatal!(s, "UnevalPromotedConstant"; {konst, ucv});
-                        })
-                        .sinto(s)
+                Some(_) => {
+                    let promoted = get_promoted_mir(s, ucv);
+                    let evaluated = eval_mir_constant(s, konst).sinto(s);
+                    Promoted(promoted, evaluated)
                 }
-                None => match translate_constant_reference(s, span, ucv.shrink()) {
+                None => Value(match translate_constant_reference(s, span, ucv.shrink()) {
                     Some(val) => val,
                     None => match eval_mir_constant(s, konst) {
                         Some(val) => val.sinto(s),
-                        // TODO: This is triggered when compiling using `generic_const_exprs`
+                        // TODO: This is triggered when compiling using `generic_const_exprs`. We
+                        // might be able to get a MIR body from the def_id.
                         None => supposely_unreachable_fatal!(s, "TranslateUneval"; {konst, ucv}),
                     },
-                },
+                }),
             }
         }
-    };
-    (evaluated, promoted)
+    }
 }
 
 #[cfg(feature = "rustc")]
+/// This impl is used in THIR patterns.
 impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
     fn sinto(&self, s: &S) -> ConstantExpr {
-        translate_mir_const(s, rustc_span::DUMMY_SP, *self).0
+        match translate_mir_const(s, rustc_span::DUMMY_SP, *self) {
+            ConstOperandKind::Value(val) | ConstOperandKind::Promoted(_, Some(val)) => val,
+            ConstOperandKind::Promoted(body, None) => fatal!(
+                s, "Cannot convert constant back to an expression";
+                {body}
+            ),
+        }
     }
 }
 
@@ -812,31 +847,29 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
             let cur_ty = current_ty;
             let cur_kind = current_kind.clone();
             use rustc_middle::ty::TyKind;
-            let mk_field =
-                |index: &rustc_target::abi::FieldIdx,
-                 variant_idx: Option<rustc_target::abi::VariantIdx>| {
-                    ProjectionElem::Field(match cur_ty.kind() {
-                        TyKind::Adt(adt_def, _) => {
-                            assert!(
-                                ((adt_def.is_struct() || adt_def.is_union())
-                                    && variant_idx.is_none())
-                                    || (adt_def.is_enum() && variant_idx.is_some())
-                            );
-                            ProjectionElemFieldKind::Adt {
-                                typ: adt_def.did().sinto(s),
-                                variant: variant_idx.map(|id| id.sinto(s)),
-                                index: index.sinto(s),
-                            }
+            let mk_field = |index: &rustc_abi::FieldIdx,
+                            variant_idx: Option<rustc_abi::VariantIdx>| {
+                ProjectionElem::Field(match cur_ty.kind() {
+                    TyKind::Adt(adt_def, _) => {
+                        assert!(
+                            ((adt_def.is_struct() || adt_def.is_union()) && variant_idx.is_none())
+                                || (adt_def.is_enum() && variant_idx.is_some())
+                        );
+                        ProjectionElemFieldKind::Adt {
+                            typ: adt_def.did().sinto(s),
+                            variant: variant_idx.map(|id| id.sinto(s)),
+                            index: index.sinto(s),
                         }
-                        TyKind::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
-                        ty_kind => {
-                            supposely_unreachable_fatal!(
-                                s, "ProjectionElemFieldBadType";
-                                {index, ty_kind, variant_idx, &cur_ty, &cur_kind}
-                            );
-                        }
-                    })
-                };
+                    }
+                    TyKind::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
+                    ty_kind => {
+                        supposely_unreachable_fatal!(
+                            s, "ProjectionElemFieldBadType";
+                            {index, ty_kind, variant_idx, &cur_ty, &cur_kind}
+                        );
+                    }
+                })
+            };
             let elem_kind: ProjectionElem = match elems {
                 [Downcast(_, variant_idx), Field(index, ty), rest @ ..] => {
                     elems = rest;
@@ -924,6 +957,7 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
                         // and `fn(‘static ())` (according to @compiler-errors on Zulip).
                         Subtype { .. } => panic!("unexpected Subtype"),
                         Downcast { .. } => panic!("unexpected Downcast"),
+                        UnwrapUnsafeBinder { .. } => panic!("unsupported feature: unsafe binders"),
                     }
                 }
                 [] => break,
@@ -1012,8 +1046,9 @@ pub enum CoercionSource {
 pub enum NullOp {
     SizeOf,
     AlignOf,
-    OffsetOf(Vec<(usize, FieldIdx)>),
+    OffsetOf(Vec<(VariantIdx, FieldIdx)>),
     UbChecks,
+    ContractChecks,
 }
 
 #[derive_group(Serializers)]
@@ -1030,7 +1065,7 @@ pub enum Rvalue {
     Repeat(Operand, ConstantExpr),
     Ref(Region, BorrowKind, Place),
     ThreadLocalRef(DefId),
-    RawPtr(Mutability, Place),
+    RawPtr(RawPtrKind, Place),
     Len(Place),
     Cast(CastKind, Operand, Ty),
     BinaryOp(BinOp, (Operand, Operand)),
@@ -1040,6 +1075,16 @@ pub enum Rvalue {
     Aggregate(AggregateKind, IndexVec<FieldIdx, Operand>),
     ShallowInitBox(Operand, Ty),
     CopyForDeref(Place),
+    WrapUnsafeBinder(Operand, Ty),
+}
+
+#[derive_group(Serializers)]
+#[derive(AdtInto, Clone, Debug, JsonSchema)]
+#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::RawPtrKind, state: S as _s)]
+pub enum RawPtrKind {
+    Mut,
+    Const,
+    FakeForPtrMetadata,
 }
 
 #[derive_group(Serializers)]
@@ -1055,7 +1100,7 @@ make_idx_wrapper!(rustc_middle::mir, BasicBlock);
 make_idx_wrapper!(rustc_middle::mir, SourceScope);
 make_idx_wrapper!(rustc_middle::mir, Local);
 make_idx_wrapper!(rustc_middle::ty, UserTypeAnnotationIndex);
-make_idx_wrapper!(rustc_target::abi, FieldIdx);
+make_idx_wrapper!(rustc_abi, FieldIdx);
 
 /// Reflects [`rustc_middle::mir::UnOp`]
 #[derive_group(Serializers)]
