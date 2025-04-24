@@ -517,18 +517,7 @@ impl<Body> ImplAssocItem<Body> {
     }
 }
 
-/// Gets the kind of the definition.
-#[cfg(feature = "rustc")]
-pub fn get_def_kind<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> RDefKind {
-    if def_id == rustc_span::def_id::CRATE_DEF_ID.to_def_id() {
-        // Horrible hack: without this, `def_kind` crashes on the crate root. Presumably some table
-        // isn't properly initialized otherwise.
-        let _ = tcx.def_span(def_id);
-    };
-    tcx.def_kind(def_id)
-}
-
-/// Gets the attributes of the definition.
+/// Gets the span of the definition.
 #[cfg(feature = "rustc")]
 pub fn get_def_span<'tcx>(
     tcx: ty::TyCtxt<'tcx>,

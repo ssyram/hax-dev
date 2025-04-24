@@ -18,7 +18,7 @@ use crate::prelude::*;
 use crate::{AdtInto, JsonSchema};
 
 #[cfg(feature = "rustc")]
-use {rustc_hir as hir, rustc_span::def_id::DefId as RDefId};
+use {rustc_hir as hir, rustc_hir::def_id::DefId as RDefId, rustc_middle::ty};
 
 pub type Symbol = String;
 
@@ -210,6 +210,18 @@ impl std::hash::Hash for DefId {
     }
 }
 
+/// Gets the kind of the definition. Can't use `def_kind` directly because this crashes on the
+/// crate root.
+#[cfg(feature = "rustc")]
+pub(crate) fn get_def_kind<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> hir::def::DefKind {
+    if def_id == rustc_span::def_id::CRATE_DEF_ID.to_def_id() {
+        // Horrible hack: without this, `def_kind` crashes on the crate root. Presumably some table
+        // isn't properly initialized otherwise.
+        let _ = tcx.def_span(def_id);
+    };
+    tcx.def_kind(def_id)
+}
+
 #[cfg(feature = "rustc")]
 pub(crate) fn translate_def_id<'tcx, S: BaseState<'tcx>>(s: &S, def_id: RDefId) -> DefId {
     let tcx = s.base().tcx;
@@ -231,7 +243,7 @@ pub(crate) fn translate_def_id<'tcx, S: BaseState<'tcx>>(s: &S, def_id: RDefId) 
             rustc_hir::def_id::DefIndex::as_u32(def_id.index),
         ),
         is_local: def_id.is_local(),
-        kind: tcx.def_kind(def_id).sinto(s),
+        kind: get_def_kind(tcx, def_id).sinto(s),
     };
     let contents =
         s.with_global_cache(|cache| id_table::Node::new(contents, &mut cache.id_table_session));
