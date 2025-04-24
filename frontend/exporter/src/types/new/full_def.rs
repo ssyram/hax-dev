@@ -77,7 +77,7 @@ where
                 },
                 predicates: GenericPredicates { predicates: vec![] },
             };
-            let body = get_promoted_mir(s, rust_def_id, promoted_id.as_rust_promoted_id());
+            let body = get_promoted_mir(tcx, rust_def_id, promoted_id.as_rust_promoted_id());
             let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
                 .ty
                 .sinto(&state_with_id);
