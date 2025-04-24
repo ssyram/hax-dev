@@ -15,9 +15,8 @@ members = [
      "engine/names/extract",
      "hax-types",
      "rust-printer",
-     "rust-printer/tests",
 ]
-exclude = ["tests"]
+exclude = ["tests", "rust-printer/tests"]
 default-members = [
      "frontend/exporter",
      "frontend/exporter/options",
