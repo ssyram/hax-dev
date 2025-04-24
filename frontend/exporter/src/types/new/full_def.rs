@@ -442,9 +442,8 @@ pub enum ImplAssocItemValue<Body> {
 }
 
 impl<Body> FullDef<Body> {
-    #[cfg(feature = "rustc")]
-    pub fn rust_def_id(&self) -> RDefId {
-        (&self.def_id).into()
+    pub fn def_id(&self) -> &DefId {
+        &self.def_id
     }
 
     pub fn kind(&self) -> &FullDefKind<Body> {
@@ -503,7 +502,7 @@ impl<Body> FullDef<Body> {
         };
         // Add inherent impl items if any.
         let tcx = s.base().tcx;
-        for impl_def_id in tcx.inherent_impls(self.rust_def_id()) {
+        for impl_def_id in tcx.inherent_impls(self.def_id.to_rust_def_id()) {
             children.extend(
                 tcx.associated_items(impl_def_id)
                     .in_definition_order()

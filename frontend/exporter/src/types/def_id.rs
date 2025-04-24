@@ -197,7 +197,7 @@ impl std::fmt::Debug for DefId {
 impl std::fmt::Debug for DefId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use the more legible rustc debug implementation.
-        write!(f, "{:?}", rustc_span::def_id::DefId::from(self))
+        write!(f, "{:?}", self.to_rust_def_id())
     }
 }
 
@@ -259,21 +259,6 @@ impl<'s, S: BaseState<'s>> SInto<S, DefId> for RDefId {
         let def_id = translate_def_id(s, *self);
         s.with_item_cache(*self, |cache| cache.def_id = Some(def_id.clone()));
         def_id
-    }
-}
-
-#[cfg(feature = "rustc")]
-impl From<&DefId> for RDefId {
-    fn from<'tcx>(def_id: &DefId) -> Self {
-        def_id.to_rust_def_id()
-    }
-}
-
-// Impl to be able to use hax's `DefId` for many rustc queries.
-#[cfg(feature = "rustc")]
-impl rustc_middle::query::IntoQueryParam<RDefId> for &DefId {
-    fn into_query_param(self) -> RDefId {
-        self.into()
     }
 }
 
