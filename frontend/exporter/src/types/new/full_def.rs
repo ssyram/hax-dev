@@ -33,40 +33,82 @@ pub struct FullDef<Body = ()> {
 }
 
 #[cfg(feature = "rustc")]
-fn translate_full_def<'tcx, S, Body>(s: &S, def_id: RDefId) -> FullDef<Body>
+fn translate_full_def<'tcx, S, Body>(s: &S, def_id: &DefId) -> FullDef<Body>
 where
     S: BaseState<'tcx>,
     Body: IsBody + TypeMappable,
 {
     let tcx = s.base().tcx;
-    let hax_def_id: DefId = def_id.sinto(s);
-    let def_kind = get_def_kind(tcx, def_id);
-    let kind = {
-        let state_with_id = with_owner_id(s.base(), (), (), def_id);
-        def_kind.sinto(&state_with_id)
-    };
+    let rust_def_id = def_id.underlying_rust_def_id();
+    let state_with_id = with_owner_id(s.base(), (), (), rust_def_id);
+    let source_span;
+    let attributes;
+    let visibility;
+    let lang_item;
+    let diagnostic_item;
+    let kind;
+    match def_id.promoted_id() {
+        None => {
+            let def_kind = get_def_kind(tcx, rust_def_id);
+            kind = def_kind.sinto(&state_with_id);
 
-    let def_span = hax_def_id.def_span(s);
-    let source_span = def_id.as_local().map(|ldid| tcx.source_span(ldid));
+            source_span = rust_def_id.as_local().map(|ldid| tcx.source_span(ldid));
+            attributes = get_def_attrs(tcx, rust_def_id, def_kind).sinto(s);
+            visibility = get_def_visibility(tcx, rust_def_id, def_kind);
+            lang_item = s
+                .base()
+                .tcx
+                .as_lang_item(rust_def_id)
+                .map(|litem| litem.name())
+                .sinto(s);
+            diagnostic_item = tcx.get_diagnostic_name(rust_def_id).sinto(s);
+        }
+
+        Some(promoted_id) => {
+            let parent_def = def_id.parent.as_ref().unwrap().full_def::<_, Body>(s);
+            let parent_param_env = parent_def.param_env().unwrap();
+            let param_env = ParamEnv {
+                generics: TyGenerics {
+                    parent: def_id.parent.clone(),
+                    parent_count: parent_param_env.generics.count_total_params(),
+                    params: vec![],
+                    has_self: false,
+                    has_late_bound_regions: None,
+                },
+                predicates: GenericPredicates { predicates: vec![] },
+            };
+            let body = get_promoted_mir(s, rust_def_id, promoted_id.as_rust_promoted_id());
+            let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
+                .ty
+                .sinto(&state_with_id);
+            let body = Body::from_mir(&state_with_id, body);
+            kind = FullDefKind::PromotedConst {
+                param_env,
+                ty,
+                body,
+            };
+
+            source_span = None;
+            attributes = Default::default();
+            visibility = Default::default();
+            lang_item = Default::default();
+            diagnostic_item = Default::default();
+        }
+    }
+
     let source_text = source_span
         .filter(|source_span| source_span.ctxt().is_root())
         .and_then(|source_span| tcx.sess.source_map().span_to_snippet(source_span).ok());
-
     FullDef {
-        def_id: hax_def_id,
-        parent: tcx.opt_parent(def_id).sinto(s),
-        span: def_span,
+        def_id: def_id.clone(),
+        parent: def_id.parent.clone(),
+        span: def_id.def_span(s),
         source_span: source_span.sinto(s),
         source_text,
-        attributes: get_def_attrs(tcx, def_id, def_kind).sinto(s),
-        visibility: get_def_visibility(tcx, def_id, def_kind),
-        lang_item: s
-            .base()
-            .tcx
-            .as_lang_item(def_id)
-            .map(|litem| litem.name())
-            .sinto(s),
-        diagnostic_item: tcx.get_diagnostic_name(def_id).sinto(s),
+        attributes,
+        visibility,
+        lang_item,
+        diagnostic_item,
         kind,
     }
 }
@@ -91,16 +133,26 @@ impl DefId {
         Body: IsBody + TypeMappable,
         S: BaseState<'tcx>,
     {
-        if let Some(def_id) = self.as_rust_def_id() {
-            if let Some(def) = s.with_item_cache(def_id, |cache| cache.full_def.get().cloned()) {
-                return def;
-            }
-            let def = Arc::new(translate_full_def(s, def_id));
-            s.with_item_cache(def_id, |cache| cache.full_def.insert(def.clone()));
-            def
-        } else {
-            todo!("full_def for promoted constants")
+        let rust_def_id = self.underlying_rust_def_id();
+        if let Some(def) = s.with_item_cache(rust_def_id, |cache| match self.promoted_id() {
+            None => cache.full_def.get().cloned(),
+            Some(promoted_id) => cache.promoteds.or_default().get(&promoted_id).cloned(),
+        }) {
+            return def;
         }
+        let def = Arc::new(translate_full_def(s, self));
+        s.with_item_cache(rust_def_id, |cache| match self.promoted_id() {
+            None => {
+                cache.full_def.insert(def.clone());
+            }
+            Some(promoted_id) => {
+                cache
+                    .promoteds
+                    .or_default()
+                    .insert(promoted_id, def.clone());
+            }
+        });
+        def
     }
 }
 
@@ -331,6 +383,13 @@ pub enum FullDefKind<Body> {
         ty: Ty,
         #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
         body: Option<Body>,
+    },
+    /// A promoted constant, e.g. `&(1 + 2)`
+    #[disable_mapping]
+    PromotedConst {
+        param_env: ParamEnv,
+        ty: Ty,
+        body: Body,
     },
     Static {
         #[value(get_param_env(s, s.owner_id()))]

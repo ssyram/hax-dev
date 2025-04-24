@@ -206,14 +206,13 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
 
 /// Retrieve the MIR for a promoted body.
 #[cfg(feature = "rustc")]
-fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
+pub(crate) fn get_promoted_mir<'tcx, S: BaseState<'tcx>>(
     s: &S,
-    uneval: mir::UnevaluatedConst<'tcx>,
-) -> PromotedConstant {
+    def_id: RDefId,
+    promoted_id: mir::Promoted,
+) -> mir::Body<'tcx> {
     let tcx = s.base().tcx;
-    let promoted_id = uneval.promoted.unwrap();
-    let def_id = uneval.def;
-    let body = if let Some(local_def_id) = def_id.as_local() {
+    if let Some(local_def_id) = def_id.as_local() {
         let (_, promoteds) = tcx.mir_promoted(local_def_id);
         if !promoteds.is_stolen() {
             promoteds.borrow()[promoted_id].clone()
@@ -222,7 +221,18 @@ fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
         }
     } else {
         tcx.promoted_mir(def_id)[promoted_id].clone()
-    };
+    }
+}
+
+/// Retrieve the MIR for a promoted body.
+#[cfg(feature = "rustc")]
+fn get_promoted_constant<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    uneval: mir::UnevaluatedConst<'tcx>,
+) -> PromotedConstant {
+    let promoted_id = uneval.promoted.unwrap();
+    let def_id = uneval.def;
+    let body = get_promoted_mir(s, def_id, promoted_id);
     let body = Rc::new(body);
     let s = &State {
         base: s.base(),
@@ -274,7 +284,7 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
             );
             match ucv.promoted {
                 Some(_) => {
-                    let promoted = get_promoted_mir(s, ucv);
+                    let promoted = get_promoted_constant(s, ucv);
                     let evaluated = eval_mir_constant(s, konst).sinto(s);
                     Promoted(promoted, evaluated)
                 }

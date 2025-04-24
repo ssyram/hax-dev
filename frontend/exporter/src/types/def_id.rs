@@ -84,6 +84,13 @@ pub struct PromotedId {
     pub id: u32,
 }
 
+#[cfg(feature = "rustc")]
+impl PromotedId {
+    pub fn as_rust_promoted_id(&self) -> rustc_middle::mir::Promoted {
+        rustc_middle::mir::Promoted::from_u32(self.id)
+    }
+}
+
 /// Reflects [`rustc_hir::def::DefKind`]
 #[derive_group(Serializers)]
 #[cfg_attr(not(feature = "extract_names_mode"), derive(JsonSchema, AdtInto))]
@@ -190,9 +197,9 @@ impl DefId {
             index: rustc_hir::def_id::DefIndex::from_u32(index),
         }
     }
-    pub fn promoted_id(&self) -> Option<rustc_middle::mir::Promoted> {
+    pub fn promoted_id(&self) -> Option<PromotedId> {
         let (_, _, promoted) = self.index;
-        promoted.map(|promoted| rustc_middle::mir::Promoted::from_u32(promoted.id))
+        promoted
     }
 
     /// Iterate over this element and its parents.
@@ -260,7 +267,11 @@ impl std::fmt::Debug for DefId {
 impl std::fmt::Debug for DefId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use the more legible rustc debug implementation.
-        write!(f, "{:?}", self.as_rust_def_id())
+        write!(f, "{:?}", self.underlying_rust_def_id())?;
+        if let Some(promoted) = self.promoted_id() {
+            write!(f, "::promoted#{}", promoted.id)?;
+        }
+        Ok(())
     }
 }
 
