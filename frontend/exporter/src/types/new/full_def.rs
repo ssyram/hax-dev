@@ -78,6 +78,8 @@ where
                 predicates: GenericPredicates { predicates: vec![] },
             };
             let body = get_promoted_mir(tcx, rust_def_id, promoted_id.as_rust_promoted_id());
+            source_span = Some(body.span);
+
             let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
                 .ty
                 .sinto(&state_with_id);
@@ -88,7 +90,7 @@ where
                 body,
             };
 
-            source_span = None;
+            // None of these make sense for a promoted constant.
             attributes = Default::default();
             visibility = Default::default();
             lang_item = Default::default();
