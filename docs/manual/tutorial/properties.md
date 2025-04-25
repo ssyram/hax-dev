@@ -48,6 +48,7 @@ const BARRETT_SHIFT: i64 = 26;
 const BARRETT_R: i64 = 0x4000000; // 2^26
 const BARRETT_MULTIPLIER: i64 = 20159; // ⌊(BARRETT_R / FIELD_MODULUS) + 1/2⌋
 
+#[hax_lib::fstar::options("--z3rlimit 100")]
 #[hax_lib::requires((i64::from(value) >= -BARRETT_R && i64::from(value) <= BARRETT_R))]
 #[hax_lib::ensures(|result| result > -FIELD_MODULUS && result < FIELD_MODULUS
                      && result %  FIELD_MODULUS ==  value % FIELD_MODULUS)]
@@ -60,9 +61,6 @@ fn barrett_reduce(value: i32) -> i32 {
 
     let sub = quotient * FIELD_MODULUS;
 
-    // Here a lemma to prove that `(quotient * 3329) % 3329 = 0`
-    // may have to be called in F*.
-
     value - sub
 }
 ```
@@ -71,13 +69,26 @@ fn barrett_reduce(value: i32) -> i32 {
 effect, but in F*, that establishes that `(quotient * 3329) % 3329` is
 zero. -->
 
-Before returning, a lemma may have to be called in F* to prove the correctness
-of the reduction.
-The lemma is `Math.Lemmas.cancel_mul_mod (v quotient) 3329;`, which establishes
-that `(quotient * 3329) % 3329` is zero.
-With the help of that one lemma, F\* is able to prove the
-reduction computes the expected result.
-(We may expose lemmas like this to call from Rust directly in future.)
+The proof for the code above uses the Z3 SMT solver to prive the
+post-condition.  Since the SMT solver needs to reason about non-linear
+arithmetic (multiplication, modulus, division) it needs more
+resources, hence we bump up the `rlimit` to 100 in an annotation above
+the function. With this annotation F* and Z3 are able to automatically
+verify this function. However, it is worth noting that the heuristic
+strategies used by Z3 for non-linear arithmetic may sometimes fail to
+complete in the given `rlimit` depending on the solver version or random
+number generator, so we often give Z3 a generous resource limit.
+
+Conversely, instead of relying on the SMT solver, we can also
+elaborate the proof of this function by hand to make it more
+predictable.  For example, before the final line of the function, 
+we could call a mathematical lemma may have to help F* prove
+the correctness of the reduction.  The lemma call would be:
+```
+    fstar!("Math.Lemmas.cancel_mul_mod (v quotient) 3329");
+```
+This lemma establishes that `(quotient * 3329) % 3329` is zero. We often use lemmas like
+these to limit our dependence on Z3. 
 
 This Barrett reduction examples is taken from
 [libcrux](https://github.com/cryspen/libcrux/tree/main)'s proof of
