@@ -72,7 +72,16 @@ end
 module AST = Ast.Make (InputLanguage)
 module BackendOptions = Backend.UnitBackendOptions
 open Ast
-module CoqNamePolicy = Concrete_ident.DefaultNamePolicy
+module CoqNamePolicy = struct
+  include Concrete_ident.DefaultNamePolicy
+  let reserved_words = Hash_set.of_list (module String) [
+      "left";
+      "right";
+    ]
+    (* let temp = Hash_set.create (module String) in *)
+    (* temp *)
+    (* Hash_set.add temp "left" *)
+end
 module U = Ast_utils.Make (InputLanguage)
 module RenderId = Concrete_ident.MakeRenderAPI (CoqNamePolicy)
 open AST
@@ -378,63 +387,63 @@ module SSPExtraDefinitions (* : ANALYSIS *) = struct
               SSP.AST.NameTy ("both" ^ " " ^ ty_name) )
           (* :: SSP.AST.Arguments ("Build_" ^ pconcrete_ident name,) *);
         ]
-      @ [SSP.AST.ProgramInstance
-           (* (name, arguments, self_ty, ty_list, impl_list) *)
-           ( "Settable",
-             [],
-             SSP.AST.NameTy name,
-             [wrap_type_in_both (SSP.AST.NameTy name)],
-             SSP.AST.InstanceDecls [SSP.AST.LetDef ("mkT", [],
-               SSP.AST.App (SSP.AST.Var "fun x => ", [
-               List.fold_left
-                ~init:
-                  ((* SSP.AST.App *)
-                   (*   ( SSP.AST.Var "solve_lift", *)
-                       (* [ *)
-                         SSP.AST.App
-                           ( SSP.AST.Var "ret_both",
-                             [
-                               SSP.AST.TypedTerm
-                                 ( SSP.AST.Tuple
-                                     (List.map
-                                        ~f:(fst >> fun x -> SSP.AST.Var x)
-                                        fields),
-                                   SSP.AST.NameTy ty_name );
-                             ] );
-                         (* ] ) *))
-                ~f:(fun z (x, _y) ->
-                  SSP.AST.App
-                    ( SSP.AST.Var "bind_both",
-                      [ SSP.AST.App (SSP.AST.Var x , [ (SSP.AST.Var "x") ] ); SSP.AST.Lambda ([ SSP.AST.Ident x ], z) ]
-                    ))
-                fields]),
-               SSP.AST.WildTy)]
-           )
-        ]
-      (* @ List.mapi *)
-      (*     ~f:(fun i (x, _y) -> *)
-      (*       SSP.AST.Notation *)
-      (*         ( "'Build_" ^ name ^ "'" ^ " " ^ "'['" ^ " " ^ "x" ^ " " ^ "']'" *)
-      (*           ^ " " ^ "'('" ^ " " ^ "'" ^ x ^ "'" ^ " " ^ "':='" ^ " " ^ "y" *)
-      (*           ^ " " ^ "')'", *)
-      (*           SSP.AST.App *)
-      (*             ( SSP.AST.Var ("Build_" ^ name), *)
-      (*               List.mapi *)
-      (*                 ~f:(fun j (x, _y) -> *)
-      (*                   SSP.AST.AppFormat *)
-      (*                     ( [ x ^ " " ^ ":=" ^ " "; (\*v*\) "" ], *)
-      (*                       [ *)
-      (*                         SSP.AST.Value *)
-      (*                           ( (if Stdlib.(j == i) then SSP.AST.Var "y" *)
-      (*                             else *)
-      (*                               SSP.AST.App *)
-      (*                                 (SSP.AST.Var x, [ SSP.AST.Var "x" ])), *)
-      (*                             false, *)
-      (*                             0 ); *)
-      (*                       ] )) *)
-      (*                 fields ), *)
-      (*           None )) *)
-      (*     fields *))
+      (* @ [SSP.AST.ProgramInstance *)
+      (*      (\* (name, arguments, self_ty, ty_list, impl_list) *\) *)
+      (*      ( "Settable", *)
+      (*        [], *)
+      (*        SSP.AST.NameTy name, *)
+      (*        [wrap_type_in_both (SSP.AST.NameTy name)], *)
+      (*        SSP.AST.InstanceDecls [SSP.AST.LetDef ("mkT", [], *)
+      (*          SSP.AST.App (SSP.AST.Var "fun x => ", [ *)
+      (*          List.fold_left *)
+      (*           ~init: *)
+      (*             ((\* SSP.AST.App *\) *)
+      (*              (\*   ( SSP.AST.Var "solve_lift", *\) *)
+      (*                  (\* [ *\) *)
+      (*                    SSP.AST.App *)
+      (*                      ( SSP.AST.Var "ret_both", *)
+      (*                        [ *)
+      (*                          SSP.AST.TypedTerm *)
+      (*                            ( SSP.AST.Tuple *)
+      (*                                (List.map *)
+      (*                                   ~f:(fst >> fun x -> SSP.AST.Var x) *)
+      (*                                   fields), *)
+      (*                              SSP.AST.NameTy ty_name ); *)
+      (*                        ] ); *)
+      (*                    (\* ] ) *\)) *)
+      (*           ~f:(fun z (x, _y) -> *)
+      (*             SSP.AST.App *)
+      (*               ( SSP.AST.Var "bind_both", *)
+      (*                 [ SSP.AST.App (SSP.AST.Var x , [ (SSP.AST.Var "x") ] ); SSP.AST.Lambda ([ SSP.AST.Ident x ], z) ] *)
+      (*               )) *)
+      (*           fields]), *)
+      (*          SSP.AST.WildTy)] *)
+      (*      ) *)
+      (*   ] *)
+      @ List.mapi
+          ~f:(fun i (x, _y) ->
+            SSP.AST.Notation
+              ( "'Build_" ^ name ^ "'" ^ " " ^ "'['" ^ " " ^ "x" ^ " " ^ "']'"
+                ^ " " ^ "'('" ^ " " ^ "'" ^ x ^ "'" ^ " " ^ "':='" ^ " " ^ "y"
+                ^ " " ^ "')'",
+                SSP.AST.App
+                  ( SSP.AST.Var ("Build_" ^ name),
+                    List.mapi
+                      ~f:(fun j (x, _y) ->
+                        SSP.AST.AppFormat
+                          ( [ x ^ " " ^ ":=" ^ " "; (*v*) "" ],
+                            [
+                              SSP.AST.Value
+                                ( (if Stdlib.(j == i) then SSP.AST.Var "y"
+                                  else
+                                    SSP.AST.App
+                                      (SSP.AST.Var x, [ SSP.AST.Var "x" ])),
+                                  false,
+                                  0 );
+                            ] ))
+                      fields ),
+                None ))
+          fields)
 
   let both_enum
       ((name, arguments, cases) :
@@ -2230,7 +2239,7 @@ let hardcoded_coq_headers =
    Open Scope hacspec_scope.\n\
    Import choice.Choice.Exports.\n\n\
    From RecordUpdate Require Import RecordUpdate.\n\n\
-   Import RecordSetNotations.\n\n
+   Import RecordSetNotations.\n\n\
    Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.\n"
 
 let translate m (_bo : BackendOptions.t) ~(bundles : AST.item list list) (items : AST.item list) : Types.file list =
