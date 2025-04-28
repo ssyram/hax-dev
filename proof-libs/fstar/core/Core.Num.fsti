@@ -12,6 +12,7 @@ let impl_u16__wrapping_add: u16 -> u16 ->  u16 = add_mod
 val impl_u16__to_be_bytes: u16 -> t_Array u8 (sz 2)
 val impl_u16__from_be_bytes: t_Array u8 (sz 2) -> u16
 let impl_i32__wrapping_add: i32 -> i32 -> i32 = add_mod
+let impl_i32__wrapping_sub: i32 -> i32 -> i32 = sub_mod
 let impl_i32__abs (a:i32{minint i32_inttype < v a}) : i32 = abs_int a
 
 let impl_i16__wrapping_add: i16 -> i16 -> i16 = add_mod
