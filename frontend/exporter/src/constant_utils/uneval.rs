@@ -337,6 +337,31 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
                 fields,
             }
         }
+        ty::Closure(def_id, args) => {
+            // A closure is essentially an adt with funky generics and some builtin impls.
+            let def_id: DefId = def_id.sinto(s);
+            let field_count = args.as_closure().upvar_tys().len();
+            let fields = read_fields(op, field_count)
+                .map(|value| {
+                    interp_ok(ConstantFieldExpr {
+                        // HACK: Closure fields don't have their own def_id, but Charon doesn't use
+                        // field DefIds so we put a dummy one.
+                        field: def_id.clone(),
+                        value: value?,
+                    })
+                })
+                .collect::<InterpResult<Vec<_>>>()?;
+            let variants_info = VariantInformations {
+                type_namespace: def_id.parent.clone().unwrap(),
+                typ: def_id.clone(),
+                variant: def_id,
+                kind: VariantKind::Struct { named: false },
+            };
+            ConstantExprKind::Adt {
+                info: variants_info,
+                fields,
+            }
+        }
         ty::Tuple(args) => {
             let fields = read_fields(op, args.len()).collect::<InterpResult<Vec<_>>>()?;
             ConstantExprKind::Tuple { fields }
@@ -378,7 +403,6 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
             }
         }
         ty::FnPtr(..)
-        | ty::Closure(..)
         | ty::Dynamic(..)
         | ty::Foreign(..)
         | ty::Pat(..)
