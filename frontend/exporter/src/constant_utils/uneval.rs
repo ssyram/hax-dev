@@ -315,7 +315,10 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
             let lit = scalar_int_to_constant_literal(s, scalar_int, ty);
             ConstantExprKind::Literal(lit)
         }
-        ty::Adt(adt_def, ..) if !adt_def.is_union() => {
+        ty::Adt(adt_def, ..) if adt_def.is_union() => {
+            ConstantExprKind::Todo("Cannot translate constant of union type".into())
+        }
+        ty::Adt(adt_def, ..) => {
             let variant = ecx.read_discriminant(&op)?;
             let down = ecx.project_downcast(&op, variant)?;
             let field_count = adt_def.variants()[variant].fields.len();
@@ -374,7 +377,21 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
                 _ => unreachable!(),
             }
         }
-        _ => ConstantExprKind::Todo("Unhandled type".into()),
+        ty::FnPtr(..)
+        | ty::Closure(..)
+        | ty::Dynamic(..)
+        | ty::Foreign(..)
+        | ty::Pat(..)
+        | ty::UnsafeBinder(..)
+        | ty::CoroutineClosure(..)
+        | ty::Coroutine(..)
+        | ty::CoroutineWitness(..) => ConstantExprKind::Todo("Unhandled constant type".into()),
+        ty::Alias(..) | ty::Param(..) | ty::Bound(..) | ty::Placeholder(..) | ty::Infer(..) => {
+            fatal!(s[span], "Encountered evaluated constant of non-monomorphic type"; {op})
+        }
+        ty::Never | ty::Error(..) => {
+            fatal!(s[span], "Encountered evaluated constant of invalid type"; {ty})
+        }
     };
     let val = kind.decorate(ty.sinto(s), span.sinto(s));
     interp_ok(val)
