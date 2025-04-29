@@ -114,7 +114,7 @@ pub fn translate_constant_reference<'tcx>(
         if assoc.trait_item_def_id.is_some() {
             // This must be a trait declaration constant
             let name = assoc.name.to_string();
-            let impl_expr = self_clause_for_item(s, &assoc, ucv.args).unwrap();
+            let impl_expr = self_clause_for_item(s, ucv.def, ucv.args).unwrap();
             ConstantExprKind::TraitConst { impl_expr, name }
         } else {
             // Constant appearing in an inherent impl block.
