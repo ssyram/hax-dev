@@ -30,6 +30,13 @@ instance debuggable_bool : t_Debug Prims.bool =
   f_dbg_fmt = (fun (b: Prims.bool) (fmt: Core.Fmt.t_Formatter) -> (fmt, Core.Result.Result_Ok ()));
 }
 
+instance debuggable_u128 : t_Debug Rust_primitives.Integers.u128 =
+{
+  f_dbg_fmt_pre = (fun (b: Rust_primitives.Integers.u128) (fmt: Core.Fmt.t_Formatter) -> true);
+  f_dbg_fmt_post = (fun (b: Rust_primitives.Integers.u128) (fmt: Core.Fmt.t_Formatter) (result: (Core.Fmt.t_Formatter & Core.Result.t_Result Prims.unit Core.Fmt.t_Error)) -> true);
+  f_dbg_fmt = (fun (b: Rust_primitives.Integers.u128) (fmt: Core.Fmt.t_Formatter) -> (fmt, Core.Result.Result_Ok ()));
+}
+
 instance debuggable_pair (#a:Type) (#b:Type) (x: t_Debug a) (y: t_Debug b): t_Debug (a & b) =
 {
   f_dbg_fmt_pre = (fun (pair: (a & b)) (fmt: Core.Fmt.t_Formatter) -> f_dbg_fmt_pre pair._1 fmt && f_dbg_fmt_pre pair._2 fmt);
