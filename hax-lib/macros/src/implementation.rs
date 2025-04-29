@@ -317,6 +317,18 @@ pub fn decreases(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStrea
     quote! {#requires #attr #item}.into()
 }
 
+/// Allows to add SMT patterns to a lemma.
+/// For more informations about SMT patterns, please take a look here: https://fstar-lang.org/tutorial/book/under_the_hood/uth_smt.html#designing-a-library-with-smt-patterns.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn fstar_smt_pat(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+    let phi: syn::Expr = parse_macro_input!(attr);
+    let item: FnLike = parse_macro_input!(item);
+    let (requires, attr) =
+        make_fn_decoration(phi, item.sig.clone(), FnDecorationKind::SMTPat, None, None);
+    quote! {#requires #attr #item}.into()
+}
+
 /// Add a logical precondition to a function.
 // Note you can use the `forall` and `exists` operators. (TODO: commented out for now, see #297)
 /// In the case of a function that has one or more `&mut` inputs, in

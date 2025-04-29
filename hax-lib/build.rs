@@ -5,6 +5,7 @@ use std::path::Path;
 const FSTAR_EXTRA: &str = r"
 pub use hax_lib_macros::fstar_options as options;
 pub use hax_lib_macros::fstar_verification_status as verification_status;
+pub use hax_lib_macros::fstar_smt_pat as smt_pat;
 ";
 
 fn main() {
