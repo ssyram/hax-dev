@@ -51,5 +51,5 @@ jobs:
       - name: Create pull request
         run: nix run nixpkgs#gh -- pr create -B main -H merge-public-hax --title 'Synchronize with upstream hax' --body 'Created by Github action'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PR_PAT }}
           GH_REPO: cryspen/hax-evit
