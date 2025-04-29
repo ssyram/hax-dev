@@ -159,28 +159,6 @@ pub mod mir_kinds {
 #[cfg(feature = "rustc")]
 pub use mir_kinds::IsMirKind;
 
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::Promoted, state: S as _s)]
-pub struct PromotedId {
-    #[value(self.as_u32())]
-    pub id: u32,
-}
-
-/// Part of a MIR body that was promoted to be a constant.
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub struct PromotedConstant {
-    /// The `def_id` of the body this was extracted from.
-    pub def_id: DefId,
-    /// The identifier for this sub-body. This is the contents of a `mir::Promoted` identifier.
-    pub promoted_id: PromotedId,
-    /// The generics applied to the definition corresponding to `def_id`.
-    pub args: Vec<GenericArg>,
-    /// The MIR for this sub-body.
-    pub mir: MirBody<()>,
-}
-
 /// The contents of `Operand::Const`.
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
@@ -195,14 +173,20 @@ pub struct ConstOperand {
 pub enum ConstOperandKind {
     /// An evaluated constant represented as an expression.
     Value(ConstantExpr),
-    /// A promoted constant, that may not be evaluatable because of generics.
-    Promoted(PromotedConstant, Option<ConstantExpr>),
+    /// Part of a MIR body that was promoted to be a constant. May not be evaluatable because of
+    /// generics.
+    Promoted {
+        /// The `def_id` of the constant. Note that rustc does not give a DefId to promoted constants,
+        /// but we do in hax.
+        def_id: DefId,
+        /// The generics applied to the definition corresponding to `def_id`.
+        args: Vec<GenericArg>,
+        impl_exprs: Vec<ImplExpr>,
+    },
 }
 
 #[cfg(feature = "rustc")]
-impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
-    for rustc_middle::mir::ConstOperand<'tcx>
-{
+impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand> for mir::ConstOperand<'tcx> {
     fn sinto(&self, s: &S) -> ConstOperand {
         let kind = translate_mir_const(s, self.span, self.const_);
         ConstOperand {
@@ -215,14 +199,12 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
 
 /// Retrieve the MIR for a promoted body.
 #[cfg(feature = "rustc")]
-fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
-    s: &S,
-    uneval: mir::UnevaluatedConst<'tcx>,
-) -> PromotedConstant {
-    let tcx = s.base().tcx;
-    let promoted_id = uneval.promoted.unwrap();
-    let def_id = uneval.def;
-    let body = if let Some(local_def_id) = def_id.as_local() {
+pub fn get_promoted_mir<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    def_id: RDefId,
+    promoted_id: mir::Promoted,
+) -> mir::Body<'tcx> {
+    if let Some(local_def_id) = def_id.as_local() {
         let (_, promoteds) = tcx.mir_promoted(local_def_id);
         if !promoteds.is_stolen() {
             promoteds.borrow()[promoted_id].clone()
@@ -231,20 +213,6 @@ fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
         }
     } else {
         tcx.promoted_mir(def_id)[promoted_id].clone()
-    };
-    let body = Rc::new(body);
-    let s = &State {
-        base: s.base(),
-        owner_id: s.owner_id(),
-        mir: body.clone(),
-        binder: (),
-        thir: (),
-    };
-    PromotedConstant {
-        def_id: def_id.sinto(s),
-        promoted_id: promoted_id.sinto(s),
-        args: uneval.args.sinto(s),
-        mir: body.sinto(s),
     }
 }
 
@@ -277,10 +245,15 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
                     .unwrap_or_else(|| ucv.def.default_span(tcx)),
             );
             match ucv.promoted {
-                Some(_) => {
-                    let promoted = get_promoted_mir(s, ucv);
-                    let evaluated = eval_mir_constant(s, konst).sinto(s);
-                    Promoted(promoted, evaluated)
+                Some(promoted) => {
+                    // Construct a def_id for the promoted constant.
+                    let def_id = ucv.def.sinto(s).make_promoted_child(s, promoted.sinto(s));
+                    let impl_exprs = solve_item_required_traits(s, ucv.def, ucv.args);
+                    Promoted {
+                        def_id,
+                        args: ucv.args.sinto(s),
+                        impl_exprs,
+                    }
                 }
                 None => Value(match translate_constant_reference(s, span, ucv.shrink()) {
                     Some(val) => val,
@@ -302,10 +275,10 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
 impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
     fn sinto(&self, s: &S) -> ConstantExpr {
         match translate_mir_const(s, rustc_span::DUMMY_SP, *self) {
-            ConstOperandKind::Value(val) | ConstOperandKind::Promoted(_, Some(val)) => val,
-            ConstOperandKind::Promoted(body, None) => fatal!(
+            ConstOperandKind::Value(val) => val,
+            ConstOperandKind::Promoted { .. } => fatal!(
                 s, "Cannot convert constant back to an expression";
-                {body}
+                {self}
             ),
         }
     }
