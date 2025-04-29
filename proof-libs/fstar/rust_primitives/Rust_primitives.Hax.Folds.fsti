@@ -119,19 +119,21 @@ val fold_range_step_by
 unfold let fold_range_wf_index (#u: inttype)
   (start: int_t u) (end_: int_t u)
   (strict: bool) (i: int)
-  = v start <= v end_
-  ==> ( i >= v start 
-     /\ (if strict then i < v end_ else i <= v end_))
+  = i >= v start 
+     /\ (if strict then i < v end_ else i <= v end_)
+
+unfold let range_empty (#u: inttype)
+  (start: int_t u) (end_: int_t u) = v start > v end_
 
 let rec fold_range
   (#acc_t: Type0) (#u: inttype)
   (start: int_t u)
   (end_: int_t u)
   (inv: acc_t -> (i:int_t u{fold_range_wf_index start end_ false (v i)}) -> Type0)
-  (init: acc_t {inv init start})
+  (init: acc_t {~(range_empty start end_) ==> inv init start})
   (f: (acc:acc_t -> i:int_t u  {v i <= v end_ /\ fold_range_wf_index start end_ true (v i) /\ inv acc i}
                  -> acc':acc_t {(inv acc' (mk_int (v i + 1)))}))
-  : Tot (result: acc_t {inv result (if v start > v end_ then start else end_)}) 
+  : Tot (result: acc_t {if range_empty start end_ then result == init else inv result end_}) 
         (decreases v end_ - v start)
   = if v start < v end_
     then fold_range (start +! mk_int 1) end_ inv (f init start) f
