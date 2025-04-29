@@ -23,4 +23,20 @@ val impl_4__new_v1 (sz1: usize) (sz2: usize) (pieces: t_Slice string) (args: t_S
 val impl_7__write_fmt (fmt: t_Formatter) (args: t_Arguments): t_Formatter & t_Result
 val impl_4__new_const (u:usize) (args: t_Slice string): t_Arguments
 
+instance debuggable_bool : t_Debug Prims.bool =
+{
+  f_dbg_fmt_pre = (fun (b: Prims.bool) (fmt: Core.Fmt.t_Formatter) -> true);
+  f_dbg_fmt_post = (fun (b: Prims.bool) (fmt: Core.Fmt.t_Formatter) (result: (Core.Fmt.t_Formatter & Core.Result.t_Result Prims.unit Core.Fmt.t_Error)) -> true);
+  f_dbg_fmt = (fun (b: Prims.bool) (fmt: Core.Fmt.t_Formatter) -> (fmt, Core.Result.Result_Ok ()));
+}
 
+instance debuggable_pair (#a:Type) (#b:Type) (x: t_Debug a) (y: t_Debug b): t_Debug (a & b) =
+{
+  f_dbg_fmt_pre = (fun (pair: (a & b)) (fmt: Core.Fmt.t_Formatter) -> f_dbg_fmt_pre pair._1 fmt && f_dbg_fmt_pre pair._2 fmt);
+  f_dbg_fmt_post = (fun (pair: (a & b)) (fmt: Core.Fmt.t_Formatter) (result: (Core.Fmt.t_Formatter & Core.Result.t_Result Prims.unit Core.Fmt.t_Error)) -> f_dbg_fmt_post pair._1 fmt result && f_dbg_fmt_post pair._2 fmt result);
+  f_dbg_fmt = (fun (pair: (a & b)) (fmt: Core.Fmt.t_Formatter) ->
+     let fmt_a, result_a:(Core.Fmt.t_Formatter & Core.Result.t_Result Prims.unit Core.Fmt.t_Error) = f_dbg_fmt pair._1 fmt in
+     match result_a with
+     | Core.Result.Result_Ok v -> f_dbg_fmt pair._2 fmt_a
+     | Core.Result.Result_Err e -> (fmt_a, result_a));
+}
