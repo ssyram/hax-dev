@@ -374,9 +374,7 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
                 _ => unreachable!(),
             }
         }
-        _ => {
-            fatal!(s[span], "Cannot convert constant back to an expression"; {op})
-        }
+        _ => ConstantExprKind::Todo("Unhandled type".into()),
     };
     let val = kind.decorate(ty.sinto(s), span.sinto(s));
     interp_ok(val)

@@ -18,7 +18,7 @@ use crate::prelude::*;
 use crate::{AdtInto, JsonSchema};
 
 #[cfg(feature = "rustc")]
-use {rustc_hir as hir, rustc_span::def_id::DefId as RDefId};
+use {rustc_hir as hir, rustc_hir::def_id::DefId as RDefId, rustc_middle::ty};
 
 pub type Symbol = String;
 
@@ -72,10 +72,29 @@ pub enum MacroKind {
     Derive,
 }
 
+/// The id of a promoted MIR constant.
+///
+/// Reflects [`rustc_middle::mir::Promoted`].
+#[derive_group(Serializers)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[cfg_attr(not(feature = "extract_names_mode"), derive(JsonSchema, AdtInto))]
+#[cfg_attr(not(feature = "extract_names_mode"), args(<S>, from: rustc_middle::mir::Promoted, state: S as _s))]
+pub struct PromotedId {
+    #[cfg_attr(not(feature = "extract_names_mode"), value(self.as_u32()))]
+    pub id: u32,
+}
+
+#[cfg(feature = "rustc")]
+impl PromotedId {
+    pub fn as_rust_promoted_id(&self) -> rustc_middle::mir::Promoted {
+        rustc_middle::mir::Promoted::from_u32(self.id)
+    }
+}
+
 /// Reflects [`rustc_hir::def::DefKind`]
 #[derive_group(Serializers)]
 #[cfg_attr(not(feature = "extract_names_mode"), derive(JsonSchema, AdtInto))]
-#[cfg_attr(not(feature = "extract_names_mode"),args(<S>, from: rustc_hir::def::DefKind, state: S as tcx))]
+#[cfg_attr(not(feature = "extract_names_mode"), args(<S>, from: rustc_hir::def::DefKind, state: S as tcx))]
 #[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub enum DefKind {
     Mod,
@@ -106,6 +125,9 @@ pub enum DefKind {
     ForeignMod,
     AnonConst,
     InlineConst,
+    #[cfg_attr(not(feature = "extract_names_mode"), disable_mapping)]
+    /// Added by hax: promoted constants don't have def_ids in rustc but they do in hax.
+    PromotedConst,
     OpaqueTy,
     Field,
     LifetimeParam,
@@ -117,7 +139,8 @@ pub enum DefKind {
     SyntheticCoroutineBody,
 }
 
-/// Reflects [`rustc_hir::def_id::DefId`]
+/// Reflects [`rustc_hir::def_id::DefId`], augmented to also give ids to promoted constants (which
+/// have their own ad-hoc numbering scheme in rustc for now).
 #[derive_group(Serializers)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(not(feature = "extract_names_mode"), derive(JsonSchema))]
@@ -132,15 +155,14 @@ pub struct DefIdContents {
     pub krate: String,
     pub path: Vec<DisambiguatedDefPathItem>,
     pub parent: Option<DefId>,
-    /// Rustc's `CrateNum` and `DefIndex` raw indexes. This can be
-    /// useful if one needs to convert a [`DefId`] into a
-    /// [`rustc_hir::def_id::DefId`]; there is a `From` instance for
-    /// that purpose.
+    /// Stores rustc's `CrateNum`, `DefIndex` and `Promoted` raw indices. This can be useful if one
+    /// needs to convert a [`DefId`] into a [`rustc_hir::def_id::DefId`]. If the promoted id is
+    /// `Some`, then this `DefId` indicates the nth promoted constant associated with the item,
+    /// which doesn't have a real `rustc::DefId`.
     ///
-    /// **Warning: this `index` field might not be safe to use**. They are
-    /// valid only for one Rustc sesssion. Please do not rely on those
-    /// indexes unless you cannot do otherwise.
-    pub index: (u32, u32),
+    /// **Warning: this `index` field might not be safe to use**. They are valid only for one Rustc
+    /// sesssion. Please do not rely on those indices unless you cannot do otherwise.
+    pub index: (u32, u32, Option<PromotedId>),
     pub is_local: bool,
 
     /// The kind of definition this `DefId` points to.
@@ -148,13 +170,36 @@ pub struct DefIdContents {
 }
 
 #[cfg(feature = "rustc")]
+impl DefIdContents {
+    pub fn make_def_id<'tcx, S: BaseState<'tcx>>(self, s: &S) -> DefId {
+        let contents =
+            s.with_global_cache(|cache| id_table::Node::new(self, &mut cache.id_table_session));
+        DefId { contents }
+    }
+}
+
+#[cfg(feature = "rustc")]
 impl DefId {
-    pub fn to_rust_def_id(&self) -> RDefId {
-        let (krate, index) = self.index;
+    /// The rustc def_id corresponding to this item, if there is one. Promoted constants don't have
+    /// a rustc def_id.
+    pub fn as_rust_def_id(&self) -> Option<RDefId> {
+        let (_, _, promoted) = self.index;
+        match promoted {
+            None => Some(self.underlying_rust_def_id()),
+            Some(_) => None,
+        }
+    }
+    /// The def_id of this item or its parent if this is a promoted constant.
+    pub fn underlying_rust_def_id(&self) -> RDefId {
+        let (krate, index, _) = self.index;
         RDefId {
             krate: rustc_hir::def_id::CrateNum::from_u32(krate),
             index: rustc_hir::def_id::DefIndex::from_u32(index),
         }
+    }
+    pub fn promoted_id(&self) -> Option<PromotedId> {
+        let (_, _, promoted) = self.index;
+        promoted
     }
 
     /// Iterate over this element and its parents.
@@ -173,6 +218,31 @@ impl DefId {
                     name: self.krate.clone(),
                 },
             })
+    }
+
+    /// Construct a hax `DefId` for the nth promoted constant of the current item. That `DefId` has
+    /// no corresponding rustc `DefId`.
+    pub fn make_promoted_child<'tcx, S: BaseState<'tcx>>(
+        &self,
+        s: &S,
+        promoted_id: PromotedId,
+    ) -> Self {
+        let mut path = self.path.clone();
+        path.push(DisambiguatedDefPathItem {
+            data: DefPathItem::PromotedConst,
+            // Reuse the promoted id as disambiguator, like for inline consts.
+            disambiguator: promoted_id.id,
+        });
+        let (krate, index, _) = self.index;
+        let contents = DefIdContents {
+            krate: self.krate.clone(),
+            path,
+            parent: Some(self.clone()),
+            is_local: self.is_local,
+            index: (krate, index, Some(promoted_id)),
+            kind: DefKind::PromotedConst,
+        };
+        contents.make_def_id(s)
     }
 }
 
@@ -197,7 +267,11 @@ impl std::fmt::Debug for DefId {
 impl std::fmt::Debug for DefId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use the more legible rustc debug implementation.
-        write!(f, "{:?}", rustc_span::def_id::DefId::from(self))
+        write!(f, "{:?}", self.underlying_rust_def_id())?;
+        if let Some(promoted) = self.promoted_id() {
+            write!(f, "::promoted#{}", promoted.id)?;
+        }
+        Ok(())
     }
 }
 
@@ -208,6 +282,18 @@ impl std::hash::Hash for DefId {
         self.krate.hash(state);
         self.path.hash(state);
     }
+}
+
+/// Gets the kind of the definition. Can't use `def_kind` directly because this crashes on the
+/// crate root.
+#[cfg(feature = "rustc")]
+pub(crate) fn get_def_kind<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> hir::def::DefKind {
+    if def_id == rustc_span::def_id::CRATE_DEF_ID.to_def_id() {
+        // Horrible hack: without this, `def_kind` crashes on the crate root. Presumably some table
+        // isn't properly initialized otherwise.
+        let _ = tcx.def_span(def_id);
+    };
+    tcx.def_kind(def_id)
 }
 
 #[cfg(feature = "rustc")]
@@ -229,13 +315,12 @@ pub(crate) fn translate_def_id<'tcx, S: BaseState<'tcx>>(s: &S, def_id: RDefId) 
         index: (
             rustc_hir::def_id::CrateNum::as_u32(def_id.krate),
             rustc_hir::def_id::DefIndex::as_u32(def_id.index),
+            None,
         ),
         is_local: def_id.is_local(),
-        kind: tcx.def_kind(def_id).sinto(s),
+        kind: get_def_kind(tcx, def_id).sinto(s),
     };
-    let contents =
-        s.with_global_cache(|cache| id_table::Node::new(contents, &mut cache.id_table_session));
-    DefId { contents }
+    contents.make_def_id(s)
 }
 
 #[cfg(all(not(feature = "extract_names_mode"), feature = "rustc"))]
@@ -247,21 +332,6 @@ impl<'s, S: BaseState<'s>> SInto<S, DefId> for RDefId {
         let def_id = translate_def_id(s, *self);
         s.with_item_cache(*self, |cache| cache.def_id = Some(def_id.clone()));
         def_id
-    }
-}
-
-#[cfg(feature = "rustc")]
-impl From<&DefId> for RDefId {
-    fn from<'tcx>(def_id: &DefId) -> Self {
-        def_id.to_rust_def_id()
-    }
-}
-
-// Impl to be able to use hax's `DefId` for many rustc queries.
-#[cfg(feature = "rustc")]
-impl rustc_middle::query::IntoQueryParam<RDefId> for &DefId {
-    fn into_query_param(self) -> RDefId {
-        self.into()
     }
 }
 
@@ -315,6 +385,8 @@ pub enum DefPathItem {
     Closure,
     Ctor,
     AnonConst,
+    #[cfg_attr(not(feature = "extract_names_mode"), disable_mapping)]
+    PromotedConst,
     OpaqueTy,
 }
 

@@ -63,13 +63,44 @@ pub fn fstar_options(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenS
 /// `coq`...) are in scope.
 #[proc_macro]
 pub fn loop_invariant(predicate: pm::TokenStream) -> pm::TokenStream {
+    let predicate2: TokenStream = predicate.clone().into();
+    let predicate_expr: syn::Expr = parse_macro_input!(predicate);
+
+    let (invariant_f, predicate) = match predicate_expr {
+        syn::Expr::Closure(_) => (quote!(hax_lib::_internal_loop_invariant), predicate2),
+        _ => (
+            quote!(hax_lib::_internal_while_loop_invariant),
+            quote!(::hax_lib::Prop::from(#predicate2)),
+        ),
+    };
+    let ts: pm::TokenStream = quote! {
+        #[cfg(#HaxCfgOptionName)]
+        {
+            #invariant_f({
+                #HaxQuantifiers
+                #predicate
+            })
+        }
+    }
+    .into();
+    ts
+}
+
+/// Must be used to prove termination of while loops. This takes an
+/// expression that should be a usize that decreases at every iteration
+///
+/// This function must be called just after `loop_invariant`, or at the first
+/// line of the loop if there is no invariant.
+#[proc_macro]
+pub fn loop_decreases(predicate: pm::TokenStream) -> pm::TokenStream {
     let predicate: TokenStream = predicate.into();
     let ts: pm::TokenStream = quote! {
         #[cfg(#HaxCfgOptionName)]
         {
-            hax_lib::_internal_loop_invariant({
+            hax_lib::_internal_loop_decreases({
                 #HaxQuantifiers
-                #predicate
+                use ::hax_lib::int::ToInt;
+                (#predicate).to_int()
             })
         }
     }

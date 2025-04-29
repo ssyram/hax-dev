@@ -9,7 +9,7 @@ pub struct Prop(bool);
 /// Hax rewrite more elaborated versions (see `forall` or `AndBit` below) to those monomorphic constructors.
 pub mod constructors {
     use super::Prop;
-    pub fn from_bool(b: bool) -> Prop {
+    pub const fn from_bool(b: bool) -> Prop {
         Prop(b)
     }
     pub fn and(lhs: Prop, other: Prop) -> Prop {
@@ -46,7 +46,7 @@ pub mod constructors {
 
 impl Prop {
     /// Lifts a boolean to a logical proposition.
-    pub fn from_bool(b: bool) -> Self {
+    pub const fn from_bool(b: bool) -> Self {
         constructors::from_bool(b)
     }
     /// Conjuction of two propositions.

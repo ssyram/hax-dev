@@ -513,7 +513,8 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
           else Some (Int64.to_string disambiguator)
 
     (** Renders one chunk *)
-    let rec render_chunk ~namespace (chunk : View.RelPath.Chunk.t) : NameAst.t =
+    let render_chunk ~namespace ~final (chunk : View.RelPath.Chunk.t) :
+        NameAst.t =
       let prefix ?(global = false) ?(disable_when = []) s contents =
         NameAst.Policy
           ( {
@@ -525,7 +526,11 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       in
       let prefix_d s d = prefix s (NameAst.UnsafeString (Int64.to_string d)) in
       let dstr s = NameAst.UnsafeString (render_disambiguated s) in
-      let _render_chunk = render_chunk ~namespace in
+      let render_impl_name ?(always = false) disambiguator impl_infos =
+        match impl_name ~namespace ~always disambiguator impl_infos with
+        | Some name -> prefix "impl" (UnsafeString name)
+        | None -> TrustedString "impl"
+      in
       match chunk with
       | `AnonConst d ->
           prefix ~global:true ~disable_when:[ `SameCase ] "anon_const"
@@ -535,19 +540,22 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       | `GlobalAsm d -> prefix_d "global_asm" d
       | `Opaque d -> prefix_d "opaque" d
       (* The name of a trait impl *)
-      | `Impl (d, _, impl_infos) -> (
-          match impl_name ~namespace d impl_infos with
-          | Some name -> prefix "impl" (UnsafeString name)
-          | None -> TrustedString "impl")
+      | `Impl (d, _, impl_infos) -> render_impl_name d impl_infos
       (* Print the name of an associated item in a inherent impl *)
       | `AssociatedItem
           ((`Type n | `Const n | `Fn n), `Impl (d, `Inherent, impl_infos)) ->
-          let impl =
-            match impl_name ~always:true ~namespace d impl_infos with
-            | Some name -> prefix "impl" (UnsafeString name)
-            | None -> TrustedString "impl"
-          in
+          let impl = render_impl_name ~always:true d impl_infos in
           Concat (impl, dstr n)
+      (* Print the name of an item defined inside an associated item of a trait impl *)
+      (* `Impl of
+         'disambiguator
+         * [ `Inherent | `Trait ]
+         * Types.impl_infos option*)
+      | `AssociatedItem
+          ((`Type n | `Const n | `Fn n), `Impl (d, `Trait, impl_infos))
+        when not final ->
+          Concat
+            (prefix "f" (dstr n), render_impl_name ~always:true d impl_infos)
       (* Print the name of an associated item in a trait impl *)
       | `AssociatedItem
           ((`Type n | `Const n | `Fn n), (`Trait _ | `Impl (_, `Trait, _))) ->
@@ -611,8 +619,12 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
           prefix "t" (dstr n)
 
     let render_name ~namespace (rel_path : View.RelPath.t) =
+      let l = List.length rel_path in
       let rel_path =
-        List.map ~f:(render_chunk ~namespace) rel_path |> NameAst.concat_list
+        List.mapi
+          ~f:(fun i -> render_chunk ~final:(i = l - 1) ~namespace)
+          rel_path
+        |> NameAst.concat_list
       in
       NameAst.render rel_path
 

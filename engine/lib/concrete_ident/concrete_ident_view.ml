@@ -128,12 +128,12 @@ let rec poly :
           (match List.last_exn (Explicit_def_id.to_def_id did).path with
           | { data = GlobalAsm; disambiguator } -> into_d did disambiguator
           | _ -> broken_invariant "last path chunk to be GlobalAsm" did)
-    | TyParam | ConstParam | InlineConst | LifetimeParam | Closure
-    | SyntheticCoroutineBody ->
+    | TyParam | ConstParam | InlineConst | PromotedConst | LifetimeParam
+    | Closure | SyntheticCoroutineBody ->
         (* It should be impossible for such items to ever be referenced by anyting in hax. *)
         broken_invariant
-          "non (TyParam | ConstParam | InlineConst | LifetimeParam | Closure | \
-           SyntheticCoroutineBody) identifier"
+          "non (TyParam | ConstParam | InlineConst | PromotedConst | \
+           LifetimeParam | Closure | SyntheticCoroutineBody) identifier"
           did
   in
   result

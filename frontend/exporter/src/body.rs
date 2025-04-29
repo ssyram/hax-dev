@@ -123,6 +123,14 @@ mod module {
 
     pub trait IsBody: Sized + Clone + 'static {
         fn body<'tcx, S: UnderOwnerState<'tcx>>(did: RLocalDefId, s: &S) -> Self;
+
+        /// Reuse a MIR body we already got. Panic if that's impossible.
+        fn from_mir<'tcx, S: UnderOwnerState<'tcx>>(
+            _s: &S,
+            _body: rustc_middle::mir::Body<'tcx>,
+        ) -> Self {
+            panic!("Can't convert MIR to the requested body type")
+        }
     }
 
     pub fn make_fn_def<'tcx, Body: IsBody, S: UnderOwnerState<'tcx>>(
@@ -160,6 +168,12 @@ mod module {
         use super::*;
         impl IsBody for () {
             fn body<'tcx, S: UnderOwnerState<'tcx>>(_did: RLocalDefId, _s: &S) -> Self {}
+            fn from_mir<'tcx, S: UnderOwnerState<'tcx>>(
+                _s: &S,
+                _body: rustc_middle::mir::Body<'tcx>,
+            ) -> Self {
+                ()
+            }
         }
         impl IsBody for ThirBody {
             fn body<'tcx, S: UnderOwnerState<'tcx>>(did: RLocalDefId, s: &S) -> Self {
@@ -198,6 +212,20 @@ mod module {
                     ))
                 });
                 mir.s_unwrap(s)
+            }
+            fn from_mir<'tcx, S: UnderOwnerState<'tcx>>(
+                s: &S,
+                body: rustc_middle::mir::Body<'tcx>,
+            ) -> Self {
+                let body = Rc::new(body.clone());
+                let s = &State {
+                    base: s.base(),
+                    owner_id: s.owner_id(),
+                    mir: body.clone(),
+                    binder: (),
+                    thir: (),
+                };
+                body.sinto(s)
             }
         }
     }

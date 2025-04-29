@@ -647,6 +647,13 @@ pub struct TyGenerics {
     pub has_late_bound_regions: Option<Span>,
 }
 
+#[cfg(feature = "rustc")]
+impl TyGenerics {
+    pub(crate) fn count_total_params(&self) -> usize {
+        self.parent_count + self.params.len()
+    }
+}
+
 /// This type merges the information from
 /// `rustc_type_ir::AliasKind` and `ty::AliasTy`
 #[derive_group(Serializers)]
