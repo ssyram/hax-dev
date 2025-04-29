@@ -33,6 +33,7 @@ pub enum ConstantLiteral {
 #[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConstantExprKind {
     Literal(ConstantLiteral),
+    // Adts (structs, enums, unions) or closures.
     Adt {
         info: VariantInformations,
         fields: Vec<ConstantFieldExpr>,
