@@ -349,13 +349,8 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
 ) -> (DefId, Vec<GenericArg>, Vec<ImplExpr>, Option<ImplExpr>) {
     let tcx = s.base().tcx;
 
-    // Retrieve the trait requirements for the **method**.
-    // For instance, if we write:
-    // ```
-    // fn foo<T : Bar>(...)
-    //            ^^^
-    // ```
-    let mut trait_refs = solve_item_required_traits(s, def_id, generics);
+    // Retrieve the trait requirements for the item.
+    let trait_refs = solve_item_required_traits(s, def_id, generics);
 
     // Check if this is a trait method call: retrieve the trait source if
     // it is the case (i.e., where does the method come from? Does it refer
@@ -428,17 +423,7 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
                 let method_generics = &generics[num_container_generics..];
                 (method_generics.sinto(s), Some(impl_expr))
             }
-            rustc_middle::ty::AssocItemContainer::Impl => {
-                // Solve the trait constraints of the impl block.
-                let container_generics = tcx.generics_of(container_def_id);
-                let container_generics = generics.truncate_to(tcx, container_generics);
-                // Prepend the container trait refs.
-                let mut combined_trait_refs =
-                    solve_item_required_traits(s, container_def_id, container_generics);
-                combined_trait_refs.extend(std::mem::take(&mut trait_refs));
-                trait_refs = combined_trait_refs;
-                (generics.sinto(s), None)
-            }
+            rustc_middle::ty::AssocItemContainer::Impl => (generics.sinto(s), None),
         }
     } else {
         // Regular function call
@@ -965,7 +950,8 @@ pub enum AggregateKind {
             generics.sinto(s),
             trait_refs,
             annot.sinto(s),
-            fid.sinto(s))
+            fid.sinto(s),
+        )
     })]
     Adt(
         DefId,

@@ -185,10 +185,10 @@ pub fn solve_trait<'tcx, S: BaseState<'tcx> + HasOwnerId>(
 }
 
 /// Solve the trait obligations for a specific item use (for example, a method call, an ADT, etc.)
-/// in the current context.
+/// in the current context. Does _not_ include impl exprs for parent items.
 #[cfg(feature = "rustc")]
 #[tracing::instrument(level = "trace", skip(s), ret)]
-pub fn solve_item_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
+pub fn solve_item_required_traits_no_parents<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     def_id: RDefId,
     generics: ty::GenericArgsRef<'tcx>,
@@ -200,7 +200,7 @@ pub fn solve_item_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
 /// Like `solve_item_required_traits`, but also includes predicates coming from the parent items.
 #[cfg(feature = "rustc")]
 #[tracing::instrument(level = "trace", skip(s), ret)]
-pub fn solve_item_and_parents_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
+pub fn solve_item_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     def_id: RDefId,
     generics: ty::GenericArgsRef<'tcx>,
@@ -220,7 +220,7 @@ pub fn solve_item_and_parents_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
             }
             _ => {}
         }
-        impl_exprs.extend(solve_item_required_traits(s, def_id, generics));
+        impl_exprs.extend(solve_item_required_traits_no_parents(s, def_id, generics));
     }
     let mut impl_exprs = vec![];
     accumulate(s, def_id, generics, &mut impl_exprs);

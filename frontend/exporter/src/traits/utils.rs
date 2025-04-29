@@ -76,9 +76,6 @@ pub fn required_predicates<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> GenericPre
         | TraitAlias
         | TyAlias
         | Union => predicates_defined_on(tcx, def_id),
-        // The tuple struct/variant constructor functions inherit the generics and predicates from
-        // their parents.
-        Variant | Ctor(..) => return required_predicates(tcx, tcx.parent(def_id)),
         // We consider all predicates on traits to be outputs
         Trait => Default::default(),
         // `predicates_defined_on` ICEs on other def kinds.
