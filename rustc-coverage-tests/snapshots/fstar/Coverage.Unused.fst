@@ -8,6 +8,12 @@ let foo (#v_T: Type0) (x: v_T) : (i32 & Prims.unit) =
   Rust_primitives.Hax.while_loop (fun i ->
         let i:i32 = i in
         i <. mk_i32 10 <: bool)
+    (fun i ->
+        let i:i32 = i in
+        true)
+    (fun i ->
+        let i:i32 = i in
+        Rust_primitives.Hax.Int.from_machine (mk_u32 0) <: Hax_lib.Int.t_Int)
     i
     (fun i ->
         let i:i32 = i in
@@ -23,6 +29,12 @@ let unused_template_func (#v_T: Type0) (x: v_T) : (i32 & Prims.unit) =
   Rust_primitives.Hax.while_loop (fun i ->
         let i:i32 = i in
         i <. mk_i32 10 <: bool)
+    (fun i ->
+        let i:i32 = i in
+        true)
+    (fun i ->
+        let i:i32 = i in
+        Rust_primitives.Hax.Int.from_machine (mk_u32 0) <: Hax_lib.Int.t_Int)
     i
     (fun i ->
         let i:i32 = i in
