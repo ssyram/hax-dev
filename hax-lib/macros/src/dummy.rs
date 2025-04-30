@@ -47,6 +47,7 @@ identity_proc_macro_attribute!(
     coq_after,
     proverif_after,
     fstar_smt_pat,
+    fstar_postprocess_with,
 );
 
 #[proc_macro]
