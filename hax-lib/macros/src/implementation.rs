@@ -156,6 +156,24 @@ pub fn fstar_verification_status(attr: pm::TokenStream, item: pm::TokenStream) -
     .into()
 }
 
+/// Postprocess an item with a given tactic. This macro takes the tactic in
+/// parameter: this may be a Rust identifier or a raw snippet of F* code as a
+/// string literal.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn fstar_postprocess_with(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+    let item: TokenStream = item.into();
+    let payload: String = if let Ok(s) = syn::parse::<LitStr>(attr.clone()) {
+        s.value()
+    } else {
+        let e = parse_macro_input!(attr as Expr);
+        format!(" ${{ {} }} ", e.to_token_stream())
+    };
+    let payload = format!("[@@FStar.Tactics.postprocess_with ({payload})]");
+    let payload: Lit = Lit::Str(syn::LitStr::new(&payload, Span::call_site()));
+    quote! {#[::hax_lib::fstar::before(#payload)] #item}.into()
+}
+
 /// Include this item in the Hax translation.
 #[proc_macro_error]
 #[proc_macro_attribute]
