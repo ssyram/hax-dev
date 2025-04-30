@@ -669,6 +669,13 @@ class t_Foo (v_Self: Type0) = {
         (fun result -> f_assoc_type_post #i2 x0 result)
 }
 
+let f (#v_T: Type0) (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: t_Foo v_T) (x: v_T) : Prims.unit =
+  let _:Prims.unit = f_assoc_f #v_T #FStar.Tactics.Typeclasses.solve () in
+  f_method_f #v_T #FStar.Tactics.Typeclasses.solve x
+
+let g (#v_T: Type0) (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: t_Foo v_T) (x: i1.f_AssocType)
+    : u32 = f_function_of_super_trait #i1.f_AssocType #FStar.Tactics.Typeclasses.solve x
+
 class t_Lang (v_Self: Type0) = {
   f_Var:Type0;
   f_s_pre:v_Self -> i32 -> Type0;
@@ -676,13 +683,6 @@ class t_Lang (v_Self: Type0) = {
   f_s:x0: v_Self -> x1: i32
     -> Prims.Pure (v_Self & f_Var) (f_s_pre x0 x1) (fun result -> f_s_post x0 x1 result)
 }
-
-let f (#v_T: Type0) (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: t_Foo v_T) (x: v_T) : Prims.unit =
-  let _:Prims.unit = f_assoc_f #v_T #FStar.Tactics.Typeclasses.solve () in
-  f_method_f #v_T #FStar.Tactics.Typeclasses.solve x
-
-let g (#v_T: Type0) (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: t_Foo v_T) (x: i1.f_AssocType)
-    : u32 = f_function_of_super_trait #i1.f_AssocType #FStar.Tactics.Typeclasses.solve x
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 let impl_Foo_for_tuple_: t_Foo Prims.unit =

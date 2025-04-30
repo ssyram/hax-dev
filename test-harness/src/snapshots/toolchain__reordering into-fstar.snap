@@ -46,11 +46,11 @@ module Reordering.Mut_rec
 open Core
 open FStar.Mul
 
+let ff_2_ (_: Prims.unit) : Prims.unit = f ()
+
 let rec g (_: Prims.unit) : Prims.unit = f ()
 
 and f (_: Prims.unit) : Prims.unit = g ()
-
-let ff_2_ (_: Prims.unit) : Prims.unit = f ()
 '''
 "Reordering.fst" = '''
 module Reordering

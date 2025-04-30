@@ -33,7 +33,7 @@ From Crypt Require Import choice_type Package Prelude.
 Import PackageNotation.
 From extructures Require Import ord fset.
 From mathcomp Require Import word_ssrZ word.
-From Jasmin Require Import word.
+(* From Jasmin Require Import word. *)
 
 From Coq Require Import ZArith.
 From Coq Require Import Strings.String.
@@ -51,30 +51,34 @@ From Hacspec Require Import Hacspec_Lib.
 Open Scope hacspec_scope.
 Import choice.Choice.Exports.
 
+From RecordUpdate Require Import RecordUpdate.
+
+Import RecordSetNotations.
+
 Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.
 
 (*Not implemented yet? todo(item)*)
 
-Equations let_else {L1 : {fset Location}} {I1 : Interface} (opt : both L1 I1 (t_Option int32)) : both L1 I1 'bool :=
+Equations let_else (opt : both (t_Option int32)) : both 'bool :=
   let_else opt  :=
-    solve_lift (run (matchb opt with
+    run (matchb opt with
     | Option_Some_case x =>
       letb x := ret_both ((x) : (int32)) in
-      ControlFlow_Continue (solve_lift (ret_both (true : 'bool)))
+      ControlFlow_Continue (ret_both (true : 'bool))
     | _ =>
-      ControlFlow_Break (solve_lift (ret_both (false : 'bool)))
-    end)) : both L1 I1 'bool.
+      ControlFlow_Break (ret_both (false : 'bool))
+    end) : both 'bool.
 Fail Next Obligation.
 
-Equations let_else_different_type {L1 : {fset Location}} {I1 : Interface} (opt : both L1 I1 (t_Option int32)) : both L1 I1 'bool :=
+Equations let_else_different_type (opt : both (t_Option int32)) : both 'bool :=
   let_else_different_type opt  :=
-    solve_lift (run (letm[choice_typeMonad.result_bind_code 'bool] hoist1 := matchb opt with
+    run (letm[choice_typeMonad.result_bind_code 'bool] hoist1 := matchb opt with
     | Option_Some_case x =>
       letb x := ret_both ((x) : (int32)) in
-      ControlFlow_Continue (Option_Some (solve_lift (x .+ (ret_both (1 : int32)))))
+      ControlFlow_Continue (Option_Some (x .+ (ret_both (1 : int32))))
     | _ =>
-      ControlFlow_Break (solve_lift (ret_both (false : 'bool)))
+      ControlFlow_Break (ret_both (false : 'bool))
     end in
-    ControlFlow_Continue (let_else hoist1))) : both L1 I1 'bool.
+    ControlFlow_Continue (let_else hoist1)) : both 'bool.
 Fail Next Obligation.
 '''
