@@ -12,25 +12,25 @@ let
   commonArgs = import ../commonArgs.nix {inherit craneLib lib;};
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 in
-  craneLib.mkCargoDerivation (commonArgs
-    // {
+  craneLib.mkCargoDerivation (commonArgs // {
       inherit cargoArtifacts;
       pname = "coverage";
       doCheck = false;
       buildPhaseCargoCommand = ''
-        cd examples/coverage
+        cd examples/coverage/
         cargo hax into coq
-
-        cd proofs/coq/extraction
-        echo -e "-R ${coqGeneratedCore}/lib/coq/user-contrib/Core Core\n$(cat _CoqProject)" > _CoqProject
-        coq_makefile -f _CoqProject -o Makefile
-        make
+	cd proofs/coq/extraction/
+	echo -e "-R ${coqGeneratedCore}/lib/coq/user-contrib/Core Core\n$(cat _CoqProject)" > _CoqProject
+	coq_makefile -f _CoqProject -o Makefile
+	make
+	cd ../../../../../
       '';
+      cargoToml = ./Cargo.toml;
       buildInputs = [
         hax
         coqPackages.coq-record-update
         coqPackages.coq
-        gnused
+        # gnused
       ];
     })
 

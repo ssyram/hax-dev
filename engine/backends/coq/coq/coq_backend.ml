@@ -93,8 +93,12 @@ module CoqNamePolicy = struct
 
   let named_field_prefix = Some `TypeName
   let struct_constructor_prefix = Some "Build_t_"
-  let enum_constructor_prefix = None
-  let union_constructor_prefix = None
+  let enum_constructor_prefix = Some "AABBCC"
+  let union_constructor_prefix = Some "DDEEFF"
+  let prefix__constructors_with_type = true
+  let prefix_struct_constructors_with_type = true
+  let prefix_enum_constructors_with_type = true
+  let prefix_union_constructors_with_type = true
 end
 
 module AST = Ast.Make (InputLanguage)
@@ -267,14 +271,24 @@ struct
         match witness with _ -> .
 
       method expr'_App_application ~super:_ ~f ~args ~generics:_ =
+        (* !^"con_f_App_TODO" ^^ *)
         f#p ^^ concat_map_with ~pre:space (fun x -> parens x#p) args
 
-      method expr'_App_constant ~super:_ ~constant ~generics:_ = constant#p
+      method expr'_App_constant ~super:_ ~constant ~generics:_ =
+        !^"con_f_Constant_TODO" ^^ constant#p
 
       method expr'_App_field_projection ~super:_ ~field ~e =
-        field#p ^^ space ^^ e#p
+        !^"constructor_App_field_projection_" ^^ field#p ^^ space ^^ e#p
 
       method expr'_App_tuple_projection ~super:_ ~size ~nth ~e =
+        !^"constructor_App_tuple_projection_"
+        ^^
+        (* (match e#v.e with *)
+        (*  | Construct { constructor; is_record; is_struct; fields; base } -> *)
+        (*    (match constructor with *)
+        (*    | `Concrete cid -> !^((RenderId.render cid).name) *)
+        (*    | _ -> !^"TODO") *)
+        (*  | _ -> empty) ^^ *)
         let size =
           match e#v.e with
           | Construct { constructor; is_record; is_struct; fields; base } ->
@@ -310,34 +324,34 @@ struct
 
       method expr'_Construct_inductive ~super:_ ~constructor ~is_record
           ~is_struct ~fields ~base =
-        let fields_or_empty add_space =
-          if List.is_empty fields then empty
-          else
-            add_space ^^ separate_map space (fun x -> parens (snd x)#p) fields
-        in
-        if is_record && is_struct then
-          match base with
-          | Some x ->
-              (* Update fields *)
-              x#p
-              ^^ concat_map_with ~pre:space
-                   (fun x ->
-                     string "<|" ^^ (fst x)#p ^^ space ^^ !^":=" ^^ space
-                     ^^ (snd x)#p ^^ space ^^ string "|>")
-                   fields
-          | None -> constructor#p ^^ fields_or_empty space
-        else if not is_record then
-          if is_struct then constructor#p ^^ fields_or_empty space
-          else constructor#p ^^ fields_or_empty space
-        else
-          constructor#p ^^ space ^^ string "{|" ^^ space
-          ^^ separate_map (semi ^^ space)
-               (fun (ident, exp) ->
-                 ident#p ^^ space ^^ string ":=" ^^ space ^^ parens exp#p)
-               fields
-          ^^ space ^^ string "|}"
+        match (is_record, is_struct, base, fields) with
+        | true, true, Some x, _ ->
+            x#p
+            ^^ concat_map_with ~pre:space
+                 (fun x ->
+                   string "<|" ^^ constructor#p ^^ (fst x)#p ^^ space ^^ !^":="
+                   ^^ space ^^ (snd x)#p ^^ space ^^ string "|>")
+                 fields
+        | true, true, None, [] | false, true, _, [] | false, false, _, [] ->
+            empty ^^ !^"Build_" ^^ constructor#p ^^ !^"_record"
+        | true, true, None, _ | false, true, _, _ | false, false, _, _ ->
+            space ^^ !^"{|" ^^ space
+            ^^ separate_map !^";"
+                 (fun x ->
+                   constructor#p ^^ !^"_" ^^ (fst x)#p ^^ space ^^ !^":="
+                   ^^ space ^^ (snd x)#p)
+                 fields
+            ^^ space ^^ !^"|}"
+        | _ ->
+            constructor#p ^^ space ^^ string "{|" ^^ space
+            ^^ separate_map (semi ^^ space)
+                 (fun (ident, exp) ->
+                   ident#p ^^ space ^^ string ":=" ^^ space ^^ parens exp#p)
+                 fields
+            ^^ space ^^ string "|}"
 
       method expr'_Construct_tuple ~super:_ ~components =
+        (* !^"constructor_expr_Construct_tuple_" ^^ *)
         if List.length components == 0 then !^"tt"
         else parens (separate_map comma (fun x -> x#p) components)
 
@@ -347,7 +361,10 @@ struct
       method expr'_EffectAction ~super:_ ~action:_ ~argument:_ =
         default_document_for "expr'_EffectAction"
 
-      method expr'_GlobalVar_concrete ~super:_ x2 = x2#p
+      method expr'_GlobalVar_concrete ~super:_ x2 =
+        (* TODO: prefix here? *)
+        !^"Build_" ^^ x2#p ^^ !^"_record"
+
       method expr'_GlobalVar_primitive ~super:_ x2 = self#primitive_to_string x2
 
       method expr'_If ~super:_ ~cond ~then_ ~else_ =
@@ -518,8 +535,8 @@ struct
         in
         let get_fn_of kind f : document option =
           Attrs.associated_fn kind super.attrs
-          |> Option.map ~f:(fun (g,p,x) -> f
-                               (g, List.hd_exn (List.rev p), self#entrypoint_expr x))
+          |> Option.map ~f:(fun (g, p, x) ->
+                 f (g, List.hd_exn (List.rev p), self#entrypoint_expr x))
         in
         let requires =
           get_expr_of Requires (fun x ->
@@ -530,10 +547,16 @@ struct
               x ^^ space ^^ string "=" ^^ space ^^ string "true")
         in
         let ensures_fn =
-          get_fn_of Ensures (fun (g,p,x) ->
-              string "let" ^^ space ^^ self#entrypoint_pat p.pat ^^ space ^^ string ":=" ^^ space ^^ string "@" ^^ name#p ^^ space ^^ concat_map_with (fun x -> x) params ^^ (Option.value ~default:empty (Option.map ~f:(fun r -> space ^^ string "H_requires") requires)) ^^ space ^^ string "in" ^^ break 1
-              ^^ x ^^ space ^^ string "=" ^^ space ^^ string "true"
-            )
+          get_fn_of Ensures (fun (g, p, x) ->
+              string "let" ^^ space ^^ self#entrypoint_pat p.pat ^^ space
+              ^^ string ":=" ^^ space ^^ string "@" ^^ name#p ^^ space
+              ^^ concat_map_with (fun x -> x) params
+              ^^ Option.value ~default:empty
+                   (Option.map
+                      ~f:(fun r -> space ^^ string "H_requires")
+                      requires)
+              ^^ space ^^ string "in" ^^ break 1 ^^ x ^^ space ^^ string "="
+              ^^ space ^^ string "true")
         in
         let is_lemma = Attrs.lemma super.attrs in
         if is_lemma then
@@ -547,28 +570,42 @@ struct
             @ Option.value ~default:[]
                 (Option.map ~f:(fun x -> [ string "`" ^^ braces x ]) requires))
             typ#p body#p
-          ^^
-          Option.value ~default:empty (
-            Option.map ~f:(fun ensure ->
-                break 1 ^^
-                CoqNotation.lemma (name#p ^^ string "_" ^^ string "ensures") generics#p params
-                  (Option.value ~default:empty (Option.map ~f:(fun r -> string "forall (H_requires : " ^^ r ^^ string ")," ^^ break 1) requires)
-                   ^^ ensure
-                  )) ensures_fn)
+          ^^ Option.value ~default:empty
+               (Option.map
+                  ~f:(fun ensure ->
+                    break 1
+                    ^^ CoqNotation.lemma
+                         (name#p ^^ string "_" ^^ string "ensures")
+                         generics#p params
+                         (Option.value ~default:empty
+                            (Option.map
+                               ~f:(fun r ->
+                                 string "forall (H_requires : "
+                                 ^^ r ^^ string ")," ^^ break 1)
+                               requires)
+                         ^^ ensure))
+                  ensures_fn)
         else
           CoqNotation.definition name#p generics#p
             (params
             @ Option.value ~default:[]
                 (Option.map ~f:(fun x -> [ string "`" ^^ braces x ]) requires))
             typ#p body#p
-          ^^
-          Option.value ~default:empty (
-            Option.map ~f:(fun ensure ->
-                break 1 ^^
-                CoqNotation.lemma (name#p ^^ string "_" ^^ string "ensures") generics#p params
-                  (Option.value ~default:empty (Option.map ~f:(fun r -> string "forall (H_requires : " ^^ r ^^ string ")," ^^ break 1) requires)
-                   ^^ ensure
-                  )) ensures_fn)
+          ^^ Option.value ~default:empty
+               (Option.map
+                  ~f:(fun ensure ->
+                    break 1
+                    ^^ CoqNotation.lemma
+                         (name#p ^^ string "_" ^^ string "ensures")
+                         generics#p params
+                         (Option.value ~default:empty
+                            (Option.map
+                               ~f:(fun r ->
+                                 string "forall (H_requires : "
+                                 ^^ r ^^ string ")," ^^ break 1)
+                               requires)
+                         ^^ ensure))
+                  ensures_fn)
 
       method item'_HaxError ~super:_ _x2 = default_document_for "item'_HaxError"
 
@@ -582,12 +619,17 @@ struct
         if Attrs.is_erased super.attrs then empty
         else
           CoqNotation.instance
-            (name#p ^^ string "_" ^^ string (Int.to_string ([%hash: item] super)))
+            (name#p ^^ string "_"
+            ^^ string (Int.to_string ([%hash: item] super)))
             generics#p []
             (name#p ^^ concat_map_with ~pre:space (fun x -> parens x#p) args)
             (braces
                (nest 2
-                  (concat_map_with ~pre:(break 1 ^^ string (String.drop_prefix (U.Concrete_ident_view.to_definition_name name#v) 2) ^^ !^"_")
+                  (concat_map_with
+                     ~pre:
+                       (break 1
+                       ^^ string ("implaabbcc_" ^ (RenderId.render name#v).name)
+                       ^^ !^"_")
                      (fun x -> x#p)
                      items)
                ^^ break 1))
@@ -614,8 +656,8 @@ struct
       method item'_TyAlias ~super:_ ~name ~generics:_ ~ty =
         CoqNotation.notation_name name#p ty#p
 
-      method item'_Type_struct ~super:_ ~type_name:name ~constructor_name:_
-          ~generics ~tuple_struct:_ ~arguments =
+      method item'_Type_struct ~super:_ ~type_name:name ~constructor_name
+          ~generics ~tuple_struct ~arguments =
         let arguments_explicity_with_ty =
           List.map ~f:(fun _ -> true) generics#v.params
           @ List.map ~f:(fun _ -> false) generics#v.constraints
@@ -638,8 +680,8 @@ struct
              (nest 2
                 (concat_map
                    (fun (ident, typ, attr) ->
-                     break 1 ^^ ident#p ^^ space ^^ colon ^^ space ^^ typ#p
-                     ^^ semi)
+                     break 1 ^^ constructor_name#p ^^ string "_" ^^ ident#p
+                     ^^ space ^^ colon ^^ space ^^ typ#p ^^ semi)
                    arguments)
              ^^ break 1))
         ^^ break 1
@@ -647,7 +689,9 @@ struct
              arguments_explicity_without_ty (* arguments_explicity_with_ty *)
         ^^ concat_map_with ~pre:(break 1)
              (fun (ident, typ, attr) ->
-               CoqNotation.arguments ident#p arguments_explicity_without_ty)
+               CoqNotation.arguments
+                 (constructor_name#p ^^ !^"_" ^^ ident#p)
+                 arguments_explicity_without_ty)
              arguments
         ^^ break 1 ^^ !^"#[export]" ^^ space
         ^^ (if List.is_empty arguments then empty
@@ -672,14 +716,14 @@ struct
                           generics#v.params)
                 ^^ space ^^ string "<"
                 ^^ separate_map (semi ^^ space)
-                     (fun (ident, typ, attr) -> ident#p)
+                     (fun (ident, typ, attr) ->
+                       constructor_name#p ^^ !^"_" ^^ ident#p)
                      arguments
                 ^^ string ">"))
         ^^
         if tuple_struct then
           break 1
-          ^^ CoqNotation.notation_name
-               (string (String.drop_prefix base_name 2))
+          ^^ CoqNotation.notation_name (string base_name)
                (string "Build_" ^^ name_doc)
         else empty
 
@@ -842,30 +886,34 @@ struct
 
       method pat'_PConstruct_inductive ~super:_ ~constructor ~is_record
           ~is_struct ~fields =
-        if is_record then
-          constructor#p ^^ space
-          ^^ parens
-               (separate_map (comma ^^ space)
-                  (fun field_pat -> (snd field_pat)#p)
-                  fields)
-        else if is_record then
-          (* constructor#p ^^ *)
-          string "{|"
-          ^^ separate_map (semi ^^ space)
-               (fun (ident, exp) ->
-                 ident#p ^^ space ^^ string ":=" ^^ space ^^ parens exp#p)
-               fields
-          ^^ string "|}"
-        else
-          constructor#p
-          ^^ concat_map_with ~pre:space
-               (fun (ident, exp) -> parens exp#p)
-               fields
+        match (is_record, is_struct) with
+        | true, true ->
+            constructor#p ^^ space
+            ^^ parens
+                 (separate_map (comma ^^ space)
+                    (fun field_pat -> (snd field_pat)#p)
+                    fields)
+        | _, true ->
+            (* constructor#p ^^ *)
+            string "{|"
+            ^^ separate_map (semi ^^ space)
+                 (fun (ident, exp) ->
+                   constructor#p ^^ ident#p ^^ space ^^ string ":=" ^^ space
+                   ^^ parens exp#p)
+                 fields
+            ^^ string "|}"
+        | _, false ->
+            constructor#p
+            ^^ concat_map_with ~pre:space
+                 (fun (ident, exp) -> parens exp#p)
+                 fields
 
       method pat'_PConstruct_tuple ~super:_ ~components =
         (* TODO: Only add `'` if you are a top-level pattern *)
         (* string "'" ^^ *)
-        parens (separate_map comma (fun x -> x#p) components)
+        !^"constructor_PConstruct_tuple_"
+        ^^ !^"TODO"
+        ^^ parens (separate_map comma (fun x -> x#p) components)
 
       method pat'_PDeref ~super:_ ~subpat:_ ~witness:_ =
         default_document_for "pat'_PDeref"

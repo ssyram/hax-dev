@@ -557,9 +557,10 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
           Concat
             (prefix "f" (dstr n), render_impl_name ~always:true d impl_infos)
       (* Print the name of an associated item in a trait impl *)
-      | `AssociatedItem
-          ((`Type n | `Const n | `Fn n), (`Trait _ | `Impl (_, `Trait, _))) ->
+      | `AssociatedItem ((`Type n | `Const n | `Fn n), `Impl (_, `Trait, _)) ->
           prefix "f" (dstr n)
+      | `AssociatedItem ((`Type n | `Const n | `Fn n), `Trait (a, _)) ->
+          Concat (dstr a, prefix "f" (dstr n))
       (* The constructor of a struct *)
       | `Constructor (cons, parent) -> (
           let cons = render_disambiguated cons in
