@@ -234,6 +234,16 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
     use std::borrow::Borrow;
     use syn::{spanned::Spanned, GenericArgument, PathArguments, ReturnType};
 
+    fn add_allow_unused_variables_to_args(func: &mut syn::ItemFn) {
+        let attr: syn::Attribute = parse_quote!(#[allow(unused_variables)]);
+
+        for input in &mut func.sig.inputs {
+            if let FnArg::Typed(pat_type) = input {
+                pat_type.attrs.push(attr.clone());
+            }
+        }
+    }
+
     /// Parses a `syn::Type` of the shape `Proof<{FORMULA}>`.
     fn parse_proof_type(r#type: syn::Type) -> Option<syn::Expr> {
         let syn::Type::Path(syn::TypePath {
@@ -280,6 +290,7 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
             );
         }
     }
+    add_allow_unused_variables_to_args(&mut item);
     use AttrPayload::NeverErased;
     quote! { #attr #NeverErased #item }.into()
 }
