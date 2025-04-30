@@ -38,6 +38,14 @@ mod ensures_on_arity_zero_fns {
 #[hax::lemma]
 fn add3_lemma(x: u32) -> Proof<{ x <= 10 || x >= u32_max / 3 || add3(x, x, x) == x * 3 }> {}
 
+fn dummy_function(x: u32) -> u32 {
+    x
+}
+
+#[hax::lemma]
+#[hax::fstar::smt_pat(x)]
+fn apply_dummy_function_lemma(x: u32) -> Proof<{ x == dummy_function(x) }> {}
+
 #[hax::exclude]
 pub fn f<'a, T>(c: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     if c {
