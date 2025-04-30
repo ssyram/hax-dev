@@ -43,11 +43,7 @@ From Core Require Import Core.
 
 
 
-Definition discriminant_EnumWithRepr_ExplicitDiscr1 : t_u16 :=
-  (1 : t_u16).
-
-Definition discriminant_EnumWithRepr_ExplicitDiscr2 : t_u16 :=
-  (5 : t_u16).
+(* NotImplementedYet *)
 
 Inductive t_EnumWithRepr : Type :=
 | EnumWithRepr_ExplicitDiscr1
@@ -60,10 +56,10 @@ Arguments EnumWithRepr_ImplicitDiscrEmptyTuple.
 Arguments EnumWithRepr_ImplicitDiscrEmptyStruct.
 
 Definition anon_const_EnumWithRepr_ExplicitDiscr1__anon_const_0 : t_u16 :=
-  1.
+  (1 : t_u16).
 
 Definition anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0 : t_u16 :=
-  5.
+  (5 : t_u16).
 
 Definition t_EnumWithRepr_cast_to_repr (x : t_EnumWithRepr) : t_u16 :=
   match x with
@@ -72,9 +68,9 @@ Definition t_EnumWithRepr_cast_to_repr (x : t_EnumWithRepr) : t_u16 :=
   | EnumWithRepr_ExplicitDiscr2 =>
     anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0
   | EnumWithRepr_ImplicitDiscrEmptyTuple =>
-    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) (1)
+    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((1 : t_u16))
   | EnumWithRepr_ImplicitDiscrEmptyStruct =>
-    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) (2)
+    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((2 : t_u16))
   end.
 
 Inductive t_ImplicitReprs : Type :=
@@ -87,40 +83,47 @@ Inductive t_ImplicitReprs : Type :=
 | ImplicitReprs_G
 | ImplicitReprs_H
 | ImplicitReprs_I.
-Arguments t_ImplicitReprs:clear implicits.
-Arguments t_ImplicitReprs.
+Arguments ImplicitReprs_A.
+Arguments ImplicitReprs_B.
+Arguments ImplicitReprs_C.
+Arguments ImplicitReprs_D.
+Arguments ImplicitReprs_E.
+Arguments ImplicitReprs_F.
+Arguments ImplicitReprs_G.
+Arguments ImplicitReprs_H.
+Arguments ImplicitReprs_I.
 
 Definition anon_const_ImplicitReprs_E__anon_const_0 : t_u64 :=
-  30.
+  (30 : t_u64).
 
 Definition t_ImplicitReprs_cast_to_repr (x : t_ImplicitReprs) : t_u64 :=
   match x with
   | ImplicitReprs_A =>
-    0
+    (0 : t_u64)
   | ImplicitReprs_B =>
-    1
+    (1 : t_u64)
   | ImplicitReprs_C =>
-    2
+    (2 : t_u64)
   | ImplicitReprs_D =>
-    3
+    (3 : t_u64)
   | ImplicitReprs_E =>
     anon_const_ImplicitReprs_E__anon_const_0
   | ImplicitReprs_F =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) (1)
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((1 : t_u64))
   | ImplicitReprs_G =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) (2)
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((2 : t_u64))
   | ImplicitReprs_H =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) (3)
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((3 : t_u64))
   | ImplicitReprs_I =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) (4)
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((4 : t_u64))
   end.
 
-Definition f (_ : unit) : t_u32 :=
-  let e_x := cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) (0)) in
-  f_add (cast (t_EnumWithRepr_cast_to_repr (EnumWithRepr_ImplicitDiscrEmptyTuple))) (cast (t_EnumWithRepr_cast_to_repr (EnumWithRepr_ImplicitDiscrEmptyStruct))).
+Definition f '(_ : unit) : t_u32 :=
+  let e_x := cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((0 : t_u16))) in
+  f_add (cast (t_EnumWithRepr_cast_to_repr (Build_EnumWithRepr_ImplicitDiscrEmptyTuple_record))) (cast (t_EnumWithRepr_cast_to_repr (Build_EnumWithRepr_ImplicitDiscrEmptyStruct_record))).
 
 Definition f__v_CONST : t_u16 :=
-  cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr1__anon_const_0) (0)).
+  cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr1__anon_const_0) ((0 : t_u16))).
 
 Definition get_repr (x : t_EnumWithRepr) : t_u16 :=
   t_EnumWithRepr_cast_to_repr (x).

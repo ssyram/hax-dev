@@ -20,10 +20,36 @@ info:
     include_flag: ~
     backend_options: ~
 ---
-exit = 0
+exit = 1
+[[stdout.diagnostics]]
+message = """
+(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
+spans = ['Span { lo: Loc { line: 5, col: 4 }, hi: Loc { line: 5, col: 8 }, filename: Real(LocalPath("let-else/src/lib.rs")), rust_span_data: None }']
 
-[stdout]
-diagnostics = []
+[[stdout.diagnostics]]
+message = """
+(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
+spans = ['Span { lo: Loc { line: 4, col: 29 }, hi: Loc { line: 4, col: 41 }, filename: Real(LocalPath("let-else/src/lib.rs")), rust_span_data: None }']
+
+[[stdout.diagnostics]]
+message = """
+(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
+spans = ['Span { lo: Loc { line: 8, col: 57 }, hi: Loc { line: 13, col: 1 }, filename: Real(LocalPath("let-else/src/lib.rs")), rust_span_data: None }']
+
+[[stdout.diagnostics]]
+message = """
+(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
+spans = ['Span { lo: Loc { line: 11, col: 8 }, hi: Loc { line: 11, col: 19 }, filename: Real(LocalPath("let-else/src/lib.rs")), rust_span_data: None }']
+
+[[stdout.diagnostics]]
+message = """
+(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
+spans = ['Span { lo: Loc { line: 10, col: 33 }, hi: Loc { line: 10, col: 45 }, filename: Real(LocalPath("let-else/src/lib.rs")), rust_span_data: None }']
 
 [stdout.files]
 "Let_else.v" = '''
@@ -47,19 +73,24 @@ From Core Require Import Core.
 Definition let_else (opt : t_Option ((t_u32))) : bool :=
   run (match opt with
   | Option_Some (x) =>
-    ControlFlow_Continue ((true : bool))
+    ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
   | _ =>
-    ControlFlow_Break ((false : bool))
+    ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
   end).
 
 Definition let_else_different_type (opt : t_Option ((t_u32))) : bool :=
   run (let hoist1 := match opt with
   | Option_Some (x) =>
-    ControlFlow_Continue (Option_Some (f_add (x) (1)))
+    ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
   | _ =>
-    ControlFlow_Break ((false : bool))
+    ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
   end in
-  ControlFlow_Continue (let_else (hoist1))).
+  ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
+Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))).
 '''
 _CoqProject = '''
 -R ./ TODO

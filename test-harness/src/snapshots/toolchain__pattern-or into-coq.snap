@@ -42,6 +42,7 @@ Import RecordSetNotations.
 From Core Require Import Core.
 
 
+
 (* NotImplementedYet *)
 
 Inductive t_E : Type :=
@@ -69,11 +70,11 @@ Definition nested (x : t_Option ((t_i32))) : t_i32 :=
   match x with
   | Option_Some (1
   | 2) =>
-    1
+    (1 : t_i32)
   | Option_Some (x) =>
     x
   | Option_None =>
-    0
+    (0 : t_i32)
   end.
 
 Definition deep (x : (t_i32*t_Option ((t_i32)))) : t_i32 :=
@@ -92,7 +93,7 @@ Definition equivalent (x : (t_i32*t_Option ((t_i32)))) : t_i32 :=
   | (1,Option_Some (4))
   | (2,Option_Some (3))
   | (2,Option_Some (4)) =>
-    0
+    (0 : t_i32)
   | (x,_) =>
     x
   end.

@@ -560,7 +560,9 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       | `AssociatedItem ((`Type n | `Const n | `Fn n), `Impl (_, `Trait, _)) ->
           prefix "f" (dstr n)
       | `AssociatedItem ((`Type n | `Const n | `Fn n), `Trait (a, _)) ->
-          Concat (dstr a, prefix "f" (dstr n))
+          if NP.prefix_associated_item_trait then
+            Concat (dstr a, prefix "f" (dstr n))
+          else prefix "f" (dstr n)
       (* The constructor of a struct *)
       | `Constructor (cons, parent) -> (
           let cons = render_disambiguated cons in
@@ -676,6 +678,7 @@ module DefaultNamePolicy : NAME_POLICY = struct
   let enum_constructor_prefix = Some "C"
   let union_constructor_prefix = Some "C"
   let named_field_prefix = None
+  let prefix_associated_item_trait = false
 end
 
 module DefaultViewAPI = MakeRenderAPI (DefaultNamePolicy)

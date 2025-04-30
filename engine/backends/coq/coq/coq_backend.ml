@@ -99,6 +99,7 @@ module CoqNamePolicy = struct
   let prefix_struct_constructors_with_type = true
   let prefix_enum_constructors_with_type = true
   let prefix_union_constructors_with_type = true
+  let prefix_associated_item_trait = true
 end
 
 module AST = Ast.Make (InputLanguage)
@@ -275,14 +276,14 @@ struct
         f#p ^^ concat_map_with ~pre:space (fun x -> parens x#p) args
 
       method expr'_App_constant ~super:_ ~constant ~generics:_ =
-        !^"con_f_Constant_TODO" ^^ constant#p
+        (* !^"con_f_Constant_TODO" ^^ *) constant#p
 
       method expr'_App_field_projection ~super:_ ~field ~e =
-        !^"constructor_App_field_projection_" ^^ field#p ^^ space ^^ e#p
+        (* !^"constructor_App_field_projection_" ^^ *) field#p ^^ space ^^ e#p
 
       method expr'_App_tuple_projection ~super:_ ~size ~nth ~e =
-        !^"constructor_App_tuple_projection_"
-        ^^
+        (* !^"constructor_App_tuple_projection_" *)
+        (* ^^ *)
         (* (match e#v.e with *)
         (*  | Construct { constructor; is_record; is_struct; fields; base } -> *)
         (*    (match constructor with *)
@@ -363,7 +364,8 @@ struct
 
       method expr'_GlobalVar_concrete ~super:_ x2 =
         (* TODO: prefix here? *)
-        !^"Build_" ^^ x2#p ^^ !^"_record"
+        (* !^"Build_" ^^ *)
+        x2#p (* ^^ !^"_record" *)
 
       method expr'_GlobalVar_primitive ~super:_ x2 = self#primitive_to_string x2
 
@@ -911,9 +913,7 @@ struct
       method pat'_PConstruct_tuple ~super:_ ~components =
         (* TODO: Only add `'` if you are a top-level pattern *)
         (* string "'" ^^ *)
-        !^"constructor_PConstruct_tuple_"
-        ^^ !^"TODO"
-        ^^ parens (separate_map comma (fun x -> x#p) components)
+        parens (separate_map comma (fun x -> x#p) components)
 
       method pat'_PDeref ~super:_ ~subpat:_ ~witness:_ =
         default_document_for "pat'_PDeref"

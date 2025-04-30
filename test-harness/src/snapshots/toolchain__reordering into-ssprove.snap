@@ -55,6 +55,11 @@ Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.
 
 (*Not implemented yet? todo(item)*)
 
+Equations ff_2_ {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
+  ff_2_ _  :=
+    solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
+Fail Next Obligation.
+
 Equations g {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
   g _  :=
     solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
@@ -63,11 +68,6 @@ Fail Next Obligation.
 Equations f {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
   f _  :=
     solve_lift (g (ret_both (tt : 'unit))) : both L1 I1 'unit.
-Fail Next Obligation.
-
-Equations ff_2_ {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
-  ff_2_ _  :=
-    solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
 Fail Next Obligation.
 
 (*Not implemented yet? todo(item)*)
@@ -180,6 +180,11 @@ Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.
 
 (*Not implemented yet? todo(item)*)
 
+Equations ff_2_ {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
+  ff_2_ _  :=
+    solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
+Fail Next Obligation.
+
 Equations g {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
   g _  :=
     solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
@@ -188,11 +193,6 @@ Fail Next Obligation.
 Equations f {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
   f _  :=
     solve_lift (g (ret_both (tt : 'unit))) : both L1 I1 'unit.
-Fail Next Obligation.
-
-Equations ff_2_ {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
-  ff_2_ _  :=
-    solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
 Fail Next Obligation.
 
 (*Not implemented yet? todo(item)*)
@@ -305,6 +305,11 @@ Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.
 
 (*Not implemented yet? todo(item)*)
 
+Equations ff_2_ {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
+  ff_2_ _  :=
+    solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
+Fail Next Obligation.
+
 Equations g {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
   g _  :=
     solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
@@ -313,11 +318,6 @@ Fail Next Obligation.
 Equations f {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
   f _  :=
     solve_lift (g (ret_both (tt : 'unit))) : both L1 I1 'unit.
-Fail Next Obligation.
-
-Equations ff_2_ {L1 : {fset Location}} {I1 : Interface} (_ : both L1 I1 'unit) : both L1 I1 'unit :=
-  ff_2_ _  :=
-    solve_lift (f (ret_both (tt : 'unit))) : both L1 I1 'unit.
 Fail Next Obligation.
 
 (*Not implemented yet? todo(item)*)
