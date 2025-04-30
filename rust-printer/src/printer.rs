@@ -17,6 +17,7 @@ pub trait Printer {
     fn attribute(&self, attribute: &Attribute) -> Doc;
     fn attributes(&self, attributes: &Attributes) -> Doc;
     fn item(&self, item: &Item) -> Doc;
+    fn arm(&self, arm: &Arm) -> Doc;
     fn expr_kind(&self, expr_kind: &ExprKind) -> Doc;
     fn literal(&self, literal: &Literal) -> Doc;
     fn generic_value(&self, generic_value: &GenericValue) -> Doc;
@@ -97,6 +98,11 @@ impl<P: Printer> ToDoc<P> for Expr {
 impl<P: Printer> ToDoc<P> for Pat {
     fn to_doc(&self, printer: &P) -> Doc {
         printer.pat_kind(self.kind())
+    }
+}
+impl<P: Printer> ToDoc<P> for Arm {
+    fn to_doc(&self, printer: &P) -> Doc {
+        printer.arm(self)
     }
 }
 impl<P: Printer> ToDoc<P> for SpannedTy {
@@ -184,6 +190,9 @@ pub mod rust {
         fn item(&self, item: &Item) -> Doc {
             item.kind.to_doc(self)
         }
+        fn arm(&self, item: &Arm) -> Doc {
+            format!("{} => {}", item.pat.to_doc(self), item.body.to_doc(self))
+        }
         fn expr_kind(&self, expr_kind: &ExprKind) -> Doc {
             match &expr_kind {
                 ExprKind::Let { lhs, rhs, body } => {
@@ -222,7 +231,7 @@ pub mod rust {
                             .join(", ")
                     )
                 }
-                ExprKind::App { head, args } => {
+                ExprKind::App { head, args, .. } => {
                     let args = args
                         .iter()
                         .map(|expr| expr.to_doc(self))
@@ -252,6 +261,14 @@ pub mod rust {
                     )
                 }
                 ExprKind::Error(_) => "<expression error>".to_string(),
+                ExprKind::Match { scrutinee, arms } => format!(
+                    "match scrutinee {{ {} }}",
+                    arms.iter()
+                        .map(|arm| arm.to_doc(self))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                _ => unimplemented!(),
             }
         }
         fn literal(&self, lit: &Literal) -> Doc {

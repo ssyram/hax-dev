@@ -17,6 +17,7 @@ pub mod node;
 pub mod span;
 
 pub use diagnostics::Diagnostic;
+use hax_frontend_exporter::ImplExpr;
 pub use identifiers::*;
 pub use literals::*;
 pub use node::Node;
@@ -104,6 +105,28 @@ pub struct Pat {
     pub meta: Metadata,
 }
 
+/// A pattern matching arm with metadata.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Arm {
+    /// The pattern of the arm.
+    pub pat: Pat,
+    /// The body of the arm.
+    pub body: Expr,
+    /// The optional guard of the arm.
+    pub guard: Option<Guard>,
+    /// Source span and attributes.
+    pub meta: Metadata,
+}
+
+/// A pattern matching arm guard with metadata.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Guard {
+    /// The kind of guard.
+    pub kind: GuardKind,
+    /// Source span and attributes.
+    pub meta: Metadata,
+}
+
 /// Represents different levels of borrowing.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum BorrowKind {
@@ -145,6 +168,13 @@ pub enum PatKind {
     Error(Diagnostic),
 }
 
+/// Represents the various kinds of patterns.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum GuardKind {
+    /// An `if let` guard
+    IfLet { lhs: Pat, rhs: Expr },
+}
+
 /// Describes the shape of an expression.
 // TODO: Kill some nodes (e.g. `Array`, `Tuple`)?
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -160,7 +190,13 @@ pub enum ExprKind {
     /// Function application.
     /// Example: `f(x, y)`
     // TODO: generics, traits
-    App { head: Expr, args: Vec<Expr> },
+    App {
+        head: Expr,
+        args: Vec<Expr>,
+        generic_args: Vec<GenericValue>,
+        bounds_impls: Vec<ImplExpr>,
+        trait_: Option<(ImplExpr, Vec<GenericValue>)>,
+    },
 
     /// A literal value.
     /// Example: `42`, `"hello"`
@@ -170,6 +206,21 @@ pub enum ExprKind {
     /// Example: `[1, 2, 3]`
     Array(Vec<Expr>),
 
+    /// A constructor application
+    /// Example: A(x)
+    Construct {
+        constructor: GlobalId,
+        is_record: bool,
+        is_struct: bool,
+        fields: Vec<(GlobalId, Expr)>,
+        base: Option<(ImplExpr, Vec<GenericValue>)>,
+    },
+
+    Match {
+        scrutinee: Expr,
+        arms: Vec<Arm>,
+    },
+
     /// A tuple literal.
     /// Example: `(a, b)`
     Tuple(Vec<Expr>),
@@ -178,14 +229,21 @@ pub enum ExprKind {
     /// Examples:
     /// - `&x` → `mutable: false`
     /// - `&mut x` → `mutable: true`
-    Borrow { mutable: bool, inner: Expr },
+    Borrow {
+        mutable: bool,
+        inner: Expr,
+    },
 
     /// A dereference: `*x`
     Deref(Expr),
 
     /// A `let` expression used in expressions.
     /// Example: `let x = 1; x + 1`
-    Let { lhs: Pat, rhs: Expr, body: Expr },
+    Let {
+        lhs: Pat,
+        rhs: Expr,
+        body: Expr,
+    },
 
     /// A global identifier.
     /// Example: `std::mem::drop`

@@ -2,9 +2,11 @@
 //!
 //! It handles fallbacks for unsupported constructs by emitting `Diagnostic` errors.
 
-use crate::ast as dst;
 use crate::ast::diagnostics::*;
-use hax_frontend_exporter as src;
+use crate::ast::{self as dst, GenericValue};
+use hax_frontend_exporter::{
+    self as src, ConstantExprKind, ConstantInt, ConstantLiteral, Decorated, GenericArg,
+};
 
 use hax_frontend_exporter::ThirBody as Body;
 
@@ -87,20 +89,69 @@ fn translate_param(param: &src::Param, span: dst::Span) -> Result<dst::Param, Di
         attributes: vec![],
     })
 }
+fn translate_generic_arg(generic_arg: &GenericArg, span: dst::Span) -> GenericValue {
+    match generic_arg {
+        GenericArg::Lifetime(region) => unimplemented!(),
+        GenericArg::Type(ty) => GenericValue::Ty(translate_ty(ty, span)),
+        GenericArg::Const(c_expr) => GenericValue::Expr(translate_constant_expr(c_expr)),
+    }
+}
+fn translate_generic_args(generic_args: &Vec<GenericArg>, span: dst::Span) -> Vec<GenericValue> {
+    generic_args
+        .iter()
+        .map(|generic_arg| translate_generic_arg(generic_arg, span))
+        .collect()
+}
+fn translate_int_literal(ty: &dst::Ty, value: u128, negative: bool) -> dst::Literal {
+    match ty {
+        dst::Ty::Primitive(dst::PrimitiveTy::Int(kind)) => dst::Literal::Int {
+            value,
+            negative,
+            kind: kind.clone(),
+        },
+        _ => unimplemented!(),
+    }
+}
+fn translate_constant_expr(c_expr: &Decorated<ConstantExprKind>) -> dst::Expr {
+    let span = (&c_expr.span).into();
+    let ty = translate_ty(&c_expr.ty, span);
+    let kind = match c_expr.contents.as_ref() {
+        ConstantExprKind::Literal(lit) => dst::ExprKind::Literal(match lit {
+            ConstantLiteral::Bool(bool) => dst::Literal::Bool(*bool),
+            ConstantLiteral::Int(ConstantInt::Int(value, _)) => {
+                translate_int_literal(&ty, i128::abs(*value) as u128, *value < 0)
+            }
+            ConstantLiteral::Int(ConstantInt::Uint(value, _)) => {
+                translate_int_literal(&ty, *value, false)
+            }
+            _ => unimplemented!(),
+        }),
+        ConstantExprKind::Adt { info, fields } => unimplemented!(),
+        ConstantExprKind::Array { fields } => unimplemented!(),
+        ConstantExprKind::Tuple { fields } => unimplemented!(),
+        ConstantExprKind::GlobalName {
+            id,
+            generics,
+            trait_refs,
+        } => unimplemented!(),
+        _ => unimplemented!(),
+    };
+    dst::Expr {
+        kind: Box::new(kind),
+        ty,
+        meta: dst::Metadata {
+            span,
+            attrs: vec![],
+        },
+    }
+}
 fn translate_expr(expr: &src::Expr) -> dst::Expr {
     let span = (&expr.span).into();
     let ty = translate_ty(&expr.ty, span);
     let kind = match expr.contents.as_ref() {
         src::ExprKind::Literal { lit, neg } => dst::ExprKind::Literal(match lit.node {
             src::LitKind::Bool(bool) => dst::Literal::Bool(bool),
-            src::LitKind::Int(value, _) => match &ty {
-                dst::Ty::Primitive(dst::PrimitiveTy::Int(kind)) => dst::Literal::Int {
-                    value,
-                    negative: *neg,
-                    kind: kind.clone(),
-                },
-                _ => unimplemented!(),
-            },
+            src::LitKind::Int(value, _) => translate_int_literal(&ty, value, *neg),
             _ => unimplemented!(),
         }),
         src::ExprKind::Index { lhs, index } => {
@@ -113,17 +164,41 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
                 },
             };
             let args = vec![translate_expr(lhs), translate_expr(index)];
-            dst::ExprKind::App { head, args }
+            dst::ExprKind::App {
+                head,
+                args,
+                generic_args: Vec::new(),
+                bounds_impls: Vec::new(),
+                trait_: None,
+            }
         }
         src::ExprKind::GlobalName { id, .. } => dst::ExprKind::GlobalId(id.clone().into()),
         src::ExprKind::PointerCoercion { source, .. } => return translate_expr(source),
         src::ExprKind::Array { fields } => {
             dst::ExprKind::Array(fields.iter().map(translate_expr).collect())
         }
-        src::ExprKind::Call { fun, args, .. } => {
+        src::ExprKind::Call {
+            fun,
+            args,
+            generic_args,
+            bounds_impls,
+            r#trait,
+            ..
+        } => {
             let head = translate_expr(fun);
             let args = args.iter().map(translate_expr).collect::<Vec<_>>();
-            dst::ExprKind::App { head, args }
+            let generic_args = translate_generic_args(generic_args, span);
+
+            let trait_ = r#trait.as_ref().map(|(impl_expr, g_args)| {
+                (impl_expr.clone(), translate_generic_args(&g_args, span))
+            });
+            dst::ExprKind::App {
+                head,
+                args,
+                generic_args,
+                bounds_impls: bounds_impls.clone(),
+                trait_,
+            }
         }
         src::ExprKind::Borrow {
             borrow_kind: src::BorrowKind::Shared,
@@ -219,7 +294,11 @@ pub fn translate_item_kind(
     span: dst::Span,
 ) -> dst::ItemKind {
     match item_kind {
-        src::ItemKind::Fn(_generics, fn_def) => {
+        src::ItemKind::Fn {
+            ident,
+            generics,
+            def: fn_def,
+        } => {
             let params = fn_def
                 .params
                 .iter()
