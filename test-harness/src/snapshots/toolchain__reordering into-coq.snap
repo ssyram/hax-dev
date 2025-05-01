@@ -124,14 +124,14 @@ From Core Require Import Core.
 
 (* NotImplementedYet *)
 
-Definition ff_2_ '(_ : unit) : unit :=
-  f (tt).
-
 Definition g '(_ : unit) : unit :=
   f (tt).
 
 Definition f '(_ : unit) : unit :=
   g (tt).
+
+Definition ff_2_ '(_ : unit) : unit :=
+  f (tt).
 '''
 _CoqProject = '''
 -R ./ TODO
