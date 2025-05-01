@@ -98,13 +98,8 @@
 
           check-toolchain = checks.toolchain;
           check-examples = checks.examples;
+	  check-coq-coverage = checks.coverage;
           check-readme-coherency = checks.readme-coherency;
-
-          coq-coverage-example = pkgs.callPackage ./examples/coverage {
-            inherit (packages) hax;
-            inherit (pkgs) coqPackages;
-            inherit craneLib;
-          };
 
           rust-by-example-hax-extraction = pkgs.stdenv.mkDerivation {
             name = "rust-by-example-hax-extraction";
@@ -130,9 +125,13 @@
         checks = {
           toolchain = packages.hax.tests;
           examples = pkgs.callPackage ./examples {
-            inherit (packages) hax;
-            inherit craneLib fstar hacl-star hax-env;
-          };
+              inherit (packages) hax;
+              inherit craneLib fstar hacl-star hax-env;
+            };
+	  coverage = pkgs.callPackage ./examples/coverage {
+              inherit (packages) hax;
+              inherit craneLib fstar hacl-star hax-env;
+            };
           readme-coherency =
             let src = pkgs.lib.sourceFilesBySuffices ./. [ ".md" ];
             in pkgs.stdenv.mkDerivation {

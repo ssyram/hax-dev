@@ -99,7 +99,7 @@ module CoqNamePolicy = struct
   let prefix_struct_constructors_with_type = true
   let prefix_enum_constructors_with_type = true
   let prefix_union_constructors_with_type = true
-  let prefix_associated_item_trait = true
+  let prefix_associated_item_with_trait_name = true
 end
 
 module AST = Ast.Make (InputLanguage)

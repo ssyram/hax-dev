@@ -19,7 +19,7 @@ module type NAME_POLICY = sig
   val struct_constructor_prefix : string option
   val enum_constructor_prefix : string option
   val union_constructor_prefix : string option
-  val prefix_associated_item_trait : bool
+  val prefix_associated_item_with_trait_name : bool
 end
 
 module Make (T : sig

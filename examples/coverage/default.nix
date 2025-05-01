@@ -3,7 +3,6 @@
   lib,
   hax,
   coqPackages,
-  gnused,
   craneLib,
   bat,
   coqGeneratedCore ? import ../../proof-libs/coq/coq {inherit stdenv coqPackages;},
@@ -17,20 +16,20 @@ in
       pname = "coverage";
       doCheck = false;
       buildPhaseCargoCommand = ''
-        cd examples/coverage/
-        cargo hax into coq
-	cd proofs/coq/extraction/
-	echo -e "-R ${coqGeneratedCore}/lib/coq/user-contrib/Core Core\n$(cat _CoqProject)" > _CoqProject
-	coq_makefile -f _CoqProject -o Makefile
-	make
-	cd ../../../../../
+        (
+	  cd examples/coverage/
+          cargo hax into coq
+	  cd proofs/coq/extraction/
+	  echo -e "-R ${coqGeneratedCore}/lib/coq/user-contrib/Core Core\n$(cat _CoqProject)" > _CoqProject
+	  coq_makefile -f _CoqProject -o Makefile
+	  make
+	)
       '';
       cargoToml = ./Cargo.toml;
       buildInputs = [
         hax
         coqPackages.coq-record-update
         coqPackages.coq
-        # gnused
       ];
     })
 
