@@ -864,10 +864,11 @@ struct
     | GlobalVar global_ident -> SSP.AST.Var (pglobal_ident global_ident)
     | App
         {
-          f = { e = GlobalVar (`Projector (`TupleField _)); _ };
+          f = { e = GlobalVar (`Projector (`TupleField (i, j))); _ };
           args = [ _ ];
           _;
         } ->
+      (* SSP.AST.App (SSP.AST.Var (Int.to_string i), [ SSP.AST.Var (Int.to_string j) ]) *)
         __TODO_term__ span "app global vcar projector tuple"
     | App
         {
