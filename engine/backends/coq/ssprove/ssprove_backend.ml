@@ -868,7 +868,7 @@ struct
           args = [ _ ];
           _;
         } ->
-      (* SSP.AST.App (SSP.AST.Var (Int.to_string i), [ SSP.AST.Var (Int.to_string j) ]) *)
+        (* SSP.AST.App (SSP.AST.Var (Int.to_string i), [ SSP.AST.Var (Int.to_string j) ]) *)
         __TODO_term__ span "app global vcar projector tuple"
     | App
         {
