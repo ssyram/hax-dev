@@ -56,10 +56,10 @@ Arguments EnumWithRepr_ImplicitDiscrEmptyTuple.
 Arguments EnumWithRepr_ImplicitDiscrEmptyStruct.
 
 Definition anon_const_EnumWithRepr_ExplicitDiscr1__anon_const_0 : t_u16 :=
-  (1 : TODO _do_not).
+  (1 : t_u16).
 
 Definition anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0 : t_u16 :=
-  (5 : TODO _do_not).
+  (5 : t_u16).
 
 Definition t_EnumWithRepr_cast_to_repr (x : t_EnumWithRepr) : t_u16 :=
   match x with
@@ -68,9 +68,9 @@ Definition t_EnumWithRepr_cast_to_repr (x : t_EnumWithRepr) : t_u16 :=
   | EnumWithRepr_ExplicitDiscr2 =>
     anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0
   | EnumWithRepr_ImplicitDiscrEmptyTuple =>
-    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((1 : TODO _do_not))
+    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((1 : t_u16))
   | EnumWithRepr_ImplicitDiscrEmptyStruct =>
-    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((2 : TODO _do_not))
+    f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((2 : t_u16))
   end.
 
 Inductive t_ImplicitReprs : Type :=
@@ -94,36 +94,36 @@ Arguments ImplicitReprs_H.
 Arguments ImplicitReprs_I.
 
 Definition anon_const_ImplicitReprs_E__anon_const_0 : t_u64 :=
-  (30 : TODO _do_not).
+  (30 : t_u64).
 
 Definition t_ImplicitReprs_cast_to_repr (x : t_ImplicitReprs) : t_u64 :=
   match x with
   | ImplicitReprs_A =>
-    (0 : TODO _do_not)
+    (0 : t_u64)
   | ImplicitReprs_B =>
-    (1 : TODO _do_not)
+    (1 : t_u64)
   | ImplicitReprs_C =>
-    (2 : TODO _do_not)
+    (2 : t_u64)
   | ImplicitReprs_D =>
-    (3 : TODO _do_not)
+    (3 : t_u64)
   | ImplicitReprs_E =>
     anon_const_ImplicitReprs_E__anon_const_0
   | ImplicitReprs_F =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((1 : TODO _do_not))
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((1 : t_u64))
   | ImplicitReprs_G =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((2 : TODO _do_not))
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((2 : t_u64))
   | ImplicitReprs_H =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((3 : TODO _do_not))
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((3 : t_u64))
   | ImplicitReprs_I =>
-    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((4 : TODO _do_not))
+    f_add (anon_const_ImplicitReprs_E__anon_const_0) ((4 : t_u64))
   end.
 
 Definition f '(_ : unit) : t_u32 :=
-  let e_x := cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((0 : TODO _do_not))) in
+  let e_x := cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr2__anon_const_0) ((0 : t_u16))) in
   f_add (cast (t_EnumWithRepr_cast_to_repr (Build_EnumWithRepr_ImplicitDiscrEmptyTuple_record))) (cast (t_EnumWithRepr_cast_to_repr (Build_EnumWithRepr_ImplicitDiscrEmptyStruct_record))).
 
 Definition f__v_CONST : t_u16 :=
-  cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr1__anon_const_0) ((0 : TODO _do_not))).
+  cast (f_add (anon_const_EnumWithRepr_ExplicitDiscr1__anon_const_0) ((0 : t_u16))).
 
 Definition get_repr (x : t_EnumWithRepr) : t_u16 :=
   t_EnumWithRepr_cast_to_repr (x).

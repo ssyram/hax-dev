@@ -48,9 +48,9 @@ From Core Require Import Core.
 From Literals Require Import hax_lib.
 Export hax_lib.
 
-Definition math_integers (x : t_Int) `{andb (f_gt (x) (impl_Int__e_unsafe_from_str (("0"%string : TODO _do_not)))) (f_lt (x) (impl_Int__e_unsafe_from_str (("16"%string : TODO _do_not)))) = true} : t_u8 :=
-  let _ : t_Int := f_lift ((3 : TODO _do_not)) in
-  let _ := f_gt (impl_Int__e_unsafe_from_str (("-340282366920938463463374607431768211455000"%string : TODO _do_not))) (impl_Int__e_unsafe_from_str (("340282366920938463463374607431768211455000"%string : TODO _do_not))) in
+Definition math_integers (x : t_Int) `{andb (f_gt (x) (impl_Int__e_unsafe_from_str (("0"%string : string)))) (f_lt (x) (impl_Int__e_unsafe_from_str (("16"%string : string)))) = true} : t_u8 :=
+  let _ : t_Int := f_lift ((3 : t_usize)) in
+  let _ := f_gt (impl_Int__e_unsafe_from_str (("-340282366920938463463374607431768211455000"%string : string))) (impl_Int__e_unsafe_from_str (("340282366920938463463374607431768211455000"%string : string))) in
   let _ := f_lt (x) (x) in
   let _ := f_ge (x) (x) in
   let _ := f_le (x) (x) in
@@ -73,7 +73,7 @@ Definition math_integers (x : t_Int) `{andb (f_gt (x) (impl_Int__e_unsafe_from_s
   impl_Int__to_u8 (f_add (x) (f_mul (x) (x))).
 
 Definition panic_with_msg '(_ : unit) : unit :=
-  never_to_any (panic_fmt (impl_4__new_const ([("with msg"%string : TODO _do_not)]))).
+  never_to_any (panic_fmt (impl_4__new_const ([("with msg"%string : string)]))).
 
 Record Foo_record : Type :=
   {
@@ -91,30 +91,30 @@ Arguments Foo_f_field.
 
 
 Definition v_CONSTANT : t_Foo :=
-   {| Foo_f_field := (3 : TODO _do_not) |}.
+   {| Foo_f_field := (3 : t_u8) |}.
 
 Definition numeric '(_ : unit) : unit :=
-  let _ : t_usize := (123 : TODO _do_not) in
-  let _ : t_isize := (-42 : TODO _do_not) in
-  let _ : t_isize := (42 : TODO _do_not) in
-  let _ : t_i32 := (-42 : TODO _do_not) in
-  let _ : t_u128 := (22222222222222222222 : TODO _do_not) in
+  let _ : t_usize := (123 : t_usize) in
+  let _ : t_isize := (-42 : t_isize) in
+  let _ : t_isize := (42 : t_isize) in
+  let _ : t_i32 := (-42 : t_i32) in
+  let _ : t_u128 := (22222222222222222222 : t_u128) in
   tt.
 
 Definition patterns '(_ : unit) : unit :=
-  let _ := match (1 : TODO _do_not) with
+  let _ := match (1 : t_u8) with
   | 2 =>
     tt
   | _ =>
     tt
   end in
-  let _ := match (("hello"%string : TODO _do_not),((123 : TODO _do_not),[("a"%string : TODO _do_not); ("b"%string : TODO _do_not)])) with
+  let _ := match (("hello"%string : string),((123 : t_i32),[("a"%string : string); ("b"%string : string)])) with
   | ("hello"%string,(123,e_todo)) =>
     tt
   | _ =>
     tt
   end in
-  let _ := match  {| Foo_f_field := (4 : TODO _do_not) |} with
+  let _ := match  {| Foo_f_field := (4 : t_u8) |} with
   | Foo (3) =>
     tt
   | _ =>
@@ -143,7 +143,7 @@ Definition fn_pointer_cast '(_ : unit) : unit :=
   tt.
 
 Definition null : ascii :=
-  ("\000"%char : TODO _do_not).
+  ("\000"%char : ascii).
 '''
 _CoqProject = '''
 -R ./ TODO

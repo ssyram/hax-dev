@@ -70,14 +70,14 @@ Arguments Bar_0.
 Notation "'Bar_Bar_record'" := Build_Bar_record.
 
 Definition g '(_ : unit) : t_Bar :=
-   {| Bar_0 := f ((32 : TODO _do_not)) |}.
+   {| Bar_0 := f ((32 : t_u32)) |}.
 
 Definition t_Foo_cast_to_repr (x : t_Foo) : t_isize :=
   match x with
   | Foo_A =>
-    (0 : TODO _do_not)
+    (0 : t_isize)
   | Foo_B =>
-    (1 : TODO _do_not)
+    (1 : t_isize)
   end.
 '''
 "Reordering_Independent_cycles.v" = '''

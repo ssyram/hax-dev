@@ -46,16 +46,16 @@ From Core Require Import Core.
 (* NotImplementedYet *)
 
 Definition v_VERSION : t_Slice t_u8 :=
-  unsize ([(118 : TODO _do_not); (49 : TODO _do_not)]).
+  unsize ([(118 : t_u8); (49 : t_u8)]).
 
 Definition do_something '(_ : t_Slice t_u8) : unit :=
   tt.
 
-Definition r#unsized '(_ : t_Array (t_Slice t_u8) ((1 : TODO _do_not))) : unit :=
+Definition r#unsized '(_ : t_Array (t_Slice t_u8) ((1 : t_usize))) : unit :=
   tt.
 
-Definition sized (x : t_Array (t_Array (t_u8) ((4 : TODO _do_not))) ((1 : TODO _do_not))) : unit :=
-  r#unsized ([unsize (f_index (x) ((0 : TODO _do_not)))]).
+Definition sized (x : t_Array (t_Array (t_u8) ((4 : t_usize))) ((1 : t_usize))) : unit :=
+  r#unsized ([unsize (f_index (x) ((0 : t_usize)))]).
 '''
 _CoqProject = '''
 -R ./ TODO

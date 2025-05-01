@@ -272,14 +272,12 @@ struct
         match witness with _ -> .
 
       method expr'_App_application ~super:_ ~f ~args ~generics:_ =
-        (* !^"con_f_App_TODO" ^^ *)
         f#p ^^ concat_map_with ~pre:space (fun x -> parens x#p) args
 
-      method expr'_App_constant ~super:_ ~constant ~generics:_ =
-        (* !^"con_f_Constant_TODO" ^^ *) constant#p
+      method expr'_App_constant ~super:_ ~constant ~generics:_ = constant#p
 
       method expr'_App_field_projection ~super:_ ~field ~e =
-        (* !^"constructor_App_field_projection_" ^^ *) field#p ^^ space ^^ e#p
+        field#p ^^ space ^^ e#p
 
       method expr'_App_tuple_projection ~super:_ ~size ~nth ~e =
         (* !^"constructor_App_tuple_projection_" *)
@@ -352,7 +350,6 @@ struct
             ^^ space ^^ string "|}"
 
       method expr'_Construct_tuple ~super:_ ~components =
-        (* !^"constructor_expr_Construct_tuple_" ^^ *)
         if List.length components == 0 then !^"tt"
         else parens (separate_map comma (fun x -> x#p) components)
 
@@ -385,9 +382,8 @@ struct
       method expr'_Literal ~super x2 =
         parens
           (x2#p ^^ space ^^ colon ^^ space
-          ^^ !^"TODO _do_not"
-             (* (self#_do_not_override_lazy_of_ty AstPos_expr'_Literal_x0 super.typ)#p *)
-          )
+         ^^ (self#_do_not_override_lazy_of_ty AstPos_expr'_Literal_x0 super.typ)
+              #p)
 
       method expr'_LocalVar ~super:_ x2 = x2#p
 
@@ -509,7 +505,6 @@ struct
             name#v
         in
         let typ =
-          (* !^"TODO_do_not" *)
           (self#_do_not_override_lazy_of_ty AstPos_item'_Fn_body body#v.typ)#p
         in
 
@@ -573,7 +568,7 @@ struct
             (params
             @ Option.value ~default:[]
                 (Option.map ~f:(fun x -> [ string "`" ^^ braces x ]) requires))
-            typ (* typ#p *) body#p
+            typ body#p
           ^^ Option.value ~default:empty
                (Option.map
                   ~f:(fun ensure ->
@@ -594,7 +589,7 @@ struct
             (params
             @ Option.value ~default:[]
                 (Option.map ~f:(fun x -> [ string "`" ^^ braces x ]) requires))
-            typ (* typ#p *) body#p
+            typ body#p
           ^^ Option.value ~default:empty
                (Option.map
                   ~f:(fun ensure ->
@@ -712,7 +707,6 @@ struct
                             match x with
                             | { ident; _ } ->
                                 let idx =
-                                  (* !^"TODO_do_not" *)
                                   (self#_do_not_override_lazy_of_local_ident
                                      AstPos_item'_Type_generics ident)
                                     #p
@@ -740,7 +734,6 @@ struct
           @ List.map ~f:(fun _ -> false) generics#v.constraints
         in
 
-        (* !^"TODO" *)
         concat_map_with ~post:(break 1)
           (fun x ->
             self#item'_Type_struct ~super

@@ -1,5 +1,5 @@
 // https://doc.rust-lang.org/reference/types.html
-// mod test_primitives;
+mod test_primitives;
 // mod test_sequence;
 
 // mod test_enum;

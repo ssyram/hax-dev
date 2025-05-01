@@ -17,13 +17,13 @@ in
       doCheck = false;
       buildPhaseCargoCommand = ''
         (
-	  cd examples/coverage/
+          cd examples/coverage/
           cargo hax into coq
-	  cd proofs/coq/extraction/
-	  echo -e "-R ${coqGeneratedCore}/lib/coq/user-contrib/Core Core\n$(cat _CoqProject)" > _CoqProject
-	  coq_makefile -f _CoqProject -o Makefile
-	  make
-	)
+          cd proofs/coq/extraction/
+          echo -e "-R ${coqGeneratedCore}/lib/coq/user-contrib/Core Core\n$(cat _CoqProject)" > _CoqProject
+          coq_makefile -f _CoqProject -o Makefile
+          make
+        )
       '';
       cargoToml = ./Cargo.toml;
       buildInputs = [
@@ -32,6 +32,3 @@ in
         coqPackages.coq
       ];
     })
-
-
-    # COQLIB
