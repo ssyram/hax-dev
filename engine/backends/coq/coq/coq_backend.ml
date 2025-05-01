@@ -385,8 +385,9 @@ struct
       method expr'_Literal ~super x2 =
         parens
           (x2#p ^^ space ^^ colon ^^ space
-         ^^ (self#_do_not_override_lazy_of_ty AstPos_expr'_Literal_x0 super.typ)
-              #p)
+          ^^ !^"TODO _do_not"
+             (* (self#_do_not_override_lazy_of_ty AstPos_expr'_Literal_x0 super.typ)#p *)
+          )
 
       method expr'_LocalVar ~super:_ x2 = x2#p
 
@@ -508,7 +509,8 @@ struct
             name#v
         in
         let typ =
-          self#_do_not_override_lazy_of_ty AstPos_item'_Fn_body body#v.typ
+          (* !^"TODO_do_not" *)
+          (self#_do_not_override_lazy_of_ty AstPos_item'_Fn_body body#v.typ)#p
         in
 
         let params =
@@ -571,7 +573,7 @@ struct
             (params
             @ Option.value ~default:[]
                 (Option.map ~f:(fun x -> [ string "`" ^^ braces x ]) requires))
-            typ#p body#p
+            typ (* typ#p *) body#p
           ^^ Option.value ~default:empty
                (Option.map
                   ~f:(fun ensure ->
@@ -592,7 +594,7 @@ struct
             (params
             @ Option.value ~default:[]
                 (Option.map ~f:(fun x -> [ string "`" ^^ braces x ]) requires))
-            typ#p body#p
+            typ (* typ#p *) body#p
           ^^ Option.value ~default:empty
                (Option.map
                   ~f:(fun ensure ->
@@ -710,6 +712,7 @@ struct
                             match x with
                             | { ident; _ } ->
                                 let idx =
+                                  (* !^"TODO_do_not" *)
                                   (self#_do_not_override_lazy_of_local_ident
                                      AstPos_item'_Type_generics ident)
                                     #p
@@ -737,6 +740,7 @@ struct
           @ List.map ~f:(fun _ -> false) generics#v.constraints
         in
 
+        (* !^"TODO" *)
         concat_map_with ~post:(break 1)
           (fun x ->
             self#item'_Type_struct ~super
@@ -785,6 +789,7 @@ struct
                    #p
                  arguments_explicity_without_ty)
              variants
+
       (* ^^ break 1 ^^ !^"Arguments" ^^ space ^^ name#p ^^ colon *)
       (* ^^ !^"clear implicits" ^^ dot ^^ break 1 ^^ !^"Arguments" ^^ space *)
       (* ^^ name#p *)

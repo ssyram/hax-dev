@@ -20,30 +20,10 @@ info:
     include_flag: ~
     backend_options: ~
 ---
-exit = 1
-[[stdout.diagnostics]]
-message = """
-(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
-spans = ['Span { lo: Loc { line: 7, col: 19 }, hi: Loc { line: 7, col: 32 }, filename: Real(LocalPath("guards/src/lib.rs")), rust_span_data: None }']
+exit = 0
 
-[[stdout.diagnostics]]
-message = """
-(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
-spans = ['Span { lo: Loc { line: 36, col: 19 }, hi: Loc { line: 36, col: 32 }, filename: Real(LocalPath("guards/src/lib.rs")), rust_span_data: None }']
-
-[[stdout.diagnostics]]
-message = """
-(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
-spans = ['Span { lo: Loc { line: 35, col: 23 }, hi: Loc { line: 35, col: 48 }, filename: Real(LocalPath("guards/src/lib.rs")), rust_span_data: None }']
-
-[[stdout.diagnostics]]
-message = """
-(Coq printer generic printer) Fatal error: something we considered as impossible occurred! \u001B[1mPlease report this by submitting an issue on GitHub!\u001B[0m
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))]"""
-spans = ['Span { lo: Loc { line: 44, col: 19 }, hi: Loc { line: 44, col: 24 }, filename: Real(LocalPath("guards/src/lib.rs")), rust_span_data: None }']
+[stdout]
+diagnostics = []
 
 [stdout.files]
 "Guards.v" = '''
@@ -67,14 +47,13 @@ From Core Require Import Core.
 Definition if_let_guard (x : t_Option ((t_Result ((t_i32)) ((t_i32))))) : t_i32 :=
   match x with
   | Option_None =>
-    (0 : t_i32)
+    (0 : TODO _do_not)
   | _ =>
     match match x with
     | Option_Some (v) =>
       match v with
       | Result_Ok (y) =>
-        ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
+         {| Option_Some_tuple_field 1 0 := y |}
       | _ =>
         Build_Option_None_record
       end
@@ -88,7 +67,7 @@ Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`Tup
       | Option_Some (Result_Err (y)) =>
         y
       | _ =>
-        (1 : t_i32)
+        (1 : TODO _do_not)
       end
     end
   end.
@@ -96,7 +75,7 @@ Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`Tup
 Definition equivalent (x : t_Option ((t_Result ((t_i32)) ((t_i32))))) : t_i32 :=
   match x with
   | Option_None =>
-    (0 : t_i32)
+    (0 : TODO _do_not)
   | _ =>
     match match x with
     | Option_Some (v) =>
@@ -116,7 +95,7 @@ Definition equivalent (x : t_Option ((t_Result ((t_i32)) ((t_i32))))) : t_i32 :=
       | Option_Some (Result_Err (y)) =>
         y
       | _ =>
-        (1 : t_i32)
+        (1 : TODO _do_not)
       end
     end
   end.
@@ -124,14 +103,13 @@ Definition equivalent (x : t_Option ((t_Result ((t_i32)) ((t_i32))))) : t_i32 :=
 Definition multiple_guards (x : t_Option ((t_Result ((t_i32)) ((t_i32))))) : t_i32 :=
   match x with
   | Option_None =>
-    (0 : t_i32)
+    (0 : TODO _do_not)
   | _ =>
     match match x with
     | Option_Some (Result_Ok (v)) =>
-      match  {| Option_Some_0 := f_add (v) ((1 : t_i32)) |} with
+      match  {| Option_Some_0 := f_add (v) ((1 : TODO _do_not)) |} with
       | Option_Some (1) =>
-        ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
+         {| Option_Some_tuple_field 1 0 := (0 : TODO _do_not) |}
       | _ =>
         Build_Option_None_record
       end
@@ -145,8 +123,7 @@ Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`Tup
       | Option_Some (v) =>
         match v with
         | Result_Ok (y) =>
-          ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
+           {| Option_Some_tuple_field 1 0 := y |}
         | _ =>
           Build_Option_None_record
         end
@@ -160,7 +137,7 @@ Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`Tup
         | Option_Some (Result_Err (y)) =>
           y
         | _ =>
-          (1 : t_i32)
+          (1 : TODO _do_not)
         end
       end
     end
@@ -169,10 +146,9 @@ Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`Tup
 Definition if_guard (x : t_Option ((t_i32))) : t_i32 :=
   match match x with
   | Option_Some (v) =>
-    match f_gt (v) ((0 : t_i32)) with
+    match f_gt (v) ((0 : TODO _do_not)) with
     | true =>
-      ((Coq printer generic printer) Fatal error: something we considered as impossible occurred! Please report this by submitting an issue on GitHub!
-Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`TupleField ((1, 0))](* ERROR_EXPR *))
+       {| Option_Some_tuple_field 1 0 := v |}
     | _ =>
       Build_Option_None_record
     end
@@ -182,7 +158,7 @@ Details: _do_not_override_lazy_of_global_ident: expected [`Concrete _] got [`Tup
   | Option_Some (x) =>
     x
   | Option_None =>
-    (0 : t_i32)
+    (0 : TODO _do_not)
   end.
 '''
 _CoqProject = '''

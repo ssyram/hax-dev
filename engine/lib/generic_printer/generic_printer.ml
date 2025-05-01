@@ -623,6 +623,11 @@ module Make (F : Features.T) = struct
             | `Concrete cid (* | `Projector (`Concrete cid) *) ->
                 (self#_do_not_override_lazy_of_concrete_ident ast_position cid)
                   #p
+            | `TupleField (i, j) ->
+                !^"tuple_field" ^^ space
+                ^^ !^(Int.to_string i)
+                ^^ space
+                ^^ !^(Int.to_string j)
             | _ ->
                 self#assertion_failure
                   ("_do_not_override_lazy_of_global_ident: expected [`Concrete \
