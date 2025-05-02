@@ -202,11 +202,6 @@ Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.
 
 (*Not implemented yet? todo(item)*)
 
-Equations ff_2_ (_ : both 'unit) : both 'unit :=
-  ff_2_ _  :=
-    f : both 'unit.
-Fail Next Obligation.
-
 Equations g (_ : both 'unit) : both 'unit :=
   g _  :=
     f : both 'unit.
@@ -215,5 +210,10 @@ Fail Next Obligation.
 Equations f (_ : both 'unit) : both 'unit :=
   f _  :=
     g : both 'unit.
+Fail Next Obligation.
+
+Equations ff_2_ (_ : both 'unit) : both 'unit :=
+  ff_2_ _  :=
+    f : both 'unit.
 Fail Next Obligation.
 '''
