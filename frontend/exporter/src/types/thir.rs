@@ -627,7 +627,7 @@ pub enum ExprKind {
                 let tcx = gstate.base().tcx;
                 r#trait = (|| {
                     let assoc_item = tcx.opt_associated_item(*def_id)?;
-                    let impl_expr = self_clause_for_item(gstate, &assoc_item, generics)?;
+                    let impl_expr = self_clause_for_item(gstate, assoc_item.def_id, generics)?;
                     let assoc_generics = tcx.generics_of(assoc_item.def_id);
                     let assoc_generics = translated_generics.drain(0..assoc_generics.parent_count).collect();
                     Some((impl_expr, assoc_generics))
@@ -881,12 +881,7 @@ pub enum ExprKind {
         args: Vec<GenericArg>,
         user_ty: Option<CanonicalUserType>,
         #[not_in_source]
-        #[value({
-            let tcx = gstate.base().tcx;
-            tcx.opt_associated_item(*def_id).as_ref().and_then(|assoc| {
-                self_clause_for_item(gstate, assoc, args)
-            })
-        })]
+        #[value(self_clause_for_item(gstate, *def_id, args))]
         r#impl: Option<ImplExpr>,
     },
     ConstParam {
