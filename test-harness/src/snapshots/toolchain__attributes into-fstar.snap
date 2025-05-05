@@ -219,6 +219,30 @@ let impl_1 (#v_T: Type0) : Core.Ops.Index.t_Index (t_Array v_T (mk_usize 10)) t_
     f_index = fun (self: t_Array v_T (mk_usize 10)) (index: t_SafeIndex) -> self.[ index.f_i ]
   }
 '''
+"Attributes.Postprocess_with.Somewhere.fst" = '''
+module Attributes.Postprocess_with.Somewhere
+#set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
+open Core
+open FStar.Mul
+
+let some_hypothetical_tactic (some_param: u8) : Prims.unit = ()
+'''
+"Attributes.Postprocess_with.fst" = '''
+module Attributes.Postprocess_with
+#set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
+open Core
+open FStar.Mul
+
+[@@FStar.Tactics.postprocess_with (fun _ -> FStar.Tactics.trefl ())]
+
+let f (_: Prims.unit) : Prims.unit = ()
+
+[@@FStar.Tactics.postprocess_with ( fun temp_0_ ->
+  let ():Prims.unit = temp_0_ in
+  Attributes.Postprocess_with.Somewhere.some_hypothetical_tactic (mk_u8 12) )]
+
+let g (_: Prims.unit) : Prims.unit = ()
+'''
 "Attributes.Pre_post_on_traits_and_impls.fst" = '''
 module Attributes.Pre_post_on_traits_and_impls
 #set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
@@ -712,6 +736,11 @@ let add3_lemma (x: u32)
     (ensures
       x <=. mk_u32 10 || x >=. (u32_max /! mk_u32 3 <: u32) ||
       (add3 x x x <: u32) =. (x *! mk_u32 3 <: u32)) = ()
+
+let dummy_function (x: u32) : u32 = x
+
+let apply_dummy_function_lemma (x: u32) : Lemma (ensures x =. (dummy_function x <: u32)) [SMTPat x] =
+  ()
 
 type t_Foo = {
   f_x:u32;

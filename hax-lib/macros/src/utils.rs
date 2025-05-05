@@ -21,6 +21,7 @@ pub enum FnDecorationKind {
     Requires,
     Ensures { ret_binder: Pat },
     Decreases,
+    SMTPat,
 }
 
 impl ToString for FnDecorationKind {
@@ -29,6 +30,7 @@ impl ToString for FnDecorationKind {
             FnDecorationKind::Requires => "requires".to_string(),
             FnDecorationKind::Ensures { .. } => "ensures".to_string(),
             FnDecorationKind::Decreases { .. } => "decreases".to_string(),
+            FnDecorationKind::SMTPat { .. } => "SMTPat".to_string(),
         }
     }
 }
@@ -39,6 +41,7 @@ impl From<FnDecorationKind> for AssociationRole {
             FnDecorationKind::Requires => AssociationRole::Requires,
             FnDecorationKind::Ensures { .. } => AssociationRole::Ensures,
             FnDecorationKind::Decreases => AssociationRole::Decreases,
+            FnDecorationKind::SMTPat => AssociationRole::SMTPat,
         }
     }
 }
@@ -294,16 +297,17 @@ pub fn make_fn_decoration(
             if let Some(generics) = generics {
                 sig.generics = merge_generics(generics, sig.generics);
             }
-            sig.output = if let FnDecorationKind::Decreases = &kind {
-                syn::parse_quote! { -> () }
-            } else {
-                syn::parse_quote! { -> impl Into<::hax_lib::Prop> }
+            sig.output = match &kind {
+                FnDecorationKind::Decreases | FnDecorationKind::SMTPat => {
+                    syn::parse_quote! { -> () }
+                }
+                _ => syn::parse_quote! { -> impl Into<::hax_lib::Prop> },
             };
             sig
         };
         let uid_attr = AttrPayload::Uid(uid.clone());
         let late_skip = &AttrPayload::ItemStatus(ItemStatus::Included { late_skip: true });
-        if let FnDecorationKind::Decreases = &kind {
+        if let FnDecorationKind::Decreases | FnDecorationKind::SMTPat = &kind {
             phi = parse_quote! {::hax_lib::any_to_unit(#phi)};
         };
         let quantifiers = if let FnDecorationKind::Decreases = &kind {

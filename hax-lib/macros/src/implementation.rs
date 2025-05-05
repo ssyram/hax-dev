@@ -156,6 +156,24 @@ pub fn fstar_verification_status(attr: pm::TokenStream, item: pm::TokenStream) -
     .into()
 }
 
+/// Postprocess an item with a given tactic. This macro takes the tactic in
+/// parameter: this may be a Rust identifier or a raw snippet of F* code as a
+/// string literal.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn fstar_postprocess_with(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+    let item: TokenStream = item.into();
+    let payload: String = if let Ok(s) = syn::parse::<LitStr>(attr.clone()) {
+        s.value()
+    } else {
+        let e = parse_macro_input!(attr as Expr);
+        format!(" ${{ {} }} ", e.to_token_stream())
+    };
+    let payload = format!("[@@FStar.Tactics.postprocess_with ({payload})]");
+    let payload: Lit = Lit::Str(syn::LitStr::new(&payload, Span::call_site()));
+    quote! {#[::hax_lib::fstar::before(#payload)] #item}.into()
+}
+
 /// Include this item in the Hax translation.
 #[proc_macro_error]
 #[proc_macro_attribute]
@@ -234,6 +252,16 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
     use std::borrow::Borrow;
     use syn::{spanned::Spanned, GenericArgument, PathArguments, ReturnType};
 
+    fn add_allow_unused_variables_to_args(func: &mut syn::ItemFn) {
+        let attr: syn::Attribute = parse_quote!(#[allow(unused_variables)]);
+
+        for input in &mut func.sig.inputs {
+            if let FnArg::Typed(pat_type) = input {
+                pat_type.attrs.push(attr.clone());
+            }
+        }
+    }
+
     /// Parses a `syn::Type` of the shape `Proof<{FORMULA}>`.
     fn parse_proof_type(r#type: syn::Type) -> Option<syn::Expr> {
         let syn::Type::Path(syn::TypePath {
@@ -280,6 +308,7 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
             );
         }
     }
+    add_allow_unused_variables_to_args(&mut item);
     use AttrPayload::NeverErased;
     quote! { #attr #NeverErased #item }.into()
 }
@@ -314,6 +343,18 @@ pub fn decreases(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStrea
         None,
         None,
     );
+    quote! {#requires #attr #item}.into()
+}
+
+/// Allows to add SMT patterns to a lemma.
+/// For more informations about SMT patterns, please take a look here: https://fstar-lang.org/tutorial/book/under_the_hood/uth_smt.html#designing-a-library-with-smt-patterns.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn fstar_smt_pat(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+    let phi: syn::Expr = parse_macro_input!(attr);
+    let item: FnLike = parse_macro_input!(item);
+    let (requires, attr) =
+        make_fn_decoration(phi, item.sig.clone(), FnDecorationKind::SMTPat, None, None);
     quote! {#requires #attr #item}.into()
 }
 

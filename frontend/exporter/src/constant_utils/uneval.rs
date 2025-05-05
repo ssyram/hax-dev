@@ -315,7 +315,10 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
             let lit = scalar_int_to_constant_literal(s, scalar_int, ty);
             ConstantExprKind::Literal(lit)
         }
-        ty::Adt(adt_def, ..) if !adt_def.is_union() => {
+        ty::Adt(adt_def, ..) if adt_def.is_union() => {
+            ConstantExprKind::Todo("Cannot translate constant of union type".into())
+        }
+        ty::Adt(adt_def, ..) => {
             let variant = ecx.read_discriminant(&op)?;
             let down = ecx.project_downcast(&op, variant)?;
             let field_count = adt_def.variants()[variant].fields.len();
@@ -329,6 +332,31 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
                 })
                 .collect::<InterpResult<Vec<_>>>()?;
             let variants_info = get_variant_information(adt_def, variant, s);
+            ConstantExprKind::Adt {
+                info: variants_info,
+                fields,
+            }
+        }
+        ty::Closure(def_id, args) => {
+            // A closure is essentially an adt with funky generics and some builtin impls.
+            let def_id: DefId = def_id.sinto(s);
+            let field_count = args.as_closure().upvar_tys().len();
+            let fields = read_fields(op, field_count)
+                .map(|value| {
+                    interp_ok(ConstantFieldExpr {
+                        // HACK: Closure fields don't have their own def_id, but Charon doesn't use
+                        // field DefIds so we put a dummy one.
+                        field: def_id.clone(),
+                        value: value?,
+                    })
+                })
+                .collect::<InterpResult<Vec<_>>>()?;
+            let variants_info = VariantInformations {
+                type_namespace: def_id.parent.clone().unwrap(),
+                typ: def_id.clone(),
+                variant: def_id,
+                kind: VariantKind::Struct { named: false },
+            };
             ConstantExprKind::Adt {
                 info: variants_info,
                 fields,
@@ -374,7 +402,20 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
                 _ => unreachable!(),
             }
         }
-        _ => ConstantExprKind::Todo("Unhandled type".into()),
+        ty::FnPtr(..)
+        | ty::Dynamic(..)
+        | ty::Foreign(..)
+        | ty::Pat(..)
+        | ty::UnsafeBinder(..)
+        | ty::CoroutineClosure(..)
+        | ty::Coroutine(..)
+        | ty::CoroutineWitness(..) => ConstantExprKind::Todo("Unhandled constant type".into()),
+        ty::Alias(..) | ty::Param(..) | ty::Bound(..) | ty::Placeholder(..) | ty::Infer(..) => {
+            fatal!(s[span], "Encountered evaluated constant of non-monomorphic type"; {op})
+        }
+        ty::Never | ty::Error(..) => {
+            fatal!(s[span], "Encountered evaluated constant of invalid type"; {ty})
+        }
     };
     let val = kind.decorate(ty.sinto(s), span.sinto(s));
     interp_ok(val)
