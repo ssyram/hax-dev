@@ -5,8 +5,6 @@
 use crate::prelude::*;
 #[cfg(feature = "rustc")]
 use rustc_middle::{mir, ty};
-#[cfg(feature = "rustc")]
-use tracing::trace;
 
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema)]
@@ -342,58 +340,20 @@ pub struct Terminator {
 }
 
 #[cfg(feature = "rustc")]
-pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + HasOwnerId>(
+/// Compute the
+pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     def_id: rustc_hir::def_id::DefId,
     generics: rustc_middle::ty::GenericArgsRef<'tcx>,
 ) -> (DefId, Vec<GenericArg>, Vec<ImplExpr>, Option<ImplExpr>) {
-    let tcx = s.base().tcx;
+    // Retrieve the trait requirements for the item.
+    let trait_refs = solve_item_required_traits(s, def_id, generics);
 
-    // Retrieve the trait requirements for the **method**.
-    // For instance, if we write:
-    // ```
-    // fn foo<T : Bar>(...)
-    //            ^^^
-    // ```
-    let mut trait_refs = solve_item_required_traits(s, def_id, generics);
-
+    // If this is a trait method call, retreive the impl expr information for that trait.
     // Check if this is a trait method call: retrieve the trait source if
-    // it is the case (i.e., where does the method come from? Does it refer
-    // to a top-level implementation? Or the method of a parameter? etc.).
-    // At the same time, retrieve the trait obligations for this **trait**.
-    // Remark: the trait obligations for the method are not the same as
-    // the trait obligations for the trait. More precisely:
-    //
-    // ```
-    // trait Foo<T : Bar> {
-    //              ^^^^^
-    //      trait level trait obligation
-    //   fn baz(...) where T : ... {
-    //      ...                ^^^
-    //             method level trait obligation
-    //   }
-    // }
-    // ```
-    //
-    // Also, a function doesn't need to belong to a trait to have trait
-    // obligations:
-    // ```
-    // fn foo<T : Bar>(...)
-    //            ^^^
-    //     method level trait obligation
-    // ```
-    let (generics, source) = if let Some(assoc) = tcx.opt_associated_item(def_id) {
-        // There is an associated item.
-        use tracing::*;
-        trace!("def_id: {:?}", def_id);
-        trace!("assoc: def_id: {:?}", assoc.def_id);
-        // Retrieve the `DefId` of the trait declaration or the impl block.
-        let container_def_id = match assoc.container {
-            rustc_middle::ty::AssocItemContainer::Trait => tcx.trait_of_item(assoc.def_id).unwrap(),
-            rustc_middle::ty::AssocItemContainer::Impl => tcx.impl_of_method(assoc.def_id).unwrap(),
-        };
-        // The generics are split in two: the arguments of the container (trait decl or impl block)
-        // and the arguments of the method.
+    let (generics, trait_impl) = if let Some(tinfo) = self_clause_for_item(s, def_id, generics) {
+        // The generics are split in two: the arguments of the container (trait decl or impl
+        // block) and the arguments of the method.
         //
         // For instance, if we have:
         // ```
@@ -408,44 +368,16 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         // ```
         // The generics for the call to `baz` will be the concatenation: `<T, u32, U>`, which we
         // split into `<T, u32>` and `<U>`.
-        //
-        // If we have:
-        // ```
-        // impl<T: Ord> Map<T> {
-        //     pub fn insert<U: Clone>(&mut self, x: U) { ... }
-        // }
-        // pub fn test(mut tree: Map<u32>) {
-        //     tree.insert(false);
-        // }
-        // ```
-        // The generics for `insert` are `<u32>` for the impl and `<bool>` for the method.
-        match assoc.container {
-            rustc_middle::ty::AssocItemContainer::Trait => {
-                let num_container_generics = tcx.generics_of(container_def_id).own_params.len();
-                // Retrieve the trait information
-                let impl_expr = self_clause_for_item(s, &assoc, generics).unwrap();
-                // Return only the method generics; the trait generics are included in `impl_expr`.
-                let method_generics = &generics[num_container_generics..];
-                (method_generics.sinto(s), Some(impl_expr))
-            }
-            rustc_middle::ty::AssocItemContainer::Impl => {
-                // Solve the trait constraints of the impl block.
-                let container_generics = tcx.generics_of(container_def_id);
-                let container_generics = generics.truncate_to(tcx, container_generics);
-                // Prepend the container trait refs.
-                let mut combined_trait_refs =
-                    solve_item_required_traits(s, container_def_id, container_generics);
-                combined_trait_refs.extend(std::mem::take(&mut trait_refs));
-                trait_refs = combined_trait_refs;
-                (generics.sinto(s), None)
-            }
-        }
+        let num_trait_generics = tinfo.r#trait.hax_skip_binder_ref().generic_args.len();
+        // Return only the method generics; the trait generics are included in `trait_impl_expr`.
+        let method_generics = &generics[num_trait_generics..];
+        (method_generics.sinto(s), Some(tinfo))
     } else {
         // Regular function call
         (generics.sinto(s), None)
     };
 
-    (def_id.sinto(s), generics, trait_refs, source)
+    (def_id.sinto(s), generics, trait_refs, trait_impl)
 }
 
 #[cfg(feature = "rustc")]
@@ -965,7 +897,8 @@ pub enum AggregateKind {
             generics.sinto(s),
             trait_refs,
             annot.sinto(s),
-            fid.sinto(s))
+            fid.sinto(s),
+        )
     })]
     Adt(
         DefId,
