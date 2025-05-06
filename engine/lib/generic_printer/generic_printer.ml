@@ -620,9 +620,16 @@ module Make (F : Features.T) = struct
         lazy_doc
           (fun (id : global_ident) ->
             match id with
-            | `Concrete cid ->
+            | `Concrete cid | `Projector (`Concrete cid) ->
                 (self#_do_not_override_lazy_of_concrete_ident ast_position cid)
                   #p
+            | `TupleField (i, j) ->
+                (* self#lhs_LhsFieldAccessor_tuple ~e ~typ ~nth ~size ~witness *)
+                (* _do_not_override_lhs_LhsFieldAccessor *)
+                !^"tuple_field" ^^ space
+                ^^ !^(Int.to_string i)
+                ^^ space
+                ^^ !^(Int.to_string j)
             | _ ->
                 self#assertion_failure
                   ("_do_not_override_lazy_of_global_ident: expected [`Concrete \
