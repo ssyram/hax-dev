@@ -63,14 +63,23 @@ pub enum Ty {
 
     /// A function or closure type.
     /// Example: `fn(i32) -> bool` or `Fn(i32) -> bool`
-    Arrow { inputs: Vec<Ty>, output: Box<Ty> },
+    Arrow {
+        inputs: Vec<Ty>,
+        output: Box<Ty>,
+    },
 
     /// A reference type.
     /// Example: `&i32`, `&mut i32`
-    Ref { inner: Box<Ty>, mutable: bool },
+    Ref {
+        inner: Box<Ty>,
+        mutable: bool,
+    },
 
     /// Fallback constructor to carry errors.
     Error(Diagnostic),
+
+    // A parameter type
+    Param(LocalId),
 }
 
 /// Extra information attached to syntax nodes.
@@ -183,7 +192,7 @@ pub enum ExprKind {
     /// Example: `if x > 0 { 1 } else { 2 }`
     If {
         condition: Expr,
-        then_: Expr,
+        then: Expr,
         else_: Option<Expr>,
     },
 
@@ -213,7 +222,7 @@ pub enum ExprKind {
         is_record: bool,
         is_struct: bool,
         fields: Vec<(GlobalId, Expr)>,
-        base: Option<(ImplExpr, Vec<GenericValue>)>,
+        base: Option<Expr>,
     },
 
     Match {
@@ -255,11 +264,90 @@ pub enum ExprKind {
 
     /// Fallback constructor to carry errors.
     Error(Diagnostic),
+
+    /// Type ascription
+    Ascription {
+        e: Expr,
+        ty: Ty,
+    },
+
+    /// Variable mutation
+    Assign {
+        lhs: Expr,
+        e: Expr,
+    },
+
+    /// Loop
+    Loop {
+        body: Expr,
+        label: Option<String>,
+    },
+
+    /// Break
+    Break {
+        e: Expr,
+        label: Option<String>,
+    },
+
+    /// Return
+    Return {
+        e: Expr,
+    },
+
+    /// Continue
+    Continue {
+        label: Option<String>,
+    },
+
+    /// Closure
+    Closure {
+        params: Vec<Pat>,
+        body: Expr,
+        captures: Vec<Expr>,
+    },
 }
 
-// TODO: implement generics
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub struct Generics;
+pub enum GenericParamKind {
+    GPLifetime,
+    GPType,
+    GPConst { ty: Ty },
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct TraitGoal {
+    trait_: GlobalId,
+    args: Vec<GenericValue>,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ImplIdent {
+    goal: TraitGoal,
+    name: String,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ProjectionPredicate;
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum GenericConstraint {
+    GCLifetime(String),
+    GCType(ImplIdent),
+    GCProjection(ProjectionPredicate),
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct GenericParam {
+    pub ident: LocalId,
+    pub meta: Metadata,
+    pub kind: GenericParamKind,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Generics {
+    pub params: Vec<GenericParam>,
+    pub constraints: Vec<GenericConstraint>,
+}
 
 /// Safety level of a function.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]

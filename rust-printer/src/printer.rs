@@ -21,6 +21,9 @@ pub trait Printer {
     fn expr_kind(&self, expr_kind: &ExprKind) -> Doc;
     fn literal(&self, literal: &Literal) -> Doc;
     fn generic_value(&self, generic_value: &GenericValue) -> Doc;
+    fn generic_constraint(&self, generic_constraint: &GenericConstraint) -> Doc;
+    fn generic_param(&self, generic_param: &GenericParam) -> Doc;
+    fn generics(&self, generics: &Generics) -> Doc;
     fn ty(&self, ty: &Ty) -> Doc;
     fn pat_kind(&self, pat_kind: &PatKind) -> Doc;
     fn param(&self, param: &Param) -> Doc;
@@ -110,6 +113,21 @@ impl<P: Printer> ToDoc<P> for SpannedTy {
         printer.ty(self.ty())
     }
 }
+impl<P: Printer> ToDoc<P> for Generics {
+    fn to_doc(&self, printer: &P) -> Doc {
+        printer.generics(self)
+    }
+}
+impl<P: Printer> ToDoc<P> for GenericParam {
+    fn to_doc(&self, printer: &P) -> Doc {
+        printer.generic_param(self)
+    }
+}
+impl<P: Printer> ToDoc<P> for GenericConstraint {
+    fn to_doc(&self, printer: &P) -> Doc {
+        printer.generic_constraint(self)
+    }
+}
 
 impl<P: Printer, T: ToDoc<P>> ToDoc<P> for Box<T> {
     fn to_doc(&self, printer: &P) -> Doc {
@@ -161,14 +179,15 @@ pub mod rust {
             match item {
                 ItemKind::Fn {
                     name,
-                    generics: _,
+                    generics,
                     body,
                     params,
                     safety: _,
                 } => {
                     format!(
-                        r#"pub fn {}({}) -> {} {{ {} }}"#,
+                        r#"pub fn {}<{}>({}) -> {} {{ {} }}"#,
                         name.name(),
+                        generics.to_doc(self),
                         params
                             .iter()
                             .map(|param| param.to_doc(self))
@@ -231,29 +250,49 @@ pub mod rust {
                             .join(", ")
                     )
                 }
-                ExprKind::App { head, args, .. } => {
+                ExprKind::App {
+                    head,
+                    args,
+                    generic_args,
+                    ..
+                } => {
                     let args = args
                         .iter()
                         .map(|expr| expr.to_doc(self))
                         .collect::<Vec<_>>();
+                    let generic_args = generic_args
+                        .iter()
+                        .map(|g_arg| g_arg.to_doc(self))
+                        .collect::<Vec<_>>();
+                    let generic_args_string = generic_args.join(",");
                     let f = head.to_doc(self);
                     match (head.kind.as_ref(), &args[..]) {
                         (ExprKind::GlobalId(hd), [lhs, index]) if hd == &GlobalId::index() => {
                             format!("({lhs})[{index}]")
                         }
-                        _ => format!("({f})({})", args.join(",")),
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Add) =>
+                        {
+                            format!("{lhs} + {rhs}")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Gt) =>
+                        {
+                            format!("{lhs} > {rhs}")
+                        } // TODO complete and improve
+                        _ => format!("({f}::<{generic_args_string}>)({})", args.join(",")),
                     }
                 }
                 ExprKind::Literal(lit) => lit.to_doc(self),
                 &ExprKind::If {
                     condition,
-                    then_,
+                    then,
                     else_,
                 } => {
                     format!(
                         "if {} {{ {} }} {}",
                         condition.to_doc(self),
-                        then_.to_doc(self),
+                        then.to_doc(self),
                         else_
                             .as_ref()
                             .map(|e| format!(" else {{ {} }}", e.to_doc(self)))
@@ -262,7 +301,8 @@ pub mod rust {
                 }
                 ExprKind::Error(_) => "<expression error>".to_string(),
                 ExprKind::Match { scrutinee, arms } => format!(
-                    "match scrutinee {{ {} }}",
+                    "match {} {{ {} }}",
+                    scrutinee.to_doc(self),
                     arms.iter()
                         .map(|arm| arm.to_doc(self))
                         .collect::<Vec<_>>()
@@ -289,6 +329,29 @@ pub mod rust {
                 GenericValue::Ty(ty) => ty.to_doc(self),
                 GenericValue::Expr(expr) => expr.to_doc(self),
             }
+        }
+        fn generic_constraint(&self, generic_constraint: &GenericConstraint) -> Doc {
+            match generic_constraint {
+                GenericConstraint::GCLifetime(l) => unimplemented!(),
+                GenericConstraint::GCProjection(predicate) => unimplemented!(),
+                GenericConstraint::GCType(i) => unimplemented!(),
+            }
+        }
+        fn generic_param(&self, generic_param: &GenericParam) -> Doc {
+            let ident = generic_param.ident.to_doc(self);
+            match &generic_param.kind {
+                GenericParamKind::GPConst { ty } => format!("const {}: {}", ident, ty.to_doc(self)),
+                GenericParamKind::GPLifetime | GenericParamKind::GPType => ident,
+            }
+        }
+        fn generics(&self, generics: &Generics) -> Doc {
+            generics
+                .constraints
+                .iter()
+                .map(|c| c.to_doc(self))
+                .chain(generics.params.iter().map(|p| p.to_doc(self)))
+                .collect::<Vec<_>>()
+                .join(",")
         }
         fn ty(&self, ty: &Ty) -> Doc {
             match ty {
@@ -325,6 +388,7 @@ pub mod rust {
                     };
                     format!("&{}{}", mutability, inner.to_doc(self))
                 }
+                Ty::Param(id) => id.to_doc(self),
                 Ty::Error(_) => "<type error>".to_string(),
             }
         }
