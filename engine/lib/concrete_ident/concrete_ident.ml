@@ -355,6 +355,7 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
             "foreign";
             "use";
             "opaque";
+            "closure";
             "t";
             "v";
             "f";
@@ -538,6 +539,7 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       | `Use d -> prefix_d "use" d
       | `Foreign d -> prefix_d "foreign" d
       | `GlobalAsm d -> prefix_d "global_asm" d
+      | `Closure d -> prefix_d "closure" d
       | `Opaque d -> prefix_d "opaque" d
       (* The name of a trait impl *)
       | `Impl (d, _, impl_infos) -> render_impl_name d impl_infos
