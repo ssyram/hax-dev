@@ -1,5 +1,6 @@
 module Core.Fmt
 open Rust_primitives
+module Rt = Core.Fmt.Rt
 
 val t_Error: Type0
 
@@ -22,7 +23,13 @@ val t_Arguments: Type0
 val impl_4__new_v1 (sz1: usize) (sz2: usize) (pieces: t_Slice string) (args: t_Slice Core.Fmt.Rt.t_Argument): t_Arguments
 val impl_7__write_fmt (fmt: t_Formatter) (args: t_Arguments): t_Formatter & t_Result
 val impl_4__new_const (u:usize) (args: t_Slice string): t_Arguments
-val impl_4__new_v1_formatted (u: usize) (args: t_Slice string) : t_Arguments
+val impl_4__new_v1_formatted :
+   pieces: t_Slice string ->
+	 args: t_Slice Rt.t_Argument ->
+	 fmt: t_Slice Rt.t_Placeholder ->
+	 unsafe_arg: Rt.t_UnsafeArg ->
+	 t_Arguments
+
 val impl_11__write_fmt : Core.Fmt.t_Formatter -> Core.Fmt.t_Arguments -> Core.Fmt.t_Formatter & Core.Result_Option_bundle.t_Result unit Core.Fmt.t_Error
 
 instance debuggable_bool : t_Debug Prims.bool =
