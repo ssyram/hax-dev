@@ -41,7 +41,7 @@
         ppx_matches
         ppx_string
         logs
-        ocamlgraph
+        (ocamlgraph (>= "2.2.0"))
 
         js_of_ocaml-compiler
         js_of_ocaml
