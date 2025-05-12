@@ -13,7 +13,7 @@ env:
 jobs:
   extract-mlkem:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' }}
-    runs-on: linux
+    runs-on: "ubuntu-latest"
 
     steps:
       - name: ⤵ Clone Libcrux repository
@@ -25,8 +25,7 @@ jobs:
         with:
           path: hax
 
-      - if: runner.environment == 'github-hosted'
-        uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@main
       - name: Set up Cachix
         uses: cachix/cachix-action@v15
         with:

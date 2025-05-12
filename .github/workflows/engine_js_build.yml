@@ -10,9 +10,8 @@ on:
 jobs:
   engine-js-build:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' }}
-    runs-on: linux
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - if: runner.environment == 'github-hosted'
-      uses: DeterminateSystems/nix-installer-action@main
+    - uses: DeterminateSystems/nix-installer-action@main
     - run: nix build .\#hax-engine.passthru.js -L  
