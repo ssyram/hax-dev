@@ -748,42 +748,35 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
         for elem in self.projection.as_slice() {
             use rustc_middle::mir::ProjectionElem::*;
             let cur_ty = current_place_ty.ty;
-            let mk_field = |index: &rustc_abi::FieldIdx,
-                            variant_idx: Option<rustc_abi::VariantIdx>| {
-                use rustc_middle::ty::TyKind;
-                ProjectionElem::Field(match cur_ty.kind() {
-                    TyKind::Adt(adt_def, _) => {
-                        assert!(
-                            ((adt_def.is_struct() || adt_def.is_union()) && variant_idx.is_none())
-                                || (adt_def.is_enum() && variant_idx.is_some())
-                        );
-                        ProjectionElemFieldKind::Adt {
-                            typ: adt_def.did().sinto(s),
-                            variant: variant_idx.map(|id| id.sinto(s)),
-                            index: index.sinto(s),
-                        }
-                    }
-                    TyKind::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
-                    ty_kind => {
-                        supposely_unreachable_fatal!(
-                            s, "ProjectionElemFieldBadType";
-                            {index, ty_kind, variant_idx, &cur_ty, &current_kind}
-                        );
-                    }
-                })
-            };
             let variant = current_place_ty.variant_index;
             current_place_ty = current_place_ty.projection_ty(tcx, *elem);
             let elem_kind: ProjectionElem = match elem {
                 Deref => ProjectionElem::Deref,
                 Field(index, _) => {
-                    if cur_ty.is_closure() {
-                        // We get there when we access one of the fields
-                        // of the the state captured by a closure.
-                        ProjectionElem::Field(ProjectionElemFieldKind::ClosureState(index.sinto(s)))
-                    } else {
-                        mk_field(index, variant)
-                    }
+                    let field_pj = match cur_ty.kind() {
+                        ty::Adt(adt_def, _) => {
+                            assert!(
+                                ((adt_def.is_struct() || adt_def.is_union()) && variant.is_none())
+                                    || (adt_def.is_enum() && variant.is_some())
+                            );
+                            ProjectionElemFieldKind::Adt {
+                                typ: adt_def.did().sinto(s),
+                                variant: variant.map(|id| id.sinto(s)),
+                                index: index.sinto(s),
+                            }
+                        }
+                        ty::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
+                        // We get there when we access one of the fields of the the state
+                        // captured by a closure.
+                        ty::Closure(..) => ProjectionElemFieldKind::ClosureState(index.sinto(s)),
+                        ty_kind => {
+                            supposely_unreachable_fatal!(
+                                s, "ProjectionElemFieldBadType";
+                                {index, ty_kind, variant, &cur_ty, &current_kind}
+                            );
+                        }
+                    };
+                    ProjectionElem::Field(field_pj)
                 }
                 Index(local) => ProjectionElem::Index(local.sinto(s)),
                 ConstantIndex {
