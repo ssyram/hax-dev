@@ -142,10 +142,10 @@ The Rust compiler (rustc) has extensive test suites that describe various expect
 
 We use the following methodology:
 - The Rust inputs from the test suite have been copied to `rustc-coverage-tests/src/`, and can be updated using a script.
-- A Rust crate structure is built around these source files, to allow hax to handle them. The files that fail `cargo check` are excluded.
+- A Rust crate structure is built around these source files, to allow hax to handle them. The files that fail `cargo check` are excluded. There are currently 26 excluded (out of 81) tests, mostly because they contain asynchronous code, which requires a runtime file that is missing in our infrastructure.
 - To test hax frontend, we run `cargo hax json`. If the command succeeds, the test is considered successful.
 
-These tests aim at increasing the confidence in the ability of hax frontend to handle Rust inputs covering all of the language constructs. As of today, all tests are handled successfully by hax frontend. However we don't test the correctness of the output.
+These tests aim at increasing the confidence in the ability of hax frontend to handle Rust inputs covering all of the language constructs. As of today, all tests are handled successfully by hax frontend. However we don't test any requirement on the output (see the following section for tests of hax frontend output quality).
 
 ### Rust printer testing
 
