@@ -119,7 +119,7 @@ For the crates that successfully generated ASTs, we compared the time taken by `
 - On average, `cargo hax` is about 4–5 times slower than `cargo check`.
 - At the **10th decile**, the slowdown is only about 2×, indicating better scaling for larger crates.
 
-## Conclusion
+### Conclusion
 
 Our quantitative evaluation shows that the hax frontend successfully extracts ASTs for a large portion of the Rust ecosystem. Nevertheless, a small portion of crates reveal performance bottlenecks or outright failures that require further investigation and optimization.
 
@@ -131,3 +131,30 @@ These results also highlight a few **limitations** of this initial study:
 Overall, the hax frontend demonstrates capabilities for large-scale Rust code verification, but continued refinement is needed to handle edge cases and improve performance.
 
 [^1]: For a given crate, we normalize the times by dividing them by the total time.
+
+## Qualitative evaluation
+
+The qualitative evaluation aims at identifying what Rust patterns the frontend can handle. It also tests whether the information extracted from the frontend describes correctly the input Rust code.
+
+### Rustc coverage test suite
+
+The Rust compiler (rustc) has extensive test suites that describe various expectations of how it should handle Rust input. One of them is the [coverage test suite](https://rustc-dev-guide.rust-lang.org/tests/compiletest.html#coverage-tests) which contains a set of Rust inputs that is supposed to cover a wide range of Rust constructs. This test suite has been adapted to test hax.
+
+We use the following methodology:
+- The Rust inputs from the test suite have been copied to `rustc-coverage-tests/src/`, and can be updated using a script.
+- A Rust crate structure is built around these source files, to allow hax to handle them. The files that fail `cargo check` are excluded.
+- To test hax frontend, we run `cargo hax json`. If the command succeeds, the test is considered successful.
+
+These tests aim at increasing the confidence in the ability of hax frontend to handle Rust inputs covering all of the language constructs. As of today, all tests are handled successfully by hax frontend. However we don't test the correctness of the output.
+
+### Rust printer testing
+
+This method aims at testing the quality of hax frontend's output. It uses a tool that is under development that we call the Rust printer.
+
+This tool (written in Rust) takes the output of hax frontend (a json file describing the content of a Rust crate), it imports it as an AST (similar to the hax engine AST), and then prints this AST in Rust syntax. 
+
+If the Rust code we get out of this tool is equivalent to the Rust code it was given as input, then this means hax frontend correctly extracted the input code without losing or altering any information.
+
+There is no easy way of testing the full input/output equivalence so the methodology here is to test that the resulting code behaves the same as the input code with respect to relevant test cases.
+
+This work is available in the `rust-printer` folder. In the `tests` subfolder, an input file is available with tests for all Rust constructs supported by the printer (currently functions and expressions). For now these tests pass after extracting and printing the file with hax frontend and the Rust printer. This means that for the Rust constructs covered by the printer and the test file, hax frontend's extraction is correct. However this still needs to be extended to test more Rust constructs.
