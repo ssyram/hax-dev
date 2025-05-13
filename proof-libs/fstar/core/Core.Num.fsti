@@ -1,10 +1,30 @@
 module Core.Num
 open Rust_primitives
 
-let impl_u64__MAX: u64 = mk_u64 (maxint u64_inttype)
+let impl_u8__MAX: u8 = mk_u8 (maxint u8_inttype)
+let impl_u8__MIN: u8 = mk_u8 (minint u8_inttype)
 let impl_u16__MAX: u16 = mk_u16 (maxint u16_inttype)
+let impl_u16__MIN: u16 = mk_u16 (minint u16_inttype)
+let impl_u32__MAX: u32 = mk_u32 (maxint u32_inttype)
+let impl_u32__MIN: u32 = mk_u32 (minint u32_inttype)
+let impl_u64__MAX: u64 = mk_u64 (maxint u64_inttype)
+let impl_u64__MIN: u64 = mk_u64 (minint u64_inttype)
+let impl_u128__MAX: u128 = mk_u128 (maxint u128_inttype)
+let impl_u128__MIN: u128 = mk_u128 (minint u128_inttype)
+let impl_usize__MAX: usize = mk_usize (maxint usize_inttype)
+let impl_usize__MIN: usize = mk_usize (minint usize_inttype)
+let impl_i8__MAX: i8 = mk_i8 (maxint i8_inttype)
+let impl_i8__MIN: i8 = mk_i8 (minint i8_inttype)
+let impl_i16__MAX: i16 = mk_i16 (maxint i16_inttype)
+let impl_i16__MIN: i16 = mk_i16 (minint i16_inttype)
 let impl_i32__MAX: i32 = mk_i32 (maxint i32_inttype)
 let impl_i32__MIN: i32 = mk_i32 (minint i32_inttype)
+let impl_i64__MAX: i64 = mk_i64 (maxint i64_inttype)
+let impl_i64__MIN: i64 = mk_i64 (minint i64_inttype)
+let impl_i128__MAX: i128 = mk_i128 (maxint i128_inttype)
+let impl_i128__MIN: i128 = mk_i128 (minint i128_inttype)
+let impl_isize__MAX: isize = mk_isize (maxint isize_inttype)
+let impl_isize__MIN: isize = mk_isize (minint isize_inttype)
 
 let impl_u8__wrapping_add: u8 -> u8 -> u8 = add_mod
 let impl_u8__wrapping_sub: u8 -> u8 -> u8 = sub_mod
