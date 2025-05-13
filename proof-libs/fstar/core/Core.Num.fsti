@@ -1,23 +1,46 @@
 module Core.Num
 open Rust_primitives
 
-let impl_u64__MAX: u64 = mk_u64 (maxint u64_inttype)
+let impl_u8__MAX: u8 = mk_u8 (maxint u8_inttype)
+let impl_u8__MIN: u8 = mk_u8 (minint u8_inttype)
 let impl_u16__MAX: u16 = mk_u16 (maxint u16_inttype)
+let impl_u16__MIN: u16 = mk_u16 (minint u16_inttype)
+let impl_u32__MAX: u32 = mk_u32 (maxint u32_inttype)
+let impl_u32__MIN: u32 = mk_u32 (minint u32_inttype)
+let impl_u64__MAX: u64 = mk_u64 (maxint u64_inttype)
+let impl_u64__MIN: u64 = mk_u64 (minint u64_inttype)
+let impl_u128__MAX: u128 = mk_u128 (maxint u128_inttype)
+let impl_u128__MIN: u128 = mk_u128 (minint u128_inttype)
+let impl_usize__MAX: usize = mk_usize (maxint usize_inttype)
+let impl_usize__MIN: usize = mk_usize (minint usize_inttype)
+let impl_i8__MAX: i8 = mk_i8 (maxint i8_inttype)
+let impl_i8__MIN: i8 = mk_i8 (minint i8_inttype)
+let impl_i16__MAX: i16 = mk_i16 (maxint i16_inttype)
+let impl_i16__MIN: i16 = mk_i16 (minint i16_inttype)
 let impl_i32__MAX: i32 = mk_i32 (maxint i32_inttype)
 let impl_i32__MIN: i32 = mk_i32 (minint i32_inttype)
+let impl_i64__MAX: i64 = mk_i64 (maxint i64_inttype)
+let impl_i64__MIN: i64 = mk_i64 (minint i64_inttype)
+let impl_i128__MAX: i128 = mk_i128 (maxint i128_inttype)
+let impl_i128__MIN: i128 = mk_i128 (minint i128_inttype)
+let impl_isize__MAX: isize = mk_isize (maxint isize_inttype)
+let impl_isize__MIN: isize = mk_isize (minint isize_inttype)
 
 let impl_u8__wrapping_add: u8 -> u8 -> u8 = add_mod
 let impl_u8__wrapping_sub: u8 -> u8 -> u8 = sub_mod
 let impl_u16__wrapping_add: u16 -> u16 ->  u16 = add_mod
 val impl_u16__to_be_bytes: u16 -> t_Array u8 (sz 2)
 val impl_u16__from_be_bytes: t_Array u8 (sz 2) -> u16
+
 let impl_i32__wrapping_add: i32 -> i32 -> i32 = add_mod
 let impl_i32__wrapping_sub: i32 -> i32 -> i32 = sub_mod
 let impl_i32__abs (a:i32{minint i32_inttype < v a}) : i32 = abs_int a
+val impl_i32__overflowing_mul: i32 -> i32 -> i32 * bool
 
 let impl_i16__wrapping_add: i16 -> i16 -> i16 = add_mod
 let impl_i16__wrapping_sub: i16 -> i16 -> i16 = sub_mod
 let impl_i16__wrapping_mul: i16 -> i16 -> i16 = mul_mod
+val impl_i16__overflowing_mul: i16 -> i16 -> i16 * bool
 
 let impl_u32__wrapping_add: u32 -> u32 -> u32 = add_mod
 val impl_u32__rotate_left: u32 -> u32 -> u32
@@ -40,6 +63,10 @@ let impl_u64__overflowing_sub (x y: u64): u64 * bool
     let borrow = sub < 0 in
     let out = if borrow then pow2 64 + sub else sub in
     (mk_u64 out, borrow)
+
+let impl_i64__wrapping_add: i64 -> i64 -> i64 = add_mod
+let impl_i64__wrapping_sub: i64 -> i64 -> i64 = sub_mod
+let impl_i64__wrapping_mul: i64 -> i64 -> i64 = mul_mod
 
 let impl_u128__wrapping_add: u128 -> u128 -> u128 = add_mod
 let impl_u128__wrapping_sub: u128 -> u128 -> u128 = sub_mod
