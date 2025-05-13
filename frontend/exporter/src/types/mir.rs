@@ -743,78 +743,84 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
         let tcx = s.base().tcx;
         let local_decls = &s.mir().local_decls;
 
-        let mut current_place_ty: mir::PlaceTy = mir::Place::from(self.local).ty(local_decls, tcx);
-        let mut current_kind = PlaceKind::Local(self.local.sinto(s));
+        let mut place_ty: mir::PlaceTy = mir::Place::from(self.local).ty(local_decls, tcx);
+        let mut place = Place {
+            ty: place_ty.ty.sinto(s),
+            kind: PlaceKind::Local(self.local.sinto(s)),
+        };
         for elem in self.projection.as_slice() {
             use rustc_middle::mir::ProjectionElem::*;
-            let cur_ty = current_place_ty.ty;
-            let variant = current_place_ty.variant_index;
-            current_place_ty = current_place_ty.projection_ty(tcx, *elem);
-            let elem_kind: ProjectionElem = match elem {
-                Deref => ProjectionElem::Deref,
-                Field(index, _) => {
-                    let field_pj = match cur_ty.kind() {
-                        ty::Adt(adt_def, _) => {
-                            assert!(
-                                ((adt_def.is_struct() || adt_def.is_union()) && variant.is_none())
-                                    || (adt_def.is_enum() && variant.is_some())
-                            );
-                            ProjectionElemFieldKind::Adt {
-                                typ: adt_def.did().sinto(s),
-                                variant: variant.map(|id| id.sinto(s)),
-                                index: index.sinto(s),
-                            }
-                        }
-                        ty::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
-                        // We get there when we access one of the fields of the the state
-                        // captured by a closure.
-                        ty::Closure(..) => ProjectionElemFieldKind::ClosureState(index.sinto(s)),
-                        ty_kind => {
-                            supposely_unreachable_fatal!(
-                                s, "ProjectionElemFieldBadType";
-                                {index, ty_kind, variant, &cur_ty, &current_kind}
-                            );
-                        }
-                    };
-                    ProjectionElem::Field(field_pj)
-                }
-                Index(local) => ProjectionElem::Index(local.sinto(s)),
-                ConstantIndex {
-                    offset,
-                    min_length,
-                    from_end,
-                } => ProjectionElem::ConstantIndex {
-                    offset: *offset,
-                    min_length: *min_length,
-                    from_end: *from_end,
-                },
-                Subslice { from, to, from_end } => ProjectionElem::Subslice {
-                    from: *from,
-                    to: *to,
-                    from_end: *from_end,
-                },
-                OpaqueCast(..) => ProjectionElem::OpaqueCast,
-                // This is used for casts to a subtype, e.g. between `for<‘a> fn(&’a ())`
-                // and `fn(‘static ())` (according to @compiler-errors on Zulip).
-                Subtype { .. } => panic!("unexpected Subtype"),
-                // Keep the same `PlaceKind`, the variant is tracked in the `PlaceTy` and we can
+            let projected_place_ty = place_ty.projection_ty(tcx, *elem);
+            if matches!(elem, Downcast { .. }) {
+                // We keep the same `Place`, the variant is tracked in the `PlaceTy` and we can
                 // access it next loop iteration.
-                Downcast { .. } => continue,
-                UnwrapUnsafeBinder { .. } => panic!("unsupported feature: unsafe binders"),
-            };
+            } else {
+                let elem_kind = match elem {
+                    Deref => ProjectionElem::Deref,
+                    Field(index, _) => {
+                        let field_pj = match place_ty.ty.kind() {
+                            ty::Adt(adt_def, _) => {
+                                let variant = place_ty.variant_index;
+                                assert!(
+                                    ((adt_def.is_struct() || adt_def.is_union())
+                                        && variant.is_none())
+                                        || (adt_def.is_enum() && variant.is_some())
+                                );
+                                ProjectionElemFieldKind::Adt {
+                                    typ: adt_def.did().sinto(s),
+                                    variant: variant.map(|id| id.sinto(s)),
+                                    index: index.sinto(s),
+                                }
+                            }
+                            ty::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
+                            // We get there when we access one of the fields of the the state
+                            // captured by a closure.
+                            ty::Closure(..) => {
+                                ProjectionElemFieldKind::ClosureState(index.sinto(s))
+                            }
+                            ty_kind => {
+                                supposely_unreachable_fatal!(
+                                    s, "ProjectionElemFieldBadType";
+                                    {index, ty_kind, &place_ty, &place}
+                                );
+                            }
+                        };
+                        ProjectionElem::Field(field_pj)
+                    }
+                    Index(local) => ProjectionElem::Index(local.sinto(s)),
+                    ConstantIndex {
+                        offset,
+                        min_length,
+                        from_end,
+                    } => ProjectionElem::ConstantIndex {
+                        offset: *offset,
+                        min_length: *min_length,
+                        from_end: *from_end,
+                    },
+                    Subslice { from, to, from_end } => ProjectionElem::Subslice {
+                        from: *from,
+                        to: *to,
+                        from_end: *from_end,
+                    },
+                    OpaqueCast(..) => ProjectionElem::OpaqueCast,
+                    // This is used for casts to a subtype, e.g. between `for<‘a> fn(&’a ())`
+                    // and `fn(‘static ())` (according to @compiler-errors on Zulip).
+                    Subtype { .. } => panic!("unexpected Subtype"),
+                    Downcast { .. } => unreachable!(),
+                    UnwrapUnsafeBinder { .. } => panic!("unsupported feature: unsafe binders"),
+                };
 
-            current_kind = PlaceKind::Projection {
-                place: Box::new(Place {
-                    ty: cur_ty.sinto(s),
-                    kind: current_kind.clone(),
-                }),
-                kind: elem_kind,
-            };
+                place = Place {
+                    ty: projected_place_ty.ty.sinto(s),
+                    kind: PlaceKind::Projection {
+                        place: Box::new(place),
+                        kind: elem_kind,
+                    },
+                };
+            }
+            place_ty = projected_place_ty;
         }
-        Place {
-            ty: current_place_ty.ty.sinto(s),
-            kind: current_kind.clone(),
-        }
+        place
     }
 }
 
