@@ -214,9 +214,16 @@ pub mod rust {
         }
         fn expr_kind(&self, expr_kind: &ExprKind) -> Doc {
             match &expr_kind {
+                /* ExprKind::Let { lhs, rhs, body } if lhs.kind() == PatKind::Wild => {
+                    format!(
+                        "{{{};\n{}}}",
+                        rhs.to_doc(self),
+                        body.to_doc(self)
+                    )
+                } */
                 ExprKind::Let { lhs, rhs, body } => {
                     format!(
-                        "let {} = {};\n{}",
+                        "{{let {} = {};\n{}}}",
                         lhs.to_doc(self),
                         rhs.to_doc(self),
                         body.to_doc(self)
@@ -226,7 +233,7 @@ pub mod rust {
                 ExprKind::LocalId(local_id) => local_id.to_string(),
                 ExprKind::Deref(inner) => format!("*{}", inner.to_doc(self)),
                 ExprKind::Borrow { mutable, inner } => format!(
-                    "&{}{}",
+                    "&{}({})",
                     if *mutable { "mut " } else { "" },
                     inner.to_doc(self)
                 ),
@@ -270,17 +277,128 @@ pub mod rust {
                         (ExprKind::GlobalId(hd), [lhs, index]) if hd == &GlobalId::index() => {
                             format!("({lhs})[{index}]")
                         }
+                        (ExprKind::GlobalId(hd), [e])
+                            if hd == &GlobalId::un_op(&hax_frontend_exporter::UnOp::Neg) =>
+                        {
+                            format!("-({e})")
+                        }
+                        (ExprKind::GlobalId(hd), [e])
+                            if hd == &GlobalId::un_op(&hax_frontend_exporter::UnOp::Not) =>
+                        {
+                            format!("!({e})")
+                        }
+                        (ExprKind::GlobalId(hd), [e]) if hd == &GlobalId::never_to_any() => {
+                            e.clone()
+                        }
+                        (ExprKind::GlobalId(hd), [e])
+                            if hd.name().starts_with(
+                                GlobalId::tuple_field(0).name().strip_suffix("0").unwrap(),
+                            ) =>
+                        {
+                            format!(
+                                "{e}.{}",
+                                hd.name()
+                                    .strip_prefix(
+                                        GlobalId::tuple_field(0).name().strip_suffix("0").unwrap()
+                                    )
+                                    .unwrap()
+                            )
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd
+                                == &GlobalId::logical_op(
+                                    &hax_frontend_exporter::LogicalOp::And,
+                                ) =>
+                        {
+                            format!("({lhs}) && ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd
+                                == &GlobalId::logical_op(&hax_frontend_exporter::LogicalOp::Or) =>
+                        {
+                            format!("({lhs}) || ({rhs})")
+                        }
                         (ExprKind::GlobalId(hd), [lhs, rhs])
                             if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Add) =>
                         {
-                            format!("{lhs} + {rhs}")
+                            format!("({lhs}) + ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Sub) =>
+                        {
+                            format!("({lhs}) - ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Mul) =>
+                        {
+                            format!("({lhs}) * ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Div) =>
+                        {
+                            format!("({lhs}) / ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Rem) =>
+                        {
+                            format!("({lhs}) % ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::BitXor) =>
+                        {
+                            format!("({lhs}) ^ ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::BitAnd) =>
+                        {
+                            format!("({lhs}) & ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::BitOr) =>
+                        {
+                            format!("({lhs}) | ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Shl) =>
+                        {
+                            format!("({lhs}) << ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Shr) =>
+                        {
+                            format!("({lhs}) >> ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Eq) =>
+                        {
+                            format!("({lhs}) == ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Ne) =>
+                        {
+                            format!("({lhs}) != ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Lt) =>
+                        {
+                            format!("({lhs}) < ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Le) =>
+                        {
+                            format!("({lhs}) <= ({rhs})")
                         }
                         (ExprKind::GlobalId(hd), [lhs, rhs])
                             if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Gt) =>
                         {
-                            format!("{lhs} > {rhs}")
+                            format!("({lhs}) > ({rhs})")
+                        }
+                        (ExprKind::GlobalId(hd), [lhs, rhs])
+                            if hd == &GlobalId::bin_op(&hax_frontend_exporter::BinOp::Ge) =>
+                        {
+                            format!("({lhs}) >= ({rhs})")
                         } // TODO complete and improve
-                        _ => format!("({f}::<{generic_args_string}>)({})", args.join(",")),
+                        _ => format!("({f}::<{generic_args_string}>)( {} )", args.join(",")),
                     }
                 }
                 ExprKind::Literal(lit) => lit.to_doc(self),
@@ -308,7 +426,54 @@ pub mod rust {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
-                _ => unimplemented!(),
+                ExprKind::Construct {
+                    constructor,
+                    is_record,
+                    is_struct,
+                    fields,
+                    base,
+                } => {
+                    let named_fields = *is_record || *is_struct;
+                    format!(
+                        "{}{}",
+                        constructor.to_doc(self),
+                        if fields.is_empty() {
+                            "".to_owned()
+                        } else {
+                            format!(
+                                "({})",
+                                fields
+                                    .iter()
+                                    .map(|(name, e)| if named_fields {
+                                        format!("{}:{}", name.to_doc(self), e.to_doc(self))
+                                    } else {
+                                        e.to_doc(self)
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            )
+                        }
+                    )
+                }
+                ExprKind::Ascription { .. } => todo!(),
+                ExprKind::Assign { lhs, e } => format!("{} = {}", lhs.to_doc(self), e.to_doc(self)),
+                ExprKind::Loop { body, .. } => format!("loop {{ {} }}", body.to_doc(self)), // TODO label
+                ExprKind::Break { e, .. } => format!("break {}", e.to_doc(self)), // TODO label
+                ExprKind::Return { e } => format!("return {}", e.to_doc(self)),
+                ExprKind::Continue { .. } => "continue".to_owned(), // TODO label
+                ExprKind::Closure {
+                    params,
+                    body,
+                    captures,
+                } => format!(
+                    "|{}| {{ {} }} ",
+                    params
+                        .iter()
+                        .map(|param| param.to_doc(self))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    body.to_doc(self)
+                ),
             }
         }
         fn literal(&self, lit: &Literal) -> Doc {
@@ -328,6 +493,7 @@ pub mod rust {
             match generic_value {
                 GenericValue::Ty(ty) => ty.to_doc(self),
                 GenericValue::Expr(expr) => expr.to_doc(self),
+                GenericValue::Lifetime => "".to_owned(),
             }
         }
         fn generic_constraint(&self, generic_constraint: &GenericConstraint) -> Doc {
@@ -407,6 +573,21 @@ pub mod rust {
                         }
                     )
                 }
+                PatKind::Construct {
+                    constructor,
+                    fields,
+                    ..
+                } if *constructor == GlobalId::tuple_pat() => {
+                    format!(
+                        "({})",
+                        fields
+                            .iter()
+                            .map(|(_, p)| p.to_doc(self))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
+                PatKind::Construct { .. } => todo!(),
                 PatKind::Error(_) => "<pattern error>".to_string(),
             }
         }

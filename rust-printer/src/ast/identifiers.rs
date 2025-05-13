@@ -66,6 +66,12 @@ mod global_id {
         pub fn index() -> Self {
             Self::from_string("index")
         }
+        pub fn tuple_field(field: usize) -> Self {
+            Self::from_string(&format!("tuple_field_{field}"))
+        }
+        pub fn tuple_pat() -> Self {
+            Self::from_string("tuple_pat")
+        }
         pub fn box_new() -> Self {
             Self::from_string("Box::new")
         }

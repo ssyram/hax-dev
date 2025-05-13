@@ -42,6 +42,14 @@ fn translate_ty(ty: &src::Ty, span: dst::Span) -> dst::Ty {
             args: vec![dst::GenericValue::Ty(translate_ty(ty.as_ref()))],
         },
         src::TyKind::Param(param_ty) => dst::Ty::Param((&(*param_ty.name)).into()),
+        src::TyKind::Adt {
+            generic_args,
+            def_id,
+            ..
+        } => dst::Ty::App {
+            head: def_id.clone().into(),
+            args: translate_generic_args(generic_args, span),
+        },
         ty => dst::Ty::Error(Diagnostic::new(
             dst::Node::Unknown(format!("Rust THIR: ty: {ty:?}")),
             DiagnosticInfo {
@@ -54,12 +62,22 @@ fn translate_ty(ty: &src::Ty, span: dst::Span) -> dst::Ty {
 }
 fn translate_pat(pat: &src::Pat) -> dst::Pat {
     let span = (&pat.span).into();
-    let kind = match pat.contents.as_ref() {
+    let kind = Box::new(match pat.contents.as_ref() {
         src::PatKind::Wild => dst::PatKind::Wild,
         src::PatKind::Binding { var, .. } => dst::PatKind::Binding {
             mutable: false,
             var: var.into(),
             mode: dst::BindingMode::ByValue,
+        },
+        src::PatKind::Tuple { subpatterns } => dst::PatKind::Construct {
+            constructor: GlobalId::tuple_pat(),
+            is_record: false,
+            is_struct: true,
+            fields: subpatterns
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (GlobalId::tuple_field(i), translate_pat(p)))
+                .collect(),
         },
         pat => dst::PatKind::Error(Diagnostic::new(
             dst::Node::Unknown(format!("Rust THIR: pat: {pat:?}")),
@@ -69,7 +87,7 @@ fn translate_pat(pat: &src::Pat) -> dst::Pat {
                 kind: DiagnosticInfoKind::Custom("Unimplemented".to_string()),
             },
         )),
-    };
+    });
     let ty = translate_ty(&pat.ty, span);
     let meta = dst::Metadata {
         span,
@@ -93,7 +111,7 @@ fn translate_param(param: &src::Param, span: dst::Span) -> Result<dst::Param, Di
 }
 fn translate_generic_arg(generic_arg: &GenericArg, span: dst::Span) -> GenericValue {
     match generic_arg {
-        GenericArg::Lifetime(region) => unimplemented!(),
+        GenericArg::Lifetime(region) => GenericValue::Lifetime,
         GenericArg::Type(ty) => GenericValue::Ty(translate_ty(ty, span)),
         GenericArg::Const(c_expr) => GenericValue::Expr(translate_constant_expr(c_expr)),
     }
@@ -182,10 +200,10 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
             simple_app(GlobalId::box_new(), vec![translate_expr(value)])
         }
         src::ExprKind::If {
-            if_then_scope,
             cond,
             then,
             else_opt,
+            ..
         } => {
             let condition = translate_expr(cond);
             let then = translate_expr(then);
@@ -197,14 +215,12 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
             }
         }
         src::ExprKind::Call {
-            ty,
             fun,
             args,
-            from_hir_call,
-            fn_span,
             generic_args,
             bounds_impls,
             r#trait,
+            ..
         } => {
             let head = translate_expr(fun);
             let args = args.iter().map(translate_expr).collect::<Vec<_>>();
@@ -291,7 +307,7 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
                         let rhs = translate_expr(expr);
                         (
                             dst::Pat {
-                                kind: dst::PatKind::Wild,
+                                kind: Box::new(dst::PatKind::Wild),
                                 ty: rhs.ty.clone(),
                                 meta: dst::Metadata {
                                     attrs: vec![],
@@ -339,7 +355,10 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
             },
         },
         src::ExprKind::Field { field, lhs } => todo!(),
-        src::ExprKind::TupleField { field, lhs } => todo!(),
+        src::ExprKind::TupleField { field, lhs } => simple_app(
+            dst::GlobalId::tuple_field(*field),
+            vec![translate_expr(lhs)],
+        ),
         src::ExprKind::Index { lhs, index } => simple_app(
             dst::GlobalId::index(),
             vec![translate_expr(lhs), translate_expr(index)],

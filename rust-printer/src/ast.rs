@@ -32,6 +32,9 @@ pub enum GenericValue {
     /// A const-level generic value.
     /// Example: `12` in `Foo<12>`
     Expr(Expr),
+    /// A lifetime.
+    /// Example `'a` in `foo<'a>`
+    Lifetime,
 }
 
 /// Built-in primitive types.
@@ -107,7 +110,7 @@ pub struct Expr {
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Pat {
     /// The kind of pattern.
-    pub kind: PatKind,
+    pub kind: Box<PatKind>,
     /// The type of this pattern.
     pub ty: Ty,
     /// Source span and attributes.
@@ -171,6 +174,14 @@ pub enum PatKind {
         mutable: bool,
         var: LocalId,
         mode: BindingMode,
+    },
+
+    /// A constructor pattern
+    Construct {
+        constructor: GlobalId,
+        is_record: bool,
+        is_struct: bool,
+        fields: Vec<(GlobalId, Pat)>,
     },
 
     /// Fallback constructor to carry errors.
