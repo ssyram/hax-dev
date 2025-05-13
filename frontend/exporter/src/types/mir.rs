@@ -774,16 +774,10 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
                 })
             };
             let elem_kind: ProjectionElem = match elems {
-                [elem0 @ Downcast(_, variant_idx), elem1 @ Field(index, _), rest @ ..] => {
-                    current_place_ty = current_place_ty.projection_ty(tcx, *elem0);
-                    current_place_ty = current_place_ty.projection_ty(tcx, *elem1);
-                    elems = rest;
-                    mk_field(index, Some(*variant_idx))
-                }
                 [elem, rest @ ..] => {
+                    let variant = current_place_ty.variant_index;
                     current_place_ty = current_place_ty.projection_ty(tcx, *elem);
                     elems = rest;
-                    use ty::TyKind;
                     match elem {
                         Deref => ProjectionElem::Deref,
                         Field(index, _) => {
@@ -794,7 +788,7 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
                                     index.sinto(s),
                                 ))
                             } else {
-                                mk_field(index, None)
+                                mk_field(index, variant)
                             }
                         }
                         Index(local) => ProjectionElem::Index(local.sinto(s)),
@@ -816,7 +810,9 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
                         // This is used for casts to a subtype, e.g. between `for<‘a> fn(&’a ())`
                         // and `fn(‘static ())` (according to @compiler-errors on Zulip).
                         Subtype { .. } => panic!("unexpected Subtype"),
-                        Downcast { .. } => panic!("unexpected Downcast"),
+                        // Keep the same `PlaceKind`, the variant will be stored in the `PlaceTy`
+                        // and we can access it next loop.
+                        Downcast { .. } => continue,
                         UnwrapUnsafeBinder { .. } => panic!("unsupported feature: unsafe binders"),
                     }
                 }
