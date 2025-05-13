@@ -18,6 +18,7 @@ let impl_i32__abs (a:i32{minint i32_inttype < v a}) : i32 = abs_int a
 let impl_i16__wrapping_add: i16 -> i16 -> i16 = add_mod
 let impl_i16__wrapping_sub: i16 -> i16 -> i16 = sub_mod
 let impl_i16__wrapping_mul: i16 -> i16 -> i16 = mul_mod
+val impl_i16__overflowing_mul: i16 -> i16 -> i16 * bool
 
 let impl_u32__wrapping_add: u32 -> u32 -> u32 = add_mod
 val impl_u32__rotate_left: u32 -> u32 -> u32
