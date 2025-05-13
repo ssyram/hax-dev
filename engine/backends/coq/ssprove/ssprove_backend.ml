@@ -12,7 +12,6 @@ include
       include On.Monadic_binding
       include On.Macro
       include On.Construct_base
-      include On.Mutable_variable
       include On.Loop
       include On.For_loop
       include On.While_loop
@@ -30,7 +29,7 @@ module SubtypeToInputLanguage
              and type continue = Features.Off.continue
              and type break = Features.Off.break
              and type mutable_pointer = Features.Off.mutable_pointer
-             and type mutable_variable = Features.On.mutable_variable
+             and type mutable_variable = Features.Off.mutable_variable
              and type reference = Features.Off.reference
              and type raw_pointer = Features.Off.raw_pointer
              and type early_exit = Features.Off.early_exit
@@ -73,7 +72,16 @@ end
 module AST = Ast.Make (InputLanguage)
 module BackendOptions = Backend.UnitBackendOptions
 open Ast
-module CoqNamePolicy = Concrete_ident.DefaultNamePolicy
+
+module CoqNamePolicy = struct
+  include Concrete_ident.DefaultNamePolicy
+
+  let reserved_words = Hash_set.of_list (module String) [ "left"; "right" ]
+  (* let temp = Hash_set.create (module String) in *)
+  (* temp *)
+  (* Hash_set.add temp "left" *)
+end
+
 module U = Ast_utils.Make (InputLanguage)
 module RenderId = Concrete_ident.MakeRenderAPI (CoqNamePolicy)
 open AST
@@ -90,8 +98,8 @@ end
 module SSP = Coq (SSProveLibrary)
 
 module SSPExtraDefinitions (* : ANALYSIS *) = struct
-  let wrap_type_in_both (l : string) (i : string) (a : SSP.AST.ty) =
-    SSP.AST.AppTy (SSP.AST.NameTy ("both" ^ " " ^ l ^ " " ^ i), [ a ])
+  let wrap_type_in_both (a : SSP.AST.ty) =
+    SSP.AST.AppTy (SSP.AST.NameTy "both", [ a ])
 
   let unit_term : SSP.AST.term =
     SSP.AST.TypedTerm (SSP.AST.UnitTerm, SSP.AST.Unit)
@@ -276,12 +284,6 @@ module SSPExtraDefinitions (* : ANALYSIS *) = struct
           | SSP.AST.Named (x, y) -> [ (x, y) ] | SSP.AST.Coercion _ -> [])
         variants
     in
-    let implicit_LI =
-      [
-        SSP.AST.Implicit (SSP.AST.Ident "L", SSP.AST.NameTy "{fset Location}");
-        SSP.AST.Implicit (SSP.AST.Ident "I", SSP.AST.NameTy "Interface");
-      ]
-    in
     let ty_name =
       "("
       ^ String.concat ~sep:" "
@@ -307,16 +309,15 @@ module SSPExtraDefinitions (* : ANALYSIS *) = struct
           ~f:(fun i (x, y) ->
             SSP.AST.Equations
               ( x,
-                implicit_LI
-                @ List.map
-                    ~f:(function
-                      | SSP.AST.Explicit (a, b) -> SSP.AST.Implicit (a, b)
-                      | v -> v)
-                    arguments
+                List.map
+                  ~f:(function
+                    | SSP.AST.Explicit (a, b) -> SSP.AST.Implicit (a, b)
+                    | v -> v)
+                  arguments
                 @ [
                     SSP.AST.Explicit
                       ( SSP.AST.Ident "s",
-                        wrap_type_in_both "L" "I" (SSP.AST.NameTy name) );
+                        wrap_type_in_both (SSP.AST.NameTy name) );
                   ],
                 SSP.AST.App
                   ( SSP.AST.Var "bind_both",
@@ -324,105 +325,96 @@ module SSPExtraDefinitions (* : ANALYSIS *) = struct
                       SSP.AST.Var "s";
                       SSP.AST.Lambda
                         ( [ SSP.AST.Ident "x" ],
+                          (* SSP.AST.App *)
+                          (*   ( SSP.AST.Var "solve_lift", *)
+                          (* [ *)
                           SSP.AST.App
-                            ( SSP.AST.Var "solve_lift",
+                            ( SSP.AST.Var "ret_both",
                               [
-                                SSP.AST.App
-                                  ( SSP.AST.Var "ret_both",
-                                    [
-                                      SSP.AST.TypedTerm
-                                        ( List.fold_right ~init:(SSP.AST.Var "x")
-                                            ~f:(fun x y ->
-                                              SSP.AST.App (SSP.AST.Var x, [ y ]))
-                                            ((if Stdlib.(i != 0) then [ "snd" ]
-                                              else [])
-                                            @ List.init
-                                                (List.length fields - 1 - i)
-                                                ~f:(fun _ -> "fst")),
-                                          y );
-                                    ] );
-                              ] ) );
+                                SSP.AST.TypedTerm
+                                  ( List.fold_right ~init:(SSP.AST.Var "x")
+                                      ~f:(fun x y ->
+                                        SSP.AST.App (SSP.AST.Var x, [ y ]))
+                                      ((if Stdlib.(i != 0) then [ "snd" ]
+                                        else [])
+                                      @ List.init
+                                          (List.length fields - 1 - i)
+                                          ~f:(fun _ -> "fst")),
+                                    y );
+                              ] )
+                          (* ] ) *) );
                     ] ),
-                wrap_type_in_both "L" "I" y ))
+                wrap_type_in_both y ))
           fields
       @ [
           SSP.AST.Equations
             ( "Build_" ^ name,
-              List.mapi
-                ~f:(fun i _ ->
-                  SSP.AST.Implicit
-                    ( SSP.AST.Ident ("L" ^ Int.to_string i),
-                      SSP.AST.NameTy "{fset Location}" ))
-                fields
-              @ List.mapi
-                  ~f:(fun i _ ->
-                    SSP.AST.Implicit
-                      ( SSP.AST.Ident ("I" ^ Int.to_string i),
-                        SSP.AST.NameTy "Interface" ))
-                  fields
-              @ List.map
-                  ~f:(function
-                    | SSP.AST.Explicit (a, b) -> SSP.AST.Implicit (a, b)
-                    | v -> v)
-                  arguments
+              List.map
+                ~f:(function
+                  | SSP.AST.Explicit (a, b) -> SSP.AST.Implicit (a, b) | v -> v)
+                arguments
               @ List.mapi
                   ~f:(fun i (x, y) ->
-                    SSP.AST.Implicit
-                      ( SSP.AST.Ident x,
-                        wrap_type_in_both
-                          ("L" ^ Int.to_string i)
-                          ("I" ^ Int.to_string i)
-                          y ))
+                    SSP.AST.Implicit (SSP.AST.Ident x, wrap_type_in_both y))
                   fields,
               List.fold_left
                 ~init:
-                  (SSP.AST.App
-                     ( SSP.AST.Var "solve_lift",
+                  ((* SSP.AST.App *)
+                   (*   ( SSP.AST.Var "solve_lift", *)
+                   (* [ *)
+                     SSP.AST.App
+                     ( SSP.AST.Var "ret_both",
                        [
-                         SSP.AST.App
-                           ( SSP.AST.Var "ret_both",
-                             [
-                               SSP.AST.TypedTerm
-                                 ( SSP.AST.Tuple
-                                     (List.map
-                                        ~f:(fst >> fun x -> SSP.AST.Var x)
-                                        fields),
-                                   SSP.AST.NameTy ty_name );
-                             ] );
-                       ] ))
+                         SSP.AST.TypedTerm
+                           ( SSP.AST.Tuple
+                               (List.map
+                                  ~f:(fst >> fun x -> SSP.AST.Var x)
+                                  fields),
+                             SSP.AST.NameTy ty_name );
+                       ] )
+                     (* ] ) *))
                 ~f:(fun z (x, _y) ->
                   SSP.AST.App
                     ( SSP.AST.Var "bind_both",
                       [ SSP.AST.Var x; SSP.AST.Lambda ([ SSP.AST.Ident x ], z) ]
                     ))
                 fields,
-              let lis =
-                String.concat ~sep:":|:"
-                  (List.map
-                     ~f:(fun i -> "L" ^ Int.to_string i)
-                     (List.range 0 (List.length fields)))
-              in
-              let lis =
-                match List.length fields with
-                | 0 -> "(fset [])"
-                | 1 -> lis
-                | _ -> "(" ^ lis ^ ")"
-              in
-              let iis =
-                String.concat ~sep:":|:"
-                  (List.map
-                     ~f:(fun i -> "I" ^ Int.to_string i)
-                     (List.range 0 (List.length fields)))
-              in
-              let iis =
-                match List.length fields with
-                | 0 -> "(fset [])"
-                | 1 -> iis
-                | _ -> "(" ^ iis ^ ")"
-              in
-              SSP.AST.NameTy ("both" ^ " " ^ lis ^ " " ^ iis ^ " " ^ ty_name) )
+              SSP.AST.NameTy ("both" ^ " " ^ ty_name) )
           (* :: SSP.AST.Arguments ("Build_" ^ pconcrete_ident name,) *);
         ]
+      (* @ [SSP.AST.ProgramInstance *)
+      (*      (\* (name, arguments, self_ty, ty_list, impl_list) *\) *)
+      (*      ( "Settable", *)
+      (*        [], *)
+      (*        SSP.AST.NameTy name, *)
+      (*        [wrap_type_in_both (SSP.AST.NameTy name)], *)
+      (*        SSP.AST.InstanceDecls [SSP.AST.LetDef ("mkT", [], *)
+      (*          SSP.AST.App (SSP.AST.Var "fun x => ", [ *)
+      (*          List.fold_left *)
+      (*           ~init: *)
+      (*             ((\* SSP.AST.App *\) *)
+      (*              (\*   ( SSP.AST.Var "solve_lift", *\) *)
+      (*                  (\* [ *\) *)
+      (*                    SSP.AST.App *)
+      (*                      ( SSP.AST.Var "ret_both", *)
+      (*                        [ *)
+      (*                          SSP.AST.TypedTerm *)
+      (*                            ( SSP.AST.Tuple *)
+      (*                                (List.map *)
+      (*                                   ~f:(fst >> fun x -> SSP.AST.Var x) *)
+      (*                                   fields), *)
+      (*                              SSP.AST.NameTy ty_name ); *)
+      (*                        ] ); *)
+      (*                    (\* ] ) *\)) *)
+      (*           ~f:(fun z (x, _y) -> *)
+      (*             SSP.AST.App *)
+      (*               ( SSP.AST.Var "bind_both", *)
+      (*                 [ SSP.AST.App (SSP.AST.Var x , [ (SSP.AST.Var "x") ] ); SSP.AST.Lambda ([ SSP.AST.Ident x ], z) ] *)
+      (*               )) *)
+      (*           fields]), *)
+      (*          SSP.AST.WildTy)] *)
+      (*      ) *)
+      (*   ] *)
       @ List.mapi
           ~f:(fun i (x, _y) ->
             SSP.AST.Notation
@@ -452,12 +444,6 @@ module SSPExtraDefinitions (* : ANALYSIS *) = struct
       ((name, arguments, cases) :
         string * SSP.AST.argument list * SSP.AST.inductive_case list) :
       SSP.AST.decl =
-    let implicit_LI =
-      [
-        SSP.AST.Implicit (SSP.AST.Ident "L", SSP.AST.NameTy "{fset Location}");
-        SSP.AST.Implicit (SSP.AST.Ident "I", SSP.AST.NameTy "Interface");
-      ]
-    in
     SSP.AST.MultipleDecls
       ((* Type definition *)
        SSP.AST.Definition
@@ -487,16 +473,16 @@ module SSPExtraDefinitions (* : ANALYSIS *) = struct
              in
              let definition_body =
                let inject_argument inner_val =
+                 (* SSP.AST.App *)
+                 (*   ( SSP.AST.Var "solve_lift", *)
+                 (* [ *)
                  SSP.AST.App
-                   ( SSP.AST.Var "solve_lift",
+                   ( SSP.AST.Var "ret_both",
                      [
-                       SSP.AST.App
-                         ( SSP.AST.Var "ret_both",
-                           [
-                             SSP.AST.TypedTerm
-                               (injections inner_val, SSP.AST.NameTy name);
-                           ] );
+                       SSP.AST.TypedTerm
+                         (injections inner_val, SSP.AST.NameTy name);
                      ] )
+                 (* ] ) *)
                in
                match curr_typ with
                | [] -> inject_argument unit_term
@@ -522,14 +508,12 @@ module SSPExtraDefinitions (* : ANALYSIS *) = struct
                   ("'" ^ v_name ^ "_case" ^ "'" ^ arg, body, Some "at level 100"));
                SSP.AST.Equations
                  ( v_name,
-                   implicit_LI
-                   @ List.map
-                       ~f:(fun x ->
-                         SSP.AST.Explicit
-                           (SSP.AST.Ident "x", wrap_type_in_both "L" "I" x))
-                       curr_typ,
+                   List.map
+                     ~f:(fun x ->
+                       SSP.AST.Explicit (SSP.AST.Ident "x", wrap_type_in_both x))
+                     curr_typ,
                    definition_body,
-                   wrap_type_in_both "L" "I" (SSP.AST.NameTy name) );
+                   wrap_type_in_both (SSP.AST.NameTy name) );
              ]))
 end
 
@@ -567,7 +551,7 @@ let primitive_to_string (id : Ast.primitive_ident) : string =
 
 open Phase_utils
 
-module TransformToInputLanguage (* : PHASE *) =
+module TransformToInputLanguage =
   [%functor_application
     Phases.Reject.Unsafe(Features.Rust)
     |> Phases.Reject.RawOrMutPointer
@@ -578,12 +562,12 @@ module TransformToInputLanguage (* : PHASE *) =
     |> Phases.Reject.Arbitrary_lhs
     |> Phases.Drop_blocks
     |> Phases.Drop_match_guards
-    (* |> Phases.Reject.Continue *)
+    |> Phases.Reject.Continue
     |> Phases.Drop_references
     |> Phases.Trivialize_assign_lhs
     |> Phases.Reconstruct_question_marks
     |> Side_effect_utils.Hoist
-    (* |> Phases.Local_mutation *)
+    |> Phases.Local_mutation
     (* |> Phases.State_passing_loop *)
     |> Phases.Reject.Continue
     |> Phases.Cf_into_monads
@@ -629,9 +613,11 @@ let plocal_ident (e : Local_ident.t) : string =
         { e with name }
     | _ -> e)
 
-module Make (Ctx : sig
-  val ctx : Context.t
-end) =
+module Make
+    (Attrs : Attrs.WITH_ITEMS)
+    (Ctx : sig
+      val ctx : Context.t
+    end) =
 struct
   open Ctx
 
@@ -731,6 +717,8 @@ struct
         SSP.AST.Product (args_ty span args)
     | TApp { ident; args; _ } ->
         SSP.AST.AppTy (SSP.AST.NameTy (pglobal_ident ident), args_ty span args)
+    | TArrow ([ TApp { ident = `TupleType 0; args = []; _ } ], output) ->
+        pty span output
     | TArrow (inputs, output) ->
         List.fold_right ~init:(pty span output)
           ~f:(fun x y -> SSP.AST.Arrow (x, y))
@@ -759,8 +747,7 @@ struct
         | GLifetime _ -> __TODO_ty__ span "lifetime"
         | GType typ -> pty span typ
         | GConst { typ; _ } ->
-            SSPExtraDefinitions.wrap_type_in_both "(fset [])" "(fset [])"
-              (pty span typ))
+            SSPExtraDefinitions.wrap_type_in_both (pty span typ))
       args
   (* match args with *)
   (* | arg :: xs -> *)
@@ -801,22 +788,21 @@ struct
         SSP.AST.WildPat (* UnitPat *)
     | PConstruct { constructor = `TupleCons 1; fields = [ _ ]; _ } ->
         __TODO_pat__ p.span "tuple 1"
-    | PConstruct { constructor = `TupleCons _n; fields; _ } ->
-        SSP.AST.TuplePat (List.map ~f:(fun { pat; _ } -> ppat pat) fields)
+    | PConstruct { constructor = `TupleCons _n; fields = args; _ } ->
+        SSP.AST.TuplePat (List.map ~f:(fun { pat; _ } -> ppat pat) args)
     (* Record *)
     | PConstruct { is_record = true; _ } -> __TODO_pat__ p.span "record pattern"
-    (* (\* SSP.AST.Ident (pglobal_ident constructor) *\) *)
-    (* SSP.AST.RecordPat (pglobal_ident constructor, List.map ~f:(fun {field; pat} -> (pglobal_ident field, ppat pat)) fields) *)
-    (*       (\* SSP.AST.ConstructorPat (pglobal_ident constructor ^ "_case", [SSP.AST.Ident "temp"]) *\) *)
-    (*       (\* List.map ~f:(fun {field; pat} -> (pat, SSP.AST.App (SSP.AST.Var (pglobal_ident field), [SSP.AST.Var "temp"]))) fields *\) *)
+    (* (\* SSP.AST.Ident (pglobal_ident name) *\) *)
+    (* SSP.AST.RecordPat (pglobal_ident name, List.map ~f:(fun {field; pat} -> (pglobal_ident field, ppat pat)) args) *)
+    (*       (\* SSP.AST.ConstructorPat (pglobal_ident name ^ "_case", [SSP.AST.Ident "temp"]) *\) *)
+    (*       (\* List.map ~f:(fun {field; pat} -> (pat, SSP.AST.App (SSP.AST.Var (pglobal_ident field), [SSP.AST.Var "temp"]))) args *\) *)
     (* Enum *)
-    | PConstruct { constructor; fields; is_record = false; _ } ->
+    | PConstruct { constructor = name; fields = args; is_record = false; _ } ->
         SSP.AST.ConstructorPat
-          ( pglobal_ident constructor,
-            match fields with
+          ( pglobal_ident name,
+            match args with
             | [] -> []
-            | _ ->
-                [ SSP.AST.TuplePat (List.map ~f:(fun p -> ppat p.pat) fields) ]
+            | _ -> [ SSP.AST.TuplePat (List.map ~f:(fun p -> ppat p.pat) args) ]
           )
     | PConstant { lit } -> SSP.AST.Lit (pliteral lit)
     | _ -> .
@@ -857,382 +843,395 @@ struct
   and pexpr (env : LocalIdentOrLisIis.W.t list Map.M(Local_ident).t)
       (add_solve : bool) (e : expr) : SSP.AST.term =
     let span = e.span in
-    (match (add_solve, e.e) with
-    | ( true,
-        ( Construct { is_record = true; _ }
-        | If _ (* | Match _ *) | Literal _
-        | Construct { constructor = `TupleCons _; _ }
-        | App _ | GlobalVar _ | LocalVar _ ) ) ->
-        fun x -> SSP.AST.App (SSP.AST.Var "solve_lift", [ x ])
-    | _ -> fun x -> x)
-      (match e.e with
-      | Literal lit ->
-          SSP.AST.App
-            ( SSP.AST.Var "ret_both",
-              [
-                SSP.AST.TypedTerm (SSP.AST.Const (pliteral lit), pty span e.typ);
-              ] )
-      | LocalVar local_ident -> SSP.AST.NameTerm (plocal_ident local_ident)
-      | GlobalVar (`TupleCons 0)
-      | Construct { constructor = `TupleCons 0; fields = []; _ } ->
-          SSP.AST.App (SSP.AST.Var "ret_both", [ SSPExtraDefinitions.unit_term ])
-      | GlobalVar global_ident -> SSP.AST.Var (pglobal_ident global_ident)
-      | App
+    (* (match (add_solve, e.e) with *)
+    (* | ( true, *)
+    (*     ( Construct { is_record = true; _ } *)
+    (*     | If _ (\* | Match _ *\) | Literal _ *)
+    (*     | Construct { constructor = `TupleCons _; _ } *)
+    (*     | App _ | GlobalVar _ | LocalVar _ ) ) -> *)
+    (*     fun x -> x (\* SSP.AST.App (SSP.AST.Var "solve_lift", [ x ]) *\) *)
+    (* | _ -> fun x -> x) *)
+    match e.e with
+    | Literal lit ->
+        SSP.AST.App
+          ( SSP.AST.Var "ret_both",
+            [ SSP.AST.TypedTerm (SSP.AST.Const (pliteral lit), pty span e.typ) ]
+          )
+    | LocalVar local_ident -> SSP.AST.NameTerm (plocal_ident local_ident)
+    | GlobalVar (`TupleCons 0)
+    | Construct { constructor = `TupleCons 0; fields = []; _ } ->
+        SSP.AST.App (SSP.AST.Var "ret_both", [ SSPExtraDefinitions.unit_term ])
+    | GlobalVar global_ident -> SSP.AST.Var (pglobal_ident global_ident)
+    | App
+        {
+          f = { e = GlobalVar (`Projector (`TupleField (i, j))); _ };
+          args = [ _ ];
+          _;
+        } ->
+        (* SSP.AST.App (SSP.AST.Var (Int.to_string i), [ SSP.AST.Var (Int.to_string j) ]) *)
+        __TODO_term__ span "app global vcar projector tuple"
+    | App
+        {
+          f;
+          args =
+            [
+              {
+                e =
+                  ( GlobalVar (`TupleCons 0)
+                  | Construct { constructor = `TupleCons 0; fields = []; _ } );
+              };
+            ];
+          _;
+        } ->
+        (pexpr env false) f
+    | App { f = { e = GlobalVar x; _ }; args; _ } when Map.mem operators x ->
+        let arity, op = Map.find_exn operators x in
+        if List.length args <> arity then failwith "Bad arity";
+        let args =
+          List.map
+            ~f:(fun x -> SSP.AST.Value ((pexpr env false) x, true, 0))
+            args
+        in
+        SSP.AST.AppFormat (op, args)
+    (* | App { f = { e = GlobalVar x }; args } -> *)
+    (*    __TODO_term__ span "GLOBAL APP?" *)
+    | App { f; args; _ } ->
+        let base = (pexpr env false) f in
+        let args = List.map ~f:(pexpr env false) args in
+        SSP.AST.App (base, args)
+    | If { cond; then_; else_ } ->
+        SSPExtraDefinitions.ifb
+          ( (pexpr env false) cond,
+            (pexpr env false) then_,
+            Option.value_map else_ ~default:(SSP.AST.Literal "()")
+              ~f:(pexpr env false) )
+    | Array l -> SSP.AST.Array (List.map ~f:(pexpr env add_solve) l)
+    | Let { lhs; rhs; body; monadic } ->
+        let extra_set, _extra_env =
+          LocalIdentOrLisIis.analyse_expr ctx.analysis_data.mut_var env rhs
+        in
+        let new_env =
+          extend_env env
+            (Map.of_alist_exn
+               (module Local_ident)
+               (List.map
+                  ~f:(fun v -> (v, extra_set))
+                  (Set.to_list (U.Reducers.variables_of_pat lhs))))
+        in
+        let new_env =
+          match (monadic, is_mutable_pat lhs) with
+          | None, true ->
+              extend_env new_env
+                (Map.of_alist_exn
+                   (module Local_ident)
+                   (List.map
+                      ~f:(fun v -> (v, [ LocalIdentOrLisIis.W.Identifier v ]))
+                      (Set.to_list (U.Reducers.variables_of_pat lhs))))
+          | _, _ -> new_env
+        in
+        SSPExtraDefinitions.letb
           {
-            f = { e = GlobalVar (`Projector (`TupleField _)); _ };
-            args = [ _ ];
-            _;
-          } ->
-          __TODO_term__ span "app global vcar projector tuple"
-      | App { f = { e = GlobalVar x; _ }; args; _ } when Map.mem operators x ->
-          let arity, op = Map.find_exn operators x in
-          if List.length args <> arity then failwith "Bad arity";
-          let args =
-            List.map
-              ~f:(fun x -> SSP.AST.Value ((pexpr env false) x, true, 0))
-              args
-          in
-          SSP.AST.AppFormat (op, args)
-      (* | App { f = { e = GlobalVar x }; args } -> *)
-      (*    __TODO_term__ span "GLOBAL APP?" *)
-      | App { f; args; _ } ->
-          let base = (pexpr env false) f in
-          let args = List.map ~f:(pexpr env false) args in
-          SSP.AST.App (base, args)
-      | If { cond; then_; else_ } ->
-          SSPExtraDefinitions.ifb
-            ( (pexpr env false) cond,
-              (pexpr env false) then_,
-              Option.value_map else_ ~default:(SSP.AST.Literal "()")
-                ~f:(pexpr env false) )
-      | Array l -> SSP.AST.Array (List.map ~f:(pexpr env add_solve) l)
-      | Let { lhs; rhs; body; monadic } ->
-          let extra_set, _extra_env =
-            LocalIdentOrLisIis.analyse_expr ctx.analysis_data.mut_var env rhs
-          in
-          let new_env =
-            extend_env env
-              (Map.of_alist_exn
-                 (module Local_ident)
-                 (List.map
-                    ~f:(fun v -> (v, extra_set))
-                    (Set.to_list (U.Reducers.variables_of_pat lhs))))
-          in
-          let new_env =
-            match (monadic, is_mutable_pat lhs) with
-            | None, true ->
-                extend_env new_env
-                  (Map.of_alist_exn
-                     (module Local_ident)
-                     (List.map
-                        ~f:(fun v -> (v, [ LocalIdentOrLisIis.W.Identifier v ]))
-                        (Set.to_list (U.Reducers.variables_of_pat lhs))))
-            | _, _ -> new_env
-          in
-          SSPExtraDefinitions.letb
-            {
-              pattern = ppat lhs;
-              mut = is_mutable_pat lhs;
-              value = (pexpr env false) rhs;
-              body = (pexpr new_env add_solve) body;
-              value_typ =
-                (match monadic with
-                | Some (MException typ, _) -> pty span typ
-                | Some (MResult typ, _) -> pty span typ
-                | _ ->
-                    SSP.AST.WildTy
-                    (* TODO : What should the correct type be here? `lhs.span lhs.typ` *));
-              monad_typ =
-                Option.map
-                  ~f:(fun (m, _) ->
-                    match m with
-                    | MException typ -> SSP.AST.Exception (pty span typ)
-                    | MResult typ -> SSP.AST.Result (pty span typ)
-                    | MOption -> SSP.AST.Option)
-                  monadic;
-            }
-      | EffectAction _ -> . (* __TODO_term__ span "monadic action" *)
-      | Match
-          {
-            scrutinee;
-            arms =
-              [
-                {
-                  arm =
-                    {
-                      arm_pat =
-                        {
-                          p =
-                            PConstruct
-                              {
-                                fields = [ { pat; _ } ];
-                                is_record = false;
-                                is_struct = true;
-                                _;
-                              };
-                          _;
-                        };
-                      body;
-                    };
-                  _;
-                };
-              ];
-          } ->
-          (* Record match expressions *)
-          (* (pexpr env true) body *)
-          SSPExtraDefinitions.letb
-            {
-              pattern = ppat pat;
-              mut = false;
-              value = (pexpr env false) scrutinee;
-              body = (pexpr env true) body;
-              value_typ = pty pat.span pat.typ;
-              monad_typ = None;
-            }
-      | Match { scrutinee; arms } ->
-          SSPExtraDefinitions.matchb
-            ( (pexpr env false) scrutinee,
-              List.map
-                ~f:(fun { arm = { arm_pat; body }; _ } ->
-                  match arm_pat.p with
-                  | PConstruct
-                      {
-                        constructor;
-                        fields;
-                        is_record = false;
-                        is_struct = false;
-                      } -> (
-                      let arg_tuple =
-                        SSP.AST.TuplePat
-                          (List.map ~f:(fun p -> ppat p.pat) fields)
-                      in
-                      ( SSP.AST.ConstructorPat
-                          ( pglobal_ident constructor ^ "_case",
-                            match fields with [] -> [] | _ -> [ arg_tuple ] ),
-                        match
-                          (fields, SSPExtraDefinitions.pat_as_expr arg_tuple)
-                        with
-                        | _ :: _, Some (redefine_pat, redefine_expr) ->
-                            SSPExtraDefinitions.letb
-                              {
-                                pattern = redefine_pat (* TODO *);
-                                mut = false;
-                                value =
-                                  SSP.AST.App
-                                    ( SSP.AST.Var "ret_both",
-                                      [
-                                        SSP.AST.TypedTerm
-                                          ( redefine_expr,
-                                            SSP.AST.Product
-                                              (List.map
-                                                 ~f:(fun x ->
-                                                   pty arm_pat.span x.pat.typ)
-                                                 fields) );
-                                      ] );
-                                body = (pexpr env true) body;
-                                value_typ =
-                                  SSP.AST.Product
-                                    (List.map
-                                       ~f:(fun x -> pty arm_pat.span x.pat.typ)
-                                       fields);
-                                monad_typ = None;
-                              }
-                        | _, _ -> (pexpr env true) body ))
-                  | _ -> (ppat arm_pat, (pexpr env true) body))
-                arms )
-      | Ascription _ -> __TODO_term__ span "asciption"
-      | Construct { constructor = `TupleCons 1; fields = [ (_, e) ]; _ } ->
-          (pexpr env false) e
-      | Construct { constructor = `TupleCons _n; fields; _ } ->
-          SSP.AST.App
-            ( SSP.AST.Var "prod_b",
-              [ SSP.AST.Tuple (List.map ~f:(snd >> pexpr env false) fields) ] )
-      | Construct { is_record = true; constructor; fields; base = None; _ } ->
-          SSP.AST.RecordConstructor
-            ( "t_" ^ pglobal_ident constructor,
-              List.map
-                ~f:(fun (f, e) -> (pglobal_ident f, (pexpr env false) e))
-                fields )
-      | Construct
-          { is_record = true; constructor; fields; base = Some (x, _); _ } ->
-          SSP.AST.RecordUpdate
-            ( pglobal_ident constructor,
-              (pexpr env false) x,
-              List.map
-                ~f:(fun (f, e) -> (pglobal_ident f, (pexpr env false) e))
-                fields )
-      (* TODO: Is there only 1 field? *)
-      | Construct { constructor; fields = [ (_f, e) ]; _ } ->
-          SSP.AST.App
-            ( SSP.AST.Var (pglobal_ident constructor),
-              [ (pexpr env add_solve) e ] )
-      | Construct { constructor; fields; _ } ->
-          (* __TODO_term__ span "constructor" *)
-          SSP.AST.App
-            ( SSP.AST.Var (pglobal_ident constructor),
-              List.map ~f:(snd >> pexpr env add_solve) fields )
-      | Closure { params; body; _ } ->
-          SSP.AST.Lambda
-            ( List.map ~f:ppat params,
-              (pexpr (extend_env_with_params env params) add_solve) body )
-      | MacroInvokation { macro; _ } ->
-          Error.raise
-          @@ {
-               kind = UnsupportedMacro { id = [%show: Ast.global_ident] macro };
-               span = e.span;
-             }
-      | Assign _ ->
-          SSP.AST.Const (SSP.AST.Const_string ("assign" ^ " todo(term)"))
-      (* __TODO_term__ span "assign" *)
-      | Loop { body; kind; state = None; label; witness } ->
-          (pexpr env false)
-            {
-              e =
-                Loop
+            pattern = ppat lhs;
+            mut = is_mutable_pat lhs;
+            value = (pexpr env false) rhs;
+            body = (pexpr new_env add_solve) body;
+            value_typ =
+              (match monadic with
+              | Some (MException typ, _) -> pty span typ
+              | Some (MResult typ, _) -> pty span typ
+              | _ ->
+                  SSP.AST.WildTy
+                  (* TODO : What should the correct type be here? `lhs.span lhs.typ` *));
+            monad_typ =
+              Option.map
+                ~f:(fun (m, _) ->
+                  match m with
+                  | MException typ -> SSP.AST.Exception (pty span typ)
+                  | MResult typ -> SSP.AST.Result (pty span typ)
+                  | MOption -> SSP.AST.Option)
+                monadic;
+          }
+    | EffectAction _ -> . (* __TODO_term__ span "monadic action" *)
+    | Match
+        {
+          scrutinee;
+          arms =
+            [
+              {
+                arm =
                   {
+                    arm_pat =
+                      {
+                        p =
+                          PConstruct
+                            {
+                              fields = [ { pat; _ } ];
+                              is_record = false;
+                              is_struct = true;
+                              _;
+                            };
+                        _;
+                      };
                     body;
-                    kind;
-                    state =
-                      Some
-                        {
-                          init =
-                            {
-                              e =
-                                Construct
-                                  {
-                                    is_record = false;
-                                    is_struct = false;
-                                    base = None;
-                                    constructor = `TupleCons 0;
-                                    fields = [];
-                                  };
-                              span = Span.dummy ();
-                              typ = TApp { ident = `TupleType 0; args = [] };
-                            };
-                          bpat =
-                            {
-                              p =
-                                PConstruct
-                                  {
-                                    constructor = `TupleCons 0;
-                                    fields = [];
-                                    is_record = false;
-                                    is_struct = false;
-                                  };
-                              span = Span.dummy ();
-                              typ = TApp { ident = `TupleType 0; args = [] };
-                            };
-                          witness =
-                            Features.On.state_passing_loop
-                            (* state_passing_loop *);
-                        };
-                    label;
-                    witness;
-                    control_flow = None;
                   };
-              typ = e.typ;
-              span = e.span;
-            }
-      | Loop
+                _;
+              };
+            ];
+        } ->
+        (* Record match expressions *)
+        (* (pexpr env true) body *)
+        SSPExtraDefinitions.letb
           {
-            body;
-            kind = ForIndexLoop { start; end_; var; _ };
-            state = Some { init; bpat; _ };
-            _;
-          } ->
-          SSP.AST.App
-            ( SSP.AST.Var "foldi_both",
-              [
-                (pexpr env false) start;
-                (pexpr env false) end_;
-                SSP.AST.Lambda
-                  ( [
-                      (* SSP.AST.Ident "{L I _ _}";  *)
-                      SSP.AST.Ident (plocal_ident var);
-                    ],
-                    SSP.AST.App
-                      ( SSP.AST.Var "ssp",
-                        [
-                          SSP.AST.Lambda
-                            ( [ ppat bpat ],
-                              both_type_expr
-                                (extend_env env
-                                   (Map.of_alist_exn
-                                      (module Local_ident)
-                                      ([
-                                         ( var,
-                                           [
-                                             LocalIdentOrLisIis.W.Data
-                                               ( [ plocal_ident var ^ "?" ],
-                                                 [ plocal_ident var ^ "?" ] );
-                                           ] );
-                                       ]
-                                      @ List.map
-                                          ~f:(fun v ->
-                                            ( v,
-                                              [
-                                                LocalIdentOrLisIis.W.Data
-                                                  ( [ plocal_ident v ^ "!" ],
-                                                    [ plocal_ident v ^ "!" ] );
-                                              ] ))
-                                          (vars_from_pat bpat))))
-                                true [] body );
-                        ] ) );
-                (pexpr env false) init;
-              ] )
-      | Loop
+            pattern = ppat pat;
+            mut = false;
+            value = (pexpr env false) scrutinee;
+            body = (pexpr env true) body;
+            value_typ = pty pat.span pat.typ;
+            monad_typ = None;
+          }
+    | Match { scrutinee; arms } ->
+        SSPExtraDefinitions.matchb
+          ( (pexpr env false) scrutinee,
+            List.map
+              ~f:(fun { arm = { arm_pat; body }; _ } ->
+                match arm_pat.p with
+                | PConstruct
+                    {
+                      constructor = name;
+                      fields = args;
+                      is_record = false;
+                      is_struct = false;
+                    } -> (
+                    let arg_tuple =
+                      SSP.AST.TuplePat (List.map ~f:(fun p -> ppat p.pat) args)
+                    in
+                    ( SSP.AST.ConstructorPat
+                        ( pglobal_ident name ^ "_case",
+                          match args with [] -> [] | _ -> [ arg_tuple ] ),
+                      match
+                        (args, SSPExtraDefinitions.pat_as_expr arg_tuple)
+                      with
+                      | _ :: _, Some (redefine_pat, redefine_expr) ->
+                          SSPExtraDefinitions.letb
+                            {
+                              pattern = redefine_pat (* TODO *);
+                              mut = false;
+                              value =
+                                SSP.AST.App
+                                  ( SSP.AST.Var "ret_both",
+                                    [
+                                      SSP.AST.TypedTerm
+                                        ( redefine_expr,
+                                          SSP.AST.Product
+                                            (List.map
+                                               ~f:(fun x ->
+                                                 pty arm_pat.span x.pat.typ)
+                                               args) );
+                                    ] );
+                              body = (pexpr env true) body;
+                              value_typ =
+                                SSP.AST.Product
+                                  (List.map
+                                     ~f:(fun x -> pty arm_pat.span x.pat.typ)
+                                     args);
+                              monad_typ = None;
+                            }
+                      | _, _ -> (pexpr env true) body ))
+                | _ -> (ppat arm_pat, (pexpr env true) body))
+              arms )
+    | Ascription _ -> __TODO_term__ span "asciption"
+    | Construct { constructor = `TupleCons 1; fields = [ (_, e) ]; _ } ->
+        (pexpr env false) e
+    | Construct { constructor = `TupleCons _n; fields; _ } ->
+        SSP.AST.App
+          ( SSP.AST.Var "prod_b",
+            [ SSP.AST.Tuple (List.map ~f:(snd >> pexpr env false) fields) ] )
+    | Construct { is_record = true; constructor; fields; base = None; _ } ->
+        SSP.AST.RecordConstructor
+          ( "t_" ^ pglobal_ident constructor,
+            List.map
+              ~f:(fun (f, e) -> (pglobal_ident f, (pexpr env false) e))
+              fields )
+    | Construct { is_record = true; constructor; fields; base = Some (x, _); _ }
+      ->
+        SSP.AST.RecordUpdate
+          ( pglobal_ident constructor,
+            (pexpr env false) x,
+            List.map
+              ~f:(fun (f, e) -> (pglobal_ident f, (pexpr env false) e))
+              fields )
+    (* TODO: Is there only 1 field? *)
+    | Construct { constructor; fields = [ (_f, e) ]; _ } ->
+        SSP.AST.App
+          (SSP.AST.Var (pglobal_ident constructor), [ (pexpr env add_solve) e ])
+    | Construct { constructor; fields; _ } ->
+        (* __TODO_term__ span "constructor" *)
+        SSP.AST.App
+          ( SSP.AST.Var (pglobal_ident constructor),
+            List.map ~f:(snd >> pexpr env add_solve) fields )
+    | Closure { params; body; _ } ->
+        SSP.AST.Lambda
+          ( List.map ~f:ppat params,
+            (pexpr (extend_env_with_params env params) add_solve) body )
+    | MacroInvokation { macro; _ } ->
+        Error.raise
+        @@ {
+             kind = UnsupportedMacro { id = [%show: Ast.global_ident] macro };
+             span = e.span;
+           }
+    | Assign _ ->
+        SSP.AST.Const (SSP.AST.Const_string ("assign" ^ " todo(term)"))
+    (* __TODO_term__ span "assign" *)
+    | Loop { body; kind; state = None; label; witness } ->
+        (pexpr env false)
           {
-            body;
-            kind = ForLoop { pat; it; _ };
-            state = Some { init; bpat; _ };
-            _;
-          } ->
-          let extra_set_init, _extra_env =
-            LocalIdentOrLisIis.analyse_expr ctx.analysis_data.mut_var env init
-          in
-          let new_env =
-            extend_env env
-              (Map.of_alist_exn
-                 (module Local_ident)
-                 (List.map
-                    ~f:(fun v -> (v, extra_set_init))
-                    (Set.to_list (U.Reducers.variables_of_pat bpat))))
-          in
-          let extra_set_iter, _extra_env =
-            LocalIdentOrLisIis.analyse_expr ctx.analysis_data.mut_var env it
-          in
-          let new_env =
-            extend_env new_env
-              (Map.of_alist_exn
-                 (module Local_ident)
-                 (List.map
-                    ~f:(fun v -> (v, extra_set_iter))
-                    (Set.to_list (U.Reducers.variables_of_pat bpat))))
-          in
-          SSP.AST.App
-            ( SSP.AST.Var "foldi_both_list",
-              [
-                (pexpr env false) it;
-                SSP.AST.Lambda
-                  ( [ (* SSP.AST.Ident "{L I _ _}";  *) ppat pat ],
-                    SSP.AST.App
-                      ( SSP.AST.Var "ssp",
-                        [
-                          SSP.AST.Lambda
-                            ( [ ppat bpat ],
-                              both_type_expr new_env true
-                                (extra_set_iter @ extra_set_init)
-                                body );
-                        ] ) );
-                (pexpr env false) init;
-              ] )
-      | Loop _ ->
-          SSP.AST.Const (SSP.AST.Const_string ("other loop" ^ " todo(term)"))
-      (* __TODO_term__ span "other loop" *)
-      (* | Break { e; _ } -> *)
-      (*     SSP.AST.Const (SSP.AST.Const_string ("break" ^ " todo(term)")) *)
-      (*     (* __TODO_term__ span "break" *) *)
-      | _ -> .)
+            e =
+              Loop
+                {
+                  body;
+                  kind;
+                  state =
+                    Some
+                      {
+                        init =
+                          {
+                            e =
+                              Construct
+                                {
+                                  is_record = false;
+                                  is_struct = false;
+                                  base = None;
+                                  constructor = `TupleCons 0;
+                                  fields = [];
+                                };
+                            span = Span.dummy ();
+                            typ = TApp { ident = `TupleType 0; args = [] };
+                          };
+                        bpat =
+                          {
+                            p =
+                              PConstruct
+                                {
+                                  constructor = `TupleCons 0;
+                                  fields = [];
+                                  is_record = false;
+                                  is_struct = false;
+                                };
+                            span = Span.dummy ();
+                            typ = TApp { ident = `TupleType 0; args = [] };
+                          };
+                        witness =
+                          Features.On.state_passing_loop
+                          (* state_passing_loop *);
+                      };
+                  label;
+                  witness;
+                  control_flow = None;
+                  (* TODO? *)
+                };
+            typ = e.typ;
+            span = e.span;
+          }
+    | Loop
+        {
+          body;
+          kind = ForIndexLoop { start; end_; var; _ };
+          state = Some { init; bpat; _ };
+          _;
+        } ->
+        SSP.AST.App
+          ( SSP.AST.Var "foldi_both",
+            [
+              (pexpr env false) start;
+              (pexpr env false) end_;
+              SSP.AST.Lambda
+                ( [
+                    (* SSP.AST.Ident "{L I _ _}";  *)
+                    SSP.AST.Ident (plocal_ident var);
+                  ],
+                  SSP.AST.App
+                    ( SSP.AST.Var "ssp",
+                      [
+                        SSP.AST.Lambda
+                          ( [ ppat bpat ],
+                            both_type_expr
+                              (extend_env env
+                                 (Map.of_alist_exn
+                                    (module Local_ident)
+                                    ([
+                                       ( var,
+                                         [
+                                           LocalIdentOrLisIis.W.Data
+                                             ( [ plocal_ident var ^ "?" ],
+                                               [ plocal_ident var ^ "?" ] );
+                                         ] );
+                                     ]
+                                    @ List.map
+                                        ~f:(fun v ->
+                                          ( v,
+                                            [
+                                              LocalIdentOrLisIis.W.Data
+                                                ( [ plocal_ident v ^ "!" ],
+                                                  [ plocal_ident v ^ "!" ] );
+                                            ] ))
+                                        (vars_from_pat bpat))))
+                              true [] body );
+                      ] ) );
+              (pexpr env false) init;
+            ] )
+    | Loop
+        {
+          body;
+          kind = ForLoop { pat; it; _ };
+          state = Some { init; bpat; _ };
+          _;
+        } ->
+        let extra_set_init, _extra_env =
+          LocalIdentOrLisIis.analyse_expr ctx.analysis_data.mut_var env init
+        in
+        let new_env =
+          extend_env env
+            (Map.of_alist_exn
+               (module Local_ident)
+               (List.map
+                  ~f:(fun v -> (v, extra_set_init))
+                  (Set.to_list (U.Reducers.variables_of_pat bpat))))
+        in
+        let extra_set_iter, _extra_env =
+          LocalIdentOrLisIis.analyse_expr ctx.analysis_data.mut_var env it
+        in
+        let new_env =
+          extend_env new_env
+            (Map.of_alist_exn
+               (module Local_ident)
+               (List.map
+                  ~f:(fun v -> (v, extra_set_iter))
+                  (Set.to_list (U.Reducers.variables_of_pat bpat))))
+        in
+        SSP.AST.App
+          ( SSP.AST.Var "foldi_both_list",
+            [
+              (pexpr env false) it;
+              SSP.AST.Lambda
+                ( [ (* SSP.AST.Ident "{L I _ _}";  *) ppat pat ],
+                  SSP.AST.App
+                    ( SSP.AST.Var "ssp",
+                      [
+                        SSP.AST.Lambda
+                          ( [ ppat bpat ],
+                            both_type_expr new_env true
+                              (extra_set_iter @ extra_set_init)
+                              body );
+                      ] ) );
+              (pexpr env false) init;
+            ] )
+    | Loop _ ->
+        SSP.AST.Const (SSP.AST.Const_string ("other loop" ^ " todo(term)"))
+    (* __TODO_term__ span "other loop" *)
+    (* | Break { e; _ } -> *)
+    (*     SSP.AST.Const (SSP.AST.Const_string ("break" ^ " todo(term)")) *)
+    (*     (* __TODO_term__ span "break" *) *)
+    | _ -> .
 
   and vars_from_pat : pat -> Local_ident.t list =
     U.Reducers.variables_of_pat >> Set.to_list
@@ -1288,32 +1287,17 @@ struct
   and both_type_expr (env : LocalIdentOrLisIis.W.t list Map.M(Local_ident).t)
       (add_solve : bool) (extra_set : LocalIdentOrLisIis.W.t list) (e : expr) =
     let identifiers, lis, iis, _new_env = analyse_env_of_expr env e extra_set in
-    let mvars_ext_fset_str =
-      "fset" ^ " " ^ "["
-      ^ String.concat ~sep:";"
-          (List.map ~f:(fun x -> plocal_ident x ^ "_loc") identifiers)
-      ^ "]"
-    in
-    let lis_str = String.concat ~sep:":|:" (lis @ [ mvars_ext_fset_str ]) in
-    let iis_str =
-      if List.is_empty iis then "(fset [])" else String.concat ~sep:":|:" iis
-    in
     SSP.AST.TypedTerm
       ( (pexpr env add_solve) e,
-        SSPExtraDefinitions.wrap_type_in_both
-          ("(*"
-          ^ Int.to_string (List.length identifiers)
-          ^ "*)" ^ "(" ^ lis_str ^ ")")
-          ("(" ^ iis_str ^ ")")
-          (pty e.span e.typ) )
+        SSPExtraDefinitions.wrap_type_in_both (pty e.span e.typ) )
 
   and is_mutable_pat (pat : pat) =
     match pat.p with
     | PWild -> false
     | PAscription { pat; _ } -> is_mutable_pat pat
-    | PConstruct { constructor = `TupleCons _; fields; _ } ->
+    | PConstruct { constructor = `TupleCons _; fields = args; _ } ->
         List.fold ~init:false ~f:( || )
-          (List.map ~f:(fun p -> is_mutable_pat p.pat) fields)
+          (List.map ~f:(fun p -> is_mutable_pat p.pat) args)
     | PConstruct _ -> false
     | PArray _ ->
         (* List.fold ~init:false ~f:(||) (List.map ~f:(fun p -> is_mutable_pat p) args) *)
@@ -1334,10 +1318,11 @@ struct
         SSP.AST.Implicit
           ( SSP.AST.Ident (plocal_ident ident),
             match kind with
+            | GPType (* { default = Some t } *) ->
+                SSP.AST.NameTy (plocal_ident ident) (* pty span t *)
             | GPConst { typ = t } ->
-                SSPExtraDefinitions.wrap_type_in_both "(fset [])" "(fset [])"
-                  (pty span t)
-            | GPType -> SSP.AST.WildTy
+                SSPExtraDefinitions.wrap_type_in_both (pty span t)
+            (* | GPType { default = None } -> SSP.AST.WildTy *)
             | _ -> . )
 
   let pgeneric_constraints_as_argument span :
@@ -1352,15 +1337,15 @@ struct
                     ~f:(function
                       | GType typ -> pty span typ
                       | GConst { typ; _ } ->
-                          SSPExtraDefinitions.wrap_type_in_both "(fset [])"
-                            "(fset [])" (pty span typ)
+                          SSPExtraDefinitions.wrap_type_in_both (pty span typ)
                       | _ -> .)
                     args ) );
         ]
-    | GCProjection _ ->
-        Error.unimplemented ~issue_id:549
-          ~details:"Projections of an associated type is not yet supported."
-          span
+    | GCProjection { impl; assoc_item; typ } ->
+        []
+        (* Error.unimplemented ~issue_id:549 *)
+        (*   ~details:"Projections of an associated type is not yet supported." *)
+        (*   span *)
     | _ -> .
 
   let pgeneric (span : Ast.span) (generics : AST.generics) :
@@ -1377,13 +1362,12 @@ struct
         (x :: l, r)
     | _ -> ([], a)
 
-  let rec wrap_type_in_enumerator_helper (li : int -> string)
-      (ii : int -> string) (i : int) (a : SSP.AST.ty) =
+  let rec wrap_type_in_enumerator_helper (i : int) (a : SSP.AST.ty) =
     let l, r = split_arrow_in_args a in
     let size, t =
       List.fold_left
         ~f:(fun (yi, ys) x ->
-          let size, x_val = wrap_type_in_enumerator_helper li ii yi x in
+          let size, x_val = wrap_type_in_enumerator_helper yi x in
           ( size,
             match ys with
             | Some v -> Some (SSP.AST.Arrow (v, x_val))
@@ -1392,14 +1376,11 @@ struct
     in
     match t with
     | Some v ->
-        ( size,
-          SSP.AST.Arrow
-            (v, SSPExtraDefinitions.wrap_type_in_both (li i) (ii i) r) )
-    | None -> (size + 1, SSPExtraDefinitions.wrap_type_in_both (li i) (ii i) r)
+        (size, SSP.AST.Arrow (v, SSPExtraDefinitions.wrap_type_in_both r))
+    | None -> (size + 1, SSPExtraDefinitions.wrap_type_in_both r)
 
-  let wrap_type_in_enumerator (li : int -> string) (ii : int -> string)
-      (a : SSP.AST.ty) (extra_L : string list) =
-    let size, v = wrap_type_in_enumerator_helper li ii 0 a in
+  let wrap_type_in_enumerator (a : SSP.AST.ty) =
+    let size, v = wrap_type_in_enumerator_helper 0 a in
     (* Throw away anotation of last type, and replace with accumulation of all locations and imports *)
     let xs, a =
       match v with
@@ -1412,19 +1393,9 @@ struct
                unexpected type"
             (Span.dummy ())
     in
-    let lis, iis =
-      List.unzip (List.map ~f:(fun i -> (li i, ii i)) (List.range 0 size))
-    in
-    let lis = lis @ extra_L in
     let ret_ty =
       List.fold
-        ~init:
-          (SSPExtraDefinitions.wrap_type_in_both
-             (let lis_str = String.concat ~sep:" :|: " lis in
-              if List.length lis <= 1 then lis_str else "(" ^ lis_str ^ ")")
-             (let iis_str = String.concat ~sep:" :|: " iis in
-              if List.length iis <= 1 then iis_str else "(" ^ iis_str ^ ")")
-             a)
+        ~init:(SSPExtraDefinitions.wrap_type_in_both a)
         ~f:(fun y x -> SSP.AST.Arrow (x, y))
         xs
     in
@@ -1440,23 +1411,28 @@ struct
     let decls_from_item =
       match e.v with
       | Fn { name = f_name; generics; body; params } ->
-          loc_defs_from_name f_name
-            (List.map
-               ~f:(fun v ->
-                 match v with
-                 | SSP.AST.Explicit (a, b) -> SSP.AST.Implicit (a, b)
-                 | _ -> v)
-               (pgeneric span generics))
-          @ [
-              (let args, ret_typ =
-                 lift_definition_type_to_both f_name
-                   (pgeneric span generics
-                   @ List.map
-                       ~f:(fun { pat; typ; _ } ->
-                         SSP.AST.Explicit (ppat pat, pty span typ))
-                       params)
-                   (pty span body.typ) []
-               in
+          [
+            (let args, ret_typ =
+               lift_definition_type_to_both f_name
+                 (pgeneric span generics
+                 @ List.map
+                     ~f:(fun { pat; typ; _ } ->
+                       SSP.AST.Explicit (ppat pat, pty span typ))
+                     params)
+                 (pty span body.typ)
+             in
+             if Attrs.lemma e.attrs then
+               SSP.AST.Lemma
+                 ( pconcrete_ident f_name,
+                   args,
+                   (pexpr
+                      (extend_env_with_params
+                         (Map.empty (module Local_ident))
+                         (List.map ~f:(fun { pat; _ } -> pat) params))
+                      true)
+                     (Option.value ~default:body
+                        (Attrs.associated_expr Ensures e.attrs)) )
+             else
                SSP.AST.Equations
                  ( pconcrete_ident f_name,
                    args,
@@ -1467,7 +1443,7 @@ struct
                       true)
                      body,
                    ret_typ ));
-            ]
+          ]
       | TyAlias { name; generics; ty } ->
           let g = pgeneric span generics in
           [
@@ -1576,17 +1552,12 @@ struct
                         None );
                     SSP.AST.Definition
                       ( o.type_name,
-                        [
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "L", SSP.AST.NameTy "{fset Location}");
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "I", SSP.AST.NameTy "Interface");
-                        ],
+                        [],
                         SSP.AST.Var "id",
                         SSP.AST.Arrow
-                          ( SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                          ( SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.type_name)),
-                            SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                            SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.type_name)) ) );
                   ]
               | "bytes" ->
@@ -1604,17 +1575,12 @@ struct
                         None );
                     SSP.AST.Definition
                       ( o.bytes_name,
-                        [
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "L", SSP.AST.NameTy "{fset Location}");
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "I", SSP.AST.NameTy "Interface");
-                        ],
+                        [],
                         SSP.AST.Var "id",
                         SSP.AST.Arrow
-                          ( SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                          ( SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.bytes_name)),
-                            SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                            SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.bytes_name)) ) );
                   ]
               | "unsigned_public_integer" ->
@@ -1633,17 +1599,12 @@ struct
                         None );
                     SSP.AST.Definition
                       ( o.integer_name,
-                        [
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "L", SSP.AST.NameTy "{fset Location}");
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "I", SSP.AST.NameTy "Interface");
-                        ],
+                        [],
                         SSP.AST.Var "id",
                         SSP.AST.Arrow
-                          ( SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                          ( SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.integer_name)),
-                            SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                            SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.integer_name)) ) );
                   ]
               | "public_bytes" ->
@@ -1661,17 +1622,12 @@ struct
                       ("'" ^ "t_" ^ o.bytes_name ^ "'", SSP.AST.Type typ, None);
                     SSP.AST.Definition
                       ( o.bytes_name,
-                        [
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "L", SSP.AST.NameTy "{fset Location}");
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "I", SSP.AST.NameTy "Interface");
-                        ],
+                        [],
                         SSP.AST.Var "id",
                         SSP.AST.Arrow
-                          ( SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                          ( SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.bytes_name)),
-                            SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                            SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.bytes_name)) ) );
                   ]
               | "array" ->
@@ -1698,17 +1654,12 @@ struct
                         None );
                     SSP.AST.Definition
                       ( o.array_name,
-                        [
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "L", SSP.AST.NameTy "{fset Location}");
-                          SSP.AST.Implicit
-                            (SSP.AST.Ident "I", SSP.AST.NameTy "Interface");
-                        ],
+                        [],
                         SSP.AST.Var "id",
                         SSP.AST.Arrow
-                          ( SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                          ( SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.array_name)),
-                            SSPExtraDefinitions.wrap_type_in_both "L" "I"
+                            SSPExtraDefinitions.wrap_type_in_both
                               (SSP.AST.NameTy ("t_" ^ o.array_name)) ) );
                   ]
               | _ -> unsupported ())
@@ -1721,48 +1672,25 @@ struct
       | HaxError s -> [ __TODO_item__ span s ]
       | NotImplementedYet -> [ __TODO_item__ span "Not implemented yet?" ]
       | Alias _ -> [ __TODO_item__ span "Not implemented yet? alias" ]
-      | Trait { name; items; _ } ->
+      | Trait { name; items; generics } ->
           [
             SSP.AST.Class
               ( pconcrete_ident name,
-                [],
-                (* pgeneric span generics, *)
+                (match pgeneric span generics with
+                | SSP.AST.Implicit (x, y) :: xs -> SSP.AST.Explicit (x, y) :: xs
+                | x -> x),
                 List.concat_map
                   ~f:(fun x ->
                     match x.ti_v with
                     | TIFn fn_ty ->
-                        let loc_name = pconcrete_ident x.ti_ident ^ "_loc" in
-                        let include_extra_loc =
-                          match fn_ty with TArrow _ -> true | _ -> false
-                        in
                         let size, value =
-                          wrap_type_in_enumerator
-                            (fun (i : int) -> "L" ^ Int.to_string (i + 1))
-                            (fun (i : int) -> "I" ^ Int.to_string (i + 1))
-                            (pty x.ti_span fn_ty)
-                            (if include_extra_loc then [ loc_name ] else [])
+                          wrap_type_in_enumerator (pty x.ti_span fn_ty)
                         in
-                        (if include_extra_loc then
-                           [
-                             SSP.AST.Named
-                               (loc_name, SSP.AST.NameTy "{fset Location}");
-                           ]
-                         else [])
-                        @ [
-                            SSP.AST.Named
-                              ( pconcrete_ident x.ti_ident,
-                                SSP.AST.Forall
-                                  ( List.map
-                                      ~f:(fun (i : int) ->
-                                        "L" ^ Int.to_string (i + 1))
-                                      (List.range 0 size)
-                                    @ List.map
-                                        ~f:(fun (i : int) ->
-                                          "I" ^ Int.to_string (i + 1))
-                                        (List.range 0 size),
-                                    [],
-                                    value ) );
-                          ]
+                        [
+                          SSP.AST.Named
+                            ( pconcrete_ident x.ti_ident,
+                              SSP.AST.Forall ([], [], value) );
+                        ]
                     | TIType impl_idents ->
                         SSP.AST.Named
                           (pconcrete_ident x.ti_ident, SSP.AST.TypeTy)
@@ -1781,189 +1709,76 @@ struct
                     | _ -> .)
                   items );
           ]
-          @ List.concat_map
-              ~f:(fun x ->
-                match x.ti_v with
-                | TIFn (TArrow _) ->
-                    [
-                      SSP.AST.HintUnfold
-                        (pconcrete_ident x.ti_ident ^ "_loc", None);
-                    ]
-                | TIDefault _ -> .
-                | _ -> [])
-              items
       | Impl { generics; self_ty; of_trait = name, gen_vals; items } ->
-          List.concat_map
-            ~f:(fun x ->
-              loc_defs_from_name x.ii_ident
-                (List.map
-                   ~f:(fun v ->
-                     match v with
-                     | SSP.AST.Explicit (a, b) -> SSP.AST.Implicit (a, b)
-                     | _ -> v)
-                   (pgeneric span generics)))
-            items
-          @ [
-              SSP.AST.ProgramInstance
-                ( pconcrete_ident name,
-                  pgeneric span generics,
-                  pty span self_ty,
-                  args_ty span gen_vals,
-                  SSP.AST.InstanceDecls
-                    (List.concat_map
-                       ~f:(fun x ->
-                         match x.ii_v with
-                         | IIFn { body; params } ->
-                             let mvars_ext_fset_str =
-                               "fset" ^ " " ^ "["
-                               ^ String.concat ~sep:";"
-                                   (List.map
-                                      ~f:(fun x -> plocal_ident x ^ "_loc")
-                                      (match
-                                         Map.find ctx.analysis_data.mut_var
-                                           (pconcrete_ident x.ii_ident)
-                                       with
-                                      | Some (l, _) -> l
-                                      | _ -> []))
-                               ^ "]"
-                             in
-                             [
-                               SSP.AST.InlineDef
-                                 ( pconcrete_ident x.ii_ident ^ "_loc",
-                                   [],
-                                   SSP.AST.NameTerm mvars_ext_fset_str,
-                                   SSP.AST.NameTy "{fset Location}" );
-                               (let args, ret_typ =
-                                  lift_definition_type_to_both x.ii_ident
-                                    (List.map
-                                       ~f:(fun { pat; typ; _ } ->
-                                         SSP.AST.Explicit
-                                           (ppat pat, pty span typ))
-                                       params)
-                                    (pty span body.typ)
-                                    (match
-                                       Map.find ctx.analysis_data.mut_var
-                                         (pconcrete_ident x.ii_ident)
-                                     with
-                                    | Some (_ :: _, _) -> []
-                                    | _ -> [ "fset []" ])
-                                in
-                                SSP.AST.LetDef
-                                  ( pconcrete_ident x.ii_ident,
-                                    args,
-                                    (pexpr
-                                       (extend_env_with_params
-                                          (Map.empty (module Local_ident))
-                                          (List.map
-                                             ~f:(fun { pat; _ } -> pat)
-                                             params))
-                                       true)
-                                      body,
-                                    ret_typ ));
-                             ]
-                         | IIType { typ; _ } ->
-                             [
-                               SSP.AST.LetDef
-                                 ( pconcrete_ident x.ii_ident,
-                                   [],
-                                   SSP.AST.Type (pty span typ),
-                                   SSP.AST.TypeTy );
-                             ])
-                       items) );
-            ]
+          [
+            SSP.AST.ProgramInstance
+              ( pconcrete_ident name,
+                pgeneric span generics,
+                pty span self_ty,
+                args_ty span gen_vals,
+                SSP.AST.InstanceDecls
+                  (List.concat_map
+                     ~f:(fun x ->
+                       match x.ii_v with
+                       | IIFn { body; params } ->
+                           [
+                             (let args, ret_typ =
+                                lift_definition_type_to_both x.ii_ident
+                                  (List.map
+                                     ~f:(fun { pat; typ; _ } ->
+                                       SSP.AST.Explicit (ppat pat, pty span typ))
+                                     params)
+                                  (pty span body.typ)
+                              in
+                              SSP.AST.LetDef
+                                ( pconcrete_ident x.ii_ident,
+                                  args,
+                                  (pexpr
+                                     (extend_env_with_params
+                                        (Map.empty (module Local_ident))
+                                        (List.map
+                                           ~f:(fun { pat; _ } -> pat)
+                                           params))
+                                     true)
+                                    body,
+                                  ret_typ ));
+                           ]
+                       | IIType { typ; _ } ->
+                           [
+                             SSP.AST.LetDef
+                               ( pconcrete_ident x.ii_ident,
+                                 [],
+                                 SSP.AST.Type (pty span typ),
+                                 SSP.AST.TypeTy );
+                           ])
+                     items) );
+          ]
           @ [
               SSP.AST.HintUnfold (pconcrete_ident name, Some (pty span self_ty));
             ]
     in
     decls_from_item
 
-  and loc_defs_from_name (name : concrete_ident) generics : SSP.AST.decl list =
-    List.map
-      ~f:(fun ((x, x_ty), x_n) ->
-        (* x_ty should not be (totally) resolved! , infer from let not pbinding ?? *)
-        SSP.AST.Definition
-          ( plocal_ident x ^ "_loc",
-            generics,
-            SSP.AST.AppFormat
-              ( [ "("; ";"; "%nat)" ],
-                [
-                  SSP.AST.Typing (pty (Span.dummy ()) x_ty, false, 0);
-                  SSP.AST.Value (SSP.AST.Literal (Int.to_string x_n), false, 0);
-                ] ),
-            SSP.AST.NameTy "Location" ))
-      (match Map.find ctx.analysis_data.mut_var (pconcrete_ident name) with
-      | Some l -> snd l
-      | None -> [])
-
-  and new_arguments lis iis (arguments : SSP.AST.argument list) =
-    List.map
-      ~f:(fun x ->
-        SSP.AST.Implicit (SSP.AST.Ident x, SSP.AST.NameTy "{fset Location}"))
-      lis
-    @ List.map
-        ~f:(fun x ->
-          SSP.AST.Implicit (SSP.AST.Ident x, SSP.AST.NameTy "Interface"))
-        iis
-    @ snd
-        (List.fold_left ~init:(0, [])
-           ~f:(fun (i, y) arg ->
-             let f =
-               SSPExtraDefinitions.wrap_type_in_both
-                 ("L" ^ Int.to_string (i + 1))
-                 ("I" ^ Int.to_string (i + 1))
-             in
-             match arg with
-             | Implicit (p, t) -> (i, y @ [ SSP.AST.Implicit (p, t) ])
-             | Explicit (p, t) -> (i + 1, y @ [ SSP.AST.Explicit (p, f t) ])
-             | Typeclass (so, t) -> (i, y @ [ SSP.AST.Typeclass (so, t) ]))
-           arguments)
+  and new_arguments (arguments : SSP.AST.argument list) =
+    snd
+      (List.fold_left ~init:(0, [])
+         ~f:(fun (i, y) arg ->
+           let f = SSPExtraDefinitions.wrap_type_in_both in
+           match arg with
+           | Implicit (p, t) -> (i, y @ [ SSP.AST.Implicit (p, t) ])
+           | Explicit (p, t) -> (i + 1, y @ [ SSP.AST.Explicit (p, f t) ])
+           | Typeclass (so, t) -> (i, y @ [ SSP.AST.Typeclass (so, t) ]))
+         arguments)
 
   and lift_definition_type_to_both (name : concrete_ident)
-      (arguments : SSP.AST.argument list) (typ : SSP.AST.ty)
-      (extra_L : string list) : SSP.AST.argument list * SSP.AST.ty =
-    let lis, iis = get_lis_and_iis_both arguments in
-    let new_args = new_arguments lis iis arguments in
-    let return_typ = both_return_type_from_name lis iis name typ extra_L in
+      (arguments : SSP.AST.argument list) (typ : SSP.AST.ty) :
+      SSP.AST.argument list * SSP.AST.ty =
+    let new_args = new_arguments arguments in
+    let return_typ = both_return_type_from_name name typ in
     (new_args, return_typ)
 
-  and both_return_type_from_name lis iis name typ (extra_L : string list) =
-    let mvars_ext_L =
-      match Map.find ctx.analysis_data.mut_var (pconcrete_ident name) with
-      | Some (l, _l2) when List.length l > 0 ->
-          [
-            "fset" ^ " " ^ "["
-            ^ String.concat ~sep:";"
-                (List.map ~f:(fun x -> plocal_ident x ^ "_loc") l)
-            ^ "]";
-          ]
-      | _ -> []
-    in
-    let lis = lis @ mvars_ext_L @ extra_L in
-    let iis = iis in
-    SSPExtraDefinitions.wrap_type_in_both
-      (let lis_str = String.concat ~sep:" :|: " lis in
-       if List.length lis <= 1 then lis_str else "(" ^ lis_str ^ ")")
-      (let iis_str = String.concat ~sep:" :|: " iis in
-       if List.length iis <= 1 then iis_str else "(" ^ iis_str ^ ")")
-      typ
-
-  and get_lis_and_iis_both (arguments : SSP.AST.argument list) :
-      string list * string list =
-    let num_explicit_args =
-      List.length
-        (List.filter ~f:(function Explicit _ -> true | _ -> false) arguments)
-    in
-    let lis, iis =
-      if Stdlib.(num_explicit_args == 0) (* TODO: arguments that are updated? *)
-      then ([ "L" ], [ "I" ])
-      else
-        List.unzip
-          (List.map
-             ~f:(fun i ->
-               ("L" ^ Int.to_string (i + 1), "I" ^ Int.to_string (i + 1)))
-             (List.range 0 num_explicit_args))
-    in
-    (lis, iis)
+  and both_return_type_from_name name typ =
+    SSPExtraDefinitions.wrap_type_in_both typ
 
   and p_record_record span arguments : (string * SSP.AST.ty) list =
     List.map
@@ -1978,18 +1793,20 @@ module type S = sig
   (* val pgeneric : Ast.span -> AST.generics -> SSP.AST.argument list *)
 end
 
-let make ctx =
-  (module Make (struct
-    let ctx = ctx
-  end) : S)
+let make (module M : Attrs.WITH_ITEMS) ctx =
+  (module Make
+            (M)
+            (struct
+              let ctx = ctx
+            end) : S)
 
 let decls_to_string (decls : SSP.AST.decl list) : string =
   String.concat ~sep:"\n" (List.map ~f:SSP.decl_to_string decls)
 
-let print_item (analysis_data : StaticAnalysis.analysis_data) (item : AST.item)
-    : SSP.AST.decl list =
+let print_item m (analysis_data : StaticAnalysis.analysis_data)
+    (item : AST.item) : SSP.AST.decl list =
   let (module Print) =
-    make
+    make m
       { current_namespace = (RenderId.render item.ident).path; analysis_data }
   in
   Print.pitem item
@@ -2381,12 +2198,12 @@ let process_annotation (x : 'a list) (f2 : ('b * ('a -> 'b)) list) : 'b list =
       if List.is_empty (List.concat temp) then [] else d :: temp)
     f2
 
-let string_of_items (x, y) =
+let string_of_items m (x, y) =
   cleanup_item_strings
     (List.map ~f:decls_to_string
        (process_annotation x
           [
-            ([], print_item y);
+            ([], print_item m y);
             (* ConCert.(concert_header, translate_concert_annotations y); *)
           ]
           (* @ ConCert.concert_contract_type_decls x *)))
@@ -2399,7 +2216,7 @@ let hardcoded_coq_headers =
    Import PackageNotation.\n\
    From extructures Require Import ord fset.\n\
    From mathcomp Require Import word_ssrZ word.\n\
-   From Jasmin Require Import word.\n\n\
+   (* From Jasmin Require Import word. *)\n\n\
    From Coq Require Import ZArith.\n\
    From Coq Require Import Strings.String.\n\
    Import List.ListNotations.\n\
@@ -2413,17 +2230,18 @@ let hardcoded_coq_headers =
    From Hacspec Require Import Hacspec_Lib.\n\n\
    Open Scope hacspec_scope.\n\
    Import choice.Choice.Exports.\n\n\
+   From RecordUpdate Require Import RecordUpdate.\n\n\
+   Import RecordSetNotations.\n\n\
    Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.\n"
 
-let translate _ (_bo : BackendOptions.t) ~(bundles : AST.item list list)
+let translate m (_bo : BackendOptions.t) ~(bundles : AST.item list list)
     (items : AST.item list) : Types.file list =
   let analysis_data = StaticAnalysis.analyse items in
   U.group_items_by_namespace items
   |> Map.to_alist
-  |> List.filter_map
-       ~f:
-         (snd >> List.hd
-         >> Option.map ~f:(fun i -> ((RenderId.render i.ident).path, items)))
+  |> List.filter_map ~f:(fun (_, items) ->
+         let* first_item = List.hd items in
+         Some ((RenderId.render first_item.ident).path, items))
   |> List.map ~f:(fun (ns, items) ->
          let mod_name =
            String.concat ~sep:"_"
@@ -2431,10 +2249,9 @@ let translate _ (_bo : BackendOptions.t) ~(bundles : AST.item list list)
          in
          let file_content =
            hardcoded_coq_headers ^ "\n"
-           ^ string_of_items (items, analysis_data)
+           ^ string_of_items m (items, analysis_data)
            ^ "\n"
          in
-
          Types.
            { path = mod_name ^ ".v"; contents = file_content; sourcemap = None })
 

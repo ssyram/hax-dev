@@ -38,45 +38,46 @@ Require Import String.
 Require Import Coq.Floats.Floats.
 From RecordUpdate Require Import RecordSet.
 Import RecordSetNotations.
+From Core Require Import Core.
 
 
 
 (* NotImplementedYet *)
 
-Definition no_dependency_1_ (_ : unit) : unit :=
+Definition no_dependency_1_ '(_ : unit) : unit :=
   tt.
 
-Definition no_dependency_2_ (_ : unit) : unit :=
+Definition no_dependency_2_ '(_ : unit) : unit :=
   tt.
 
 Inductive t_Foo : Type :=
 | Foo_A
 | Foo_B.
-Arguments t_Foo:clear implicits.
-Arguments t_Foo.
+Arguments Foo_A.
+Arguments Foo_B.
 
-Definition f (_ : t_u32) : t_Foo :=
-  Foo_A.
+Definition f '(_ : t_u32) : t_Foo :=
+  Build_Foo_A_record.
 
-Record t_Bar : Type :=
+Record Bar_record : Type :=
   {
-    0 : t_Foo;
+    Bar_0 : t_Foo;
   }.
-Arguments t_Bar:clear implicits.
-Arguments t_Bar.
-Arguments Build_t_Bar.
-#[export] Instance settable_t_Bar : Settable _ :=
-  settable! (@Build_t_Bar) <0>.
+Arguments Build_Bar_record.
+Arguments Bar_0.
+#[export] Instance settable_Bar_record : Settable _ :=
+  settable! (Build_Bar_record) <Bar_0>.
+Notation "'Bar_Bar_record'" := Build_Bar_record.
 
-Definition g (_ : unit) : t_Bar :=
-  Build_t_Bar (f (32)).
+Definition g '(_ : unit) : t_Bar :=
+   {| Bar_0 := f ((32 : t_u32)) |}.
 
 Definition t_Foo_cast_to_repr (x : t_Foo) : t_isize :=
   match x with
   | Foo_A =>
-    0
+    (0 : t_isize)
   | Foo_B =>
-    1
+    (1 : t_isize)
   end.
 '''
 "Reordering_Independent_cycles.v" = '''
@@ -91,19 +92,20 @@ Require Import String.
 Require Import Coq.Floats.Floats.
 From RecordUpdate Require Import RecordSet.
 Import RecordSetNotations.
+From Core Require Import Core.
 
 (* NotImplementedYet *)
 
-Definition c (_ : unit) : unit :=
+Definition c '(_ : unit) : unit :=
   a (tt).
 
-Definition a (_ : unit) : unit :=
+Definition a '(_ : unit) : unit :=
   c (tt).
 
-Definition d (_ : unit) : unit :=
+Definition d '(_ : unit) : unit :=
   b (tt).
 
-Definition b (_ : unit) : unit :=
+Definition b '(_ : unit) : unit :=
   d (tt).
 '''
 "Reordering_Mut_rec.v" = '''
@@ -118,15 +120,24 @@ Require Import String.
 Require Import Coq.Floats.Floats.
 From RecordUpdate Require Import RecordSet.
 Import RecordSetNotations.
+From Core Require Import Core.
 
 (* NotImplementedYet *)
 
-Definition g (_ : unit) : unit :=
+Definition g '(_ : unit) : unit :=
   f (tt).
 
-Definition f (_ : unit) : unit :=
+Definition f '(_ : unit) : unit :=
   g (tt).
 
-Definition ff_2_ (_ : unit) : unit :=
+Definition ff_2_ '(_ : unit) : unit :=
   f (tt).
 '''
+_CoqProject = '''
+-R ./ TODO
+-arg -w
+-arg all
+
+Reordering_Mut_rec.v
+Reordering_Independent_cycles.v
+Reordering.v'''

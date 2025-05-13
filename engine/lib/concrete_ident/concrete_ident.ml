@@ -355,6 +355,7 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
             "foreign";
             "use";
             "opaque";
+            "closure";
             "t";
             "v";
             "f";
@@ -538,6 +539,7 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       | `Use d -> prefix_d "use" d
       | `Foreign d -> prefix_d "foreign" d
       | `GlobalAsm d -> prefix_d "global_asm" d
+      | `Closure d -> prefix_d "closure" d
       | `Opaque d -> prefix_d "opaque" d
       (* The name of a trait impl *)
       | `Impl (d, _, impl_infos) -> render_impl_name d impl_infos
@@ -558,8 +560,16 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
             (prefix "f" (dstr n), render_impl_name ~always:true d impl_infos)
       (* Print the name of an associated item in a trait impl *)
       | `AssociatedItem
-          ((`Type n | `Const n | `Fn n), (`Trait _ | `Impl (_, `Trait, _))) ->
-          prefix "f" (dstr n)
+          ((`Type n | `Const n | `Fn n), `Impl (d, `Trait, impl_infos)) ->
+          if NP.prefix_associated_item_with_trait_name then
+            Concat
+              (render_impl_name ~always:true d impl_infos, prefix "f" (dstr n))
+          else prefix "f" (dstr n)
+      | `AssociatedItem ((`Type n | `Const n | `Fn n), `Trait (trait_name, _))
+        ->
+          if NP.prefix_associated_item_with_trait_name then
+            Concat (dstr trait_name, prefix "f" (dstr n))
+          else prefix "f" (dstr n)
       (* The constructor of a struct *)
       | `Constructor (cons, parent) -> (
           let cons = render_disambiguated cons in
@@ -675,6 +685,7 @@ module DefaultNamePolicy : NAME_POLICY = struct
   let enum_constructor_prefix = Some "C"
   let union_constructor_prefix = Some "C"
   let named_field_prefix = None
+  let prefix_associated_item_with_trait_name = false
 end
 
 module DefaultViewAPI = MakeRenderAPI (DefaultNamePolicy)

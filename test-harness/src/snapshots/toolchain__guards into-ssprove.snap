@@ -33,7 +33,7 @@ From Crypt Require Import choice_type Package Prelude.
 Import PackageNotation.
 From extructures Require Import ord fset.
 From mathcomp Require Import word_ssrZ word.
-From Jasmin Require Import word.
+(* From Jasmin Require Import word. *)
 
 From Coq Require Import ZArith.
 From Coq Require Import Strings.String.
@@ -51,15 +51,19 @@ From Hacspec Require Import Hacspec_Lib.
 Open Scope hacspec_scope.
 Import choice.Choice.Exports.
 
+From RecordUpdate Require Import RecordUpdate.
+
+Import RecordSetNotations.
+
 Obligation Tactic := (* try timeout 8 *) solve_ssprove_obligations.
 
 (*Not implemented yet? todo(item)*)
 
-Equations if_let_guard {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (t_Option (t_Result int32 int32))) : both L1 I1 int32 :=
+Equations if_let_guard (x : both (t_Option (t_Result int32 int32))) : both int32 :=
   if_let_guard x  :=
     matchb x with
     | Option_None_case  =>
-      solve_lift (ret_both (0 : int32))
+      ret_both (0 : int32)
     | _ =>
       matchb matchb x with
       | Option_Some_case v =>
@@ -67,7 +71,7 @@ Equations if_let_guard {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (
         matchb v with
         | Result_Ok_case y =>
           letb y := ret_both ((y) : (int32)) in
-          Option_Some (solve_lift y)
+          Option_Some y
         | _ =>
           Option_None
         end
@@ -76,24 +80,24 @@ Equations if_let_guard {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (
       end with
       | Option_Some_case x =>
         letb x := ret_both ((x) : (int32)) in
-        solve_lift x
+        x
       | Option_None_case  =>
         matchb x with
         | Option_Some_case Result_Err y =>
           letb y := ret_both ((((y))) : (t_Result int32 int32)) in
-          solve_lift y
+          y
         | _ =>
-          solve_lift (ret_both (1 : int32))
+          ret_both (1 : int32)
         end
       end
-    end : both L1 I1 int32.
+    end : both int32.
 Fail Next Obligation.
 
-Equations equivalent {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (t_Option (t_Result int32 int32))) : both L1 I1 int32 :=
+Equations equivalent (x : both (t_Option (t_Result int32 int32))) : both int32 :=
   equivalent x  :=
     matchb x with
     | Option_None_case  =>
-      solve_lift (ret_both (0 : int32))
+      ret_both (0 : int32)
     | _ =>
       matchb matchb x with
       | Option_Some_case v =>
@@ -101,7 +105,7 @@ Equations equivalent {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (t_
         matchb v with
         | Result_Ok_case y =>
           letb y := ret_both ((y) : (int32)) in
-          Option_Some (solve_lift y)
+          Option_Some y
         | _ =>
           Option_None
         end
@@ -110,24 +114,24 @@ Equations equivalent {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (t_
       end with
       | Option_Some_case y =>
         letb y := ret_both ((y) : (int32)) in
-        solve_lift y
+        y
       | Option_None_case  =>
         matchb x with
         | Option_Some_case Result_Err y =>
           letb y := ret_both ((((y))) : (t_Result int32 int32)) in
-          solve_lift y
+          y
         | _ =>
-          solve_lift (ret_both (1 : int32))
+          ret_both (1 : int32)
         end
       end
-    end : both L1 I1 int32.
+    end : both int32.
 Fail Next Obligation.
 
-Equations multiple_guards {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (t_Option (t_Result int32 int32))) : both L1 I1 int32 :=
+Equations multiple_guards (x : both (t_Option (t_Result int32 int32))) : both int32 :=
   multiple_guards x  :=
     matchb x with
     | Option_None_case  =>
-      solve_lift (ret_both (0 : int32))
+      ret_both (0 : int32)
     | _ =>
       matchb matchb x with
       | Option_Some_case Result_Ok v =>
@@ -135,7 +139,7 @@ Equations multiple_guards {L1 : {fset Location}} {I1 : Interface} (x : both L1 I
         matchb Option_Some (v .+ (ret_both (1 : int32))) with
         | Option_Some_case 1 =>
           letb 1 := ret_both ((1) : (int32)) in
-          Option_Some (solve_lift (ret_both (0 : int32)))
+          Option_Some (ret_both (0 : int32))
         | _ =>
           Option_None
         end
@@ -144,7 +148,7 @@ Equations multiple_guards {L1 : {fset Location}} {I1 : Interface} (x : both L1 I
       end with
       | Option_Some_case x =>
         letb x := ret_both ((x) : (int32)) in
-        solve_lift x
+        x
       | Option_None_case  =>
         matchb matchb x with
         | Option_Some_case v =>
@@ -152,7 +156,7 @@ Equations multiple_guards {L1 : {fset Location}} {I1 : Interface} (x : both L1 I
           matchb v with
           | Result_Ok_case y =>
             letb y := ret_both ((y) : (int32)) in
-            Option_Some (solve_lift y)
+            Option_Some y
           | _ =>
             Option_None
           end
@@ -161,28 +165,28 @@ Equations multiple_guards {L1 : {fset Location}} {I1 : Interface} (x : both L1 I
         end with
         | Option_Some_case x =>
           letb x := ret_both ((x) : (int32)) in
-          solve_lift x
+          x
         | Option_None_case  =>
           matchb x with
           | Option_Some_case Result_Err y =>
             letb y := ret_both ((((y))) : (t_Result int32 int32)) in
-            solve_lift y
+            y
           | _ =>
-            solve_lift (ret_both (1 : int32))
+            ret_both (1 : int32)
           end
         end
       end
-    end : both L1 I1 int32.
+    end : both int32.
 Fail Next Obligation.
 
-Equations if_guard {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (t_Option int32)) : both L1 I1 int32 :=
+Equations if_guard (x : both (t_Option int32)) : both int32 :=
   if_guard x  :=
     matchb matchb x with
     | Option_Some_case v =>
       letb v := ret_both ((v) : (int32)) in
       matchb v >.? (ret_both (0 : int32)) with
       | true =>
-        Option_Some (solve_lift v)
+        Option_Some v
       | _ =>
         Option_None
       end
@@ -191,9 +195,9 @@ Equations if_guard {L1 : {fset Location}} {I1 : Interface} (x : both L1 I1 (t_Op
     end with
     | Option_Some_case x =>
       letb x := ret_both ((x) : (int32)) in
-      solve_lift x
+      x
     | Option_None_case  =>
-      solve_lift (ret_both (0 : int32))
-    end : both L1 I1 int32.
+      ret_both (0 : int32)
+    end : both int32.
 Fail Next Obligation.
 '''

@@ -31,7 +31,7 @@ depends: [
   "ppx_matches"
   "ppx_string"
   "logs"
-  "ocamlgraph"
+  "ocamlgraph" {>= "2.2.0"}
   "js_of_ocaml-compiler"
   "js_of_ocaml"
   "js_of_ocaml-ppx"
@@ -59,7 +59,4 @@ build: [
 dev-repo: "git+https://github.com/hacspec/hax.git"
 depexts: [
   ["nodejs"] {}
-]
-pin-depends: [
-  ["ocamlgraph.dev" "git+https://github.com/maximebuyse/ocamlgraph.git#fix-stable-topological-sort"]
 ]
