@@ -41,6 +41,10 @@ let impl_u64__overflowing_sub (x y: u64): u64 * bool
     let out = if borrow then pow2 64 + sub else sub in
     (mk_u64 out, borrow)
 
+let impl_i64__wrapping_add: i64 -> i64 -> i64 = add_mod
+let impl_i64__wrapping_sub: i64 -> i64 -> i64 = sub_mod
+let impl_i64__wrapping_mul: i64 -> i64 -> i64 = mul_mod
+
 let impl_u128__wrapping_add: u128 -> u128 -> u128 = add_mod
 let impl_u128__wrapping_sub: u128 -> u128 -> u128 = sub_mod
 val impl_u128__rotate_left: u128 -> u128 -> u128
