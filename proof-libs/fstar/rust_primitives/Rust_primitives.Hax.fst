@@ -84,4 +84,4 @@ let while_loop #acc_t
   
 
 /// Represents backend failures
-let failure : string -> string -> unit = fun _ _ -> ()
+let failure #t (_error: string) (_ast: string): Pure t False (fun _ -> True) = ()
