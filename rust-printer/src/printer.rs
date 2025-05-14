@@ -456,10 +456,12 @@ pub mod rust {
                     )
                 }
                 ExprKind::Ascription { .. } => todo!(),
-                ExprKind::Assign { lhs, e } => format!("{} = {}", lhs.to_doc(self), e.to_doc(self)),
+                ExprKind::Assign { lhs, value } => {
+                    format!("{} = {}", lhs.to_doc(self), value.to_doc(self))
+                }
                 ExprKind::Loop { body, .. } => format!("loop {{ {} }}", body.to_doc(self)), // TODO label
-                ExprKind::Break { e, .. } => format!("break {}", e.to_doc(self)), // TODO label
-                ExprKind::Return { e } => format!("return {}", e.to_doc(self)),
+                ExprKind::Break { value, .. } => format!("break {}", value.to_doc(self)), // TODO label
+                ExprKind::Return { value } => format!("return {}", value.to_doc(self)),
                 ExprKind::Continue { .. } => "continue".to_owned(), // TODO label
                 ExprKind::Closure {
                     params,
@@ -498,16 +500,16 @@ pub mod rust {
         }
         fn generic_constraint(&self, generic_constraint: &GenericConstraint) -> Doc {
             match generic_constraint {
-                GenericConstraint::GCLifetime(l) => unimplemented!(),
-                GenericConstraint::GCProjection(predicate) => unimplemented!(),
-                GenericConstraint::GCType(i) => unimplemented!(),
+                GenericConstraint::Lifetime(l) => unimplemented!(),
+                GenericConstraint::Projection(predicate) => unimplemented!(),
+                GenericConstraint::Type(i) => unimplemented!(),
             }
         }
         fn generic_param(&self, generic_param: &GenericParam) -> Doc {
             let ident = generic_param.ident.to_doc(self);
             match &generic_param.kind {
-                GenericParamKind::GPConst { ty } => format!("const {}: {}", ident, ty.to_doc(self)),
-                GenericParamKind::GPLifetime | GenericParamKind::GPType => ident,
+                GenericParamKind::Const { ty } => format!("const {}: {}", ident, ty.to_doc(self)),
+                GenericParamKind::Lifetime | GenericParamKind::Type => ident,
             }
         }
         fn generics(&self, generics: &Generics) -> Doc {

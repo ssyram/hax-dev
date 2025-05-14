@@ -178,27 +178,13 @@ fn unit_expr(span: dst::Span) -> dst::Expr {
 fn translate_expr(expr: &src::Expr) -> dst::Expr {
     let span = (&expr.span).into();
     let ty = translate_ty(&expr.ty, span);
-    let simple_app = |fn_id, args| {
-        let head = dst::Expr {
-            kind: Box::new(dst::ExprKind::GlobalId(fn_id)),
-            ty: ty.clone(),
-            meta: dst::Metadata {
-                span,
-                attrs: vec![],
-            },
-        };
-        dst::ExprKind::App {
-            head,
-            args,
-            generic_args: Vec::new(),
-            bounds_impls: Vec::new(),
-            trait_: None,
-        }
-    };
     let kind = match expr.contents.as_ref() {
-        src::ExprKind::Box { value } => {
-            simple_app(GlobalId::box_new(), vec![translate_expr(value)])
-        }
+        src::ExprKind::Box { value } => dst::helper::simple_app(
+            GlobalId::box_new(),
+            vec![translate_expr(value)],
+            ty.clone(),
+            span.clone(),
+        ),
         src::ExprKind::If {
             cond,
             then,
@@ -226,34 +212,44 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
             let args = args.iter().map(translate_expr).collect::<Vec<_>>();
             let generic_args = translate_generic_args(generic_args, span);
 
-            let trait_ = r#trait.as_ref().map(|(impl_expr, g_args)| {
-                (impl_expr.clone(), translate_generic_args(&g_args, span))
-            });
+            let trait_ = r#trait
+                .as_ref()
+                .map(|(impl_expr, g_args)| (dst::ImplExpr, translate_generic_args(&g_args, span)));
             dst::ExprKind::App {
                 head,
                 args,
                 generic_args,
-                bounds_impls: bounds_impls.clone(),
+                bounds_impls: Vec::new(),
                 trait_,
             }
         }
         src::ExprKind::Deref { arg } => dst::ExprKind::Deref(translate_expr(arg)),
-        src::ExprKind::Binary { op, lhs, rhs } => simple_app(
+        src::ExprKind::Binary { op, lhs, rhs } => dst::helper::simple_app(
             dst::GlobalId::bin_op(op),
             vec![translate_expr(lhs), translate_expr(rhs)],
+            ty.clone(),
+            span.clone(),
         ),
-        src::ExprKind::LogicalOp { op, lhs, rhs } => simple_app(
+        src::ExprKind::LogicalOp { op, lhs, rhs } => dst::helper::simple_app(
             dst::GlobalId::logical_op(op),
             vec![translate_expr(lhs), translate_expr(rhs)],
+            ty.clone(),
+            span.clone(),
         ),
-        src::ExprKind::Unary { op, arg } => {
-            simple_app(GlobalId::un_op(op), vec![translate_expr(arg)])
-        }
+        src::ExprKind::Unary { op, arg } => dst::helper::simple_app(
+            GlobalId::un_op(op),
+            vec![translate_expr(arg)],
+            ty.clone(),
+            span.clone(),
+        ),
         src::ExprKind::Cast { source } => todo!(),
         src::ExprKind::Use { source } => *(translate_expr(source).kind),
-        src::ExprKind::NeverToAny { source } => {
-            simple_app(GlobalId::never_to_any(), vec![translate_expr(source)])
-        }
+        src::ExprKind::NeverToAny { source } => dst::helper::simple_app(
+            GlobalId::never_to_any(),
+            vec![translate_expr(source)],
+            ty.clone(),
+            span.clone(),
+        ),
         src::ExprKind::PointerCoercion { cast, source } => return translate_expr(source),
         src::ExprKind::Loop { body } => dst::ExprKind::Loop {
             body: translate_expr(body),
@@ -338,14 +334,16 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
         }
         src::ExprKind::Assign { lhs, rhs } => dst::ExprKind::Assign {
             lhs: translate_expr(lhs),
-            e: translate_expr(rhs),
+            value: translate_expr(rhs),
         },
         src::ExprKind::AssignOp { op, lhs, rhs } => dst::ExprKind::Assign {
             lhs: translate_expr(lhs),
-            e: dst::Expr {
-                kind: Box::new(simple_app(
+            value: dst::Expr {
+                kind: Box::new(dst::helper::simple_app(
                     dst::GlobalId::bin_op(op),
                     vec![translate_expr(lhs), translate_expr(rhs)],
+                    ty.clone(),
+                    span.clone(),
                 )),
                 ty: ty.clone(),
                 meta: dst::Metadata {
@@ -355,13 +353,17 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
             },
         },
         src::ExprKind::Field { field, lhs } => todo!(),
-        src::ExprKind::TupleField { field, lhs } => simple_app(
+        src::ExprKind::TupleField { field, lhs } => dst::helper::simple_app(
             dst::GlobalId::tuple_field(*field),
             vec![translate_expr(lhs)],
+            ty.clone(),
+            span.clone(),
         ),
-        src::ExprKind::Index { lhs, index } => simple_app(
+        src::ExprKind::Index { lhs, index } => dst::helper::simple_app(
             dst::GlobalId::index(),
             vec![translate_expr(lhs), translate_expr(index)],
+            ty.clone(),
+            span.clone(),
         ),
         src::ExprKind::VarRef { id } => dst::ExprKind::LocalId(id.into()),
         src::ExprKind::ConstRef { id } | src::ExprKind::ConstParam { param: id, .. } => {
@@ -375,22 +377,22 @@ fn translate_expr(expr: &src::Expr) -> dst::Expr {
         },
         src::ExprKind::RawBorrow { mutability, arg } => todo!(),
         src::ExprKind::Break { label, value } => {
-            let e = value
+            let value = value
                 .as_ref()
                 .map(translate_expr)
                 .unwrap_or(unit_expr(span));
             dst::ExprKind::Break {
-                e,
+                value,
                 label: None, // TODO
             }
         }
         src::ExprKind::Continue { label } => dst::ExprKind::Continue { label: None }, // TODO
         src::ExprKind::Return { value } => {
-            let e = value
+            let value = value
                 .as_ref()
                 .map(translate_expr)
                 .unwrap_or(unit_expr(span));
-            dst::ExprKind::Return { e }
+            dst::ExprKind::Return { value }
         }
         src::ExprKind::ConstBlock { did, args } => unimplemented!(),
         src::ExprKind::Repeat { value, count } => todo!(),
@@ -506,11 +508,11 @@ fn translate_generic_param(generic_param: &src::GenericParam<Body>) -> dst::Gene
         attrs: vec![],
     };
     let kind: GenericParamKind = match &generic_param.kind {
-        src::GenericParamKind::Lifetime { .. } => dst::GenericParamKind::GPLifetime,
-        src::GenericParamKind::Const { ty, .. } => dst::GenericParamKind::GPConst {
+        src::GenericParamKind::Lifetime { .. } => dst::GenericParamKind::Lifetime,
+        src::GenericParamKind::Const { ty, .. } => dst::GenericParamKind::Const {
             ty: translate_ty(ty, span),
         },
-        src::GenericParamKind::Type { .. } => dst::GenericParamKind::GPType,
+        src::GenericParamKind::Type { .. } => dst::GenericParamKind::Type,
     };
     dst::GenericParam { ident, meta, kind }
 }

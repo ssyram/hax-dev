@@ -11,13 +11,13 @@
 //!  5. This AST should be suitable for AST transformations.
 
 pub mod diagnostics;
+pub mod helper;
 pub mod identifiers;
 pub mod literals;
 pub mod node;
 pub mod span;
 
 pub use diagnostics::Diagnostic;
-use hax_frontend_exporter::ImplExpr;
 pub use identifiers::*;
 pub use literals::*;
 pub use node::Node;
@@ -33,7 +33,7 @@ pub enum GenericValue {
     /// Example: `12` in `Foo<12>`
     Expr(Expr),
     /// A lifetime.
-    /// Example `'a` in `foo<'a>`
+    /// Example: `'a` in `foo<'a>`
     Lifetime,
 }
 
@@ -188,12 +188,15 @@ pub enum PatKind {
     Error(Diagnostic),
 }
 
-/// Represents the various kinds of patterns.
+/// Represents the various kinds of pattern guards.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum GuardKind {
     /// An `if let` guard
     IfLet { lhs: Pat, rhs: Expr },
 }
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ImplExpr;
 
 /// Describes the shape of an expression.
 // TODO: Kill some nodes (e.g. `Array`, `Tuple`)?
@@ -209,7 +212,6 @@ pub enum ExprKind {
 
     /// Function application.
     /// Example: `f(x, y)`
-    // TODO: generics, traits
     App {
         head: Expr,
         args: Vec<Expr>,
@@ -283,34 +285,40 @@ pub enum ExprKind {
     },
 
     /// Variable mutation
+    /// Example: `x = 1`
     Assign {
         lhs: Expr,
-        e: Expr,
+        value: Expr,
     },
 
     /// Loop
+    /// Example: `loop{}`
     Loop {
         body: Expr,
         label: Option<String>,
     },
 
-    /// Break
+    /// Break out of a loop
+    /// Example: `break;`
     Break {
-        e: Expr,
+        value: Expr,
         label: Option<String>,
     },
 
-    /// Return
+    /// Return from a function
+    /// Example: `return 1;`
     Return {
-        e: Expr,
+        value: Expr,
     },
 
-    /// Continue
+    /// Continue (go to next loop iteration)
+    /// Example: `continue;`
     Continue {
         label: Option<String>,
     },
 
-    /// Closure
+    /// Closure (anonymous function)
+    /// Example: `|x| x`
     Closure {
         params: Vec<Pat>,
         body: Expr,
@@ -318,19 +326,22 @@ pub enum ExprKind {
     },
 }
 
+/// Represents the kinds of generic parameters
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum GenericParamKind {
-    GPLifetime,
-    GPType,
-    GPConst { ty: Ty },
+    Lifetime,
+    Type,
+    Const { ty: Ty },
 }
 
+/// Represents an instantiated trait that needs to be implemented
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TraitGoal {
     trait_: GlobalId,
     args: Vec<GenericValue>,
 }
 
+/// Represents a trait bound in a generic constraint
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct ImplIdent {
     goal: TraitGoal,
@@ -340,13 +351,15 @@ pub struct ImplIdent {
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct ProjectionPredicate;
 
+/// A generic constraint (lifetime, type or projection)
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum GenericConstraint {
-    GCLifetime(String),
-    GCType(ImplIdent),
-    GCProjection(ProjectionPredicate),
+    Lifetime(String),
+    Type(ImplIdent),
+    Projection(ProjectionPredicate),
 }
 
+/// A generic parameter (lifetime, type parameter or const parameter)
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct GenericParam {
     pub ident: LocalId,
@@ -354,6 +367,7 @@ pub struct GenericParam {
     pub kind: GenericParamKind,
 }
 
+/// Generic parameters and constraints (contained between `<>` in function declarations)
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Generics {
     pub params: Vec<GenericParam>,
