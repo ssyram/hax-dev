@@ -299,20 +299,20 @@ pub enum ExprKind {
     },
 
     /// Break out of a loop
-    /// Example: `break;`
+    /// Example: `break`
     Break {
         value: Expr,
         label: Option<String>,
     },
 
     /// Return from a function
-    /// Example: `return 1;`
+    /// Example: `return 1`
     Return {
         value: Expr,
     },
 
     /// Continue (go to next loop iteration)
-    /// Example: `continue;`
+    /// Example: `continue`
     Continue {
         label: Option<String>,
     },
