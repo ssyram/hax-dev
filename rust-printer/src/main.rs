@@ -57,6 +57,7 @@ fn main() {
             }
         }
         fn print(&'a self) {
+            println!("#![feature(panic_internals)]\n");
             for item in self.items {
                 let mod_path = module_path(&item.ident);
                 if mod_path == self.current_path {

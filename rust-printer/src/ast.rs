@@ -11,6 +11,7 @@
 //!  5. This AST should be suitable for AST transformations.
 
 pub mod diagnostics;
+pub mod helper;
 pub mod identifiers;
 pub mod literals;
 pub mod node;
@@ -31,6 +32,9 @@ pub enum GenericValue {
     /// A const-level generic value.
     /// Example: `12` in `Foo<12>`
     Expr(Expr),
+    /// A lifetime.
+    /// Example: `'a` in `foo<'a>`
+    Lifetime,
 }
 
 /// Built-in primitive types.
@@ -62,14 +66,23 @@ pub enum Ty {
 
     /// A function or closure type.
     /// Example: `fn(i32) -> bool` or `Fn(i32) -> bool`
-    Arrow { inputs: Vec<Ty>, output: Box<Ty> },
+    Arrow {
+        inputs: Vec<Ty>,
+        output: Box<Ty>,
+    },
 
     /// A reference type.
     /// Example: `&i32`, `&mut i32`
-    Ref { inner: Box<Ty>, mutable: bool },
+    Ref {
+        inner: Box<Ty>,
+        mutable: bool,
+    },
 
     /// Fallback constructor to carry errors.
     Error(Diagnostic),
+
+    // A parameter type
+    Param(LocalId),
 }
 
 /// Extra information attached to syntax nodes.
@@ -97,9 +110,31 @@ pub struct Expr {
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Pat {
     /// The kind of pattern.
-    pub kind: PatKind,
+    pub kind: Box<PatKind>,
     /// The type of this pattern.
     pub ty: Ty,
+    /// Source span and attributes.
+    pub meta: Metadata,
+}
+
+/// A pattern matching arm with metadata.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Arm {
+    /// The pattern of the arm.
+    pub pat: Pat,
+    /// The body of the arm.
+    pub body: Expr,
+    /// The optional guard of the arm.
+    pub guard: Option<Guard>,
+    /// Source span and attributes.
+    pub meta: Metadata,
+}
+
+/// A pattern matching arm guard with metadata.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Guard {
+    /// The kind of guard.
+    pub kind: GuardKind,
     /// Source span and attributes.
     pub meta: Metadata,
 }
@@ -141,9 +176,27 @@ pub enum PatKind {
         mode: BindingMode,
     },
 
+    /// A constructor pattern
+    Construct {
+        constructor: GlobalId,
+        is_record: bool,
+        is_struct: bool,
+        fields: Vec<(GlobalId, Pat)>,
+    },
+
     /// Fallback constructor to carry errors.
     Error(Diagnostic),
 }
+
+/// Represents the various kinds of pattern guards.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum GuardKind {
+    /// An `if let` guard
+    IfLet { lhs: Pat, rhs: Expr },
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ImplExpr;
 
 /// Describes the shape of an expression.
 // TODO: Kill some nodes (e.g. `Array`, `Tuple`)?
@@ -153,14 +206,19 @@ pub enum ExprKind {
     /// Example: `if x > 0 { 1 } else { 2 }`
     If {
         condition: Expr,
-        then_: Expr,
+        then: Expr,
         else_: Option<Expr>,
     },
 
     /// Function application.
     /// Example: `f(x, y)`
-    // TODO: generics, traits
-    App { head: Expr, args: Vec<Expr> },
+    App {
+        head: Expr,
+        args: Vec<Expr>,
+        generic_args: Vec<GenericValue>,
+        bounds_impls: Vec<ImplExpr>,
+        trait_: Option<(ImplExpr, Vec<GenericValue>)>,
+    },
 
     /// A literal value.
     /// Example: `42`, `"hello"`
@@ -170,6 +228,21 @@ pub enum ExprKind {
     /// Example: `[1, 2, 3]`
     Array(Vec<Expr>),
 
+    /// A constructor application
+    /// Example: A(x)
+    Construct {
+        constructor: GlobalId,
+        is_record: bool,
+        is_struct: bool,
+        fields: Vec<(GlobalId, Expr)>,
+        base: Option<Expr>,
+    },
+
+    Match {
+        scrutinee: Expr,
+        arms: Vec<Arm>,
+    },
+
     /// A tuple literal.
     /// Example: `(a, b)`
     Tuple(Vec<Expr>),
@@ -178,14 +251,21 @@ pub enum ExprKind {
     /// Examples:
     /// - `&x` → `mutable: false`
     /// - `&mut x` → `mutable: true`
-    Borrow { mutable: bool, inner: Expr },
+    Borrow {
+        mutable: bool,
+        inner: Expr,
+    },
 
     /// A dereference: `*x`
     Deref(Expr),
 
     /// A `let` expression used in expressions.
     /// Example: `let x = 1; x + 1`
-    Let { lhs: Pat, rhs: Expr, body: Expr },
+    Let {
+        lhs: Pat,
+        rhs: Expr,
+        body: Expr,
+    },
 
     /// A global identifier.
     /// Example: `std::mem::drop`
@@ -197,11 +277,102 @@ pub enum ExprKind {
 
     /// Fallback constructor to carry errors.
     Error(Diagnostic),
+
+    /// Type ascription
+    Ascription {
+        e: Expr,
+        ty: Ty,
+    },
+
+    /// Variable mutation
+    /// Example: `x = 1`
+    Assign {
+        lhs: Expr,
+        value: Expr,
+    },
+
+    /// Loop
+    /// Example: `loop{}`
+    Loop {
+        body: Expr,
+        label: Option<String>,
+    },
+
+    /// Break out of a loop
+    /// Example: `break`
+    Break {
+        value: Expr,
+        label: Option<String>,
+    },
+
+    /// Return from a function
+    /// Example: `return 1`
+    Return {
+        value: Expr,
+    },
+
+    /// Continue (go to next loop iteration)
+    /// Example: `continue`
+    Continue {
+        label: Option<String>,
+    },
+
+    /// Closure (anonymous function)
+    /// Example: `|x| x`
+    Closure {
+        params: Vec<Pat>,
+        body: Expr,
+        captures: Vec<Expr>,
+    },
 }
 
-// TODO: implement generics
+/// Represents the kinds of generic parameters
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub struct Generics;
+pub enum GenericParamKind {
+    Lifetime,
+    Type,
+    Const { ty: Ty },
+}
+
+/// Represents an instantiated trait that needs to be implemented
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct TraitGoal {
+    trait_: GlobalId,
+    args: Vec<GenericValue>,
+}
+
+/// Represents a trait bound in a generic constraint
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ImplIdent {
+    goal: TraitGoal,
+    name: String,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ProjectionPredicate;
+
+/// A generic constraint (lifetime, type or projection)
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum GenericConstraint {
+    Lifetime(String),
+    Type(ImplIdent),
+    Projection(ProjectionPredicate),
+}
+
+/// A generic parameter (lifetime, type parameter or const parameter)
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct GenericParam {
+    pub ident: LocalId,
+    pub meta: Metadata,
+    pub kind: GenericParamKind,
+}
+
+/// Generic parameters and constraints (contained between `<>` in function declarations)
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Generics {
+    pub params: Vec<GenericParam>,
+    pub constraints: Vec<GenericConstraint>,
+}
 
 /// Safety level of a function.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
