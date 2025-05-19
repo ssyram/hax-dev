@@ -10,10 +10,11 @@ on:
 jobs:
   tests:
     name: nix-action
-    runs-on: ubuntu-latest
+    runs-on: LINUX
     steps:
     - uses: actions/checkout@v4
-    - uses: DeterminateSystems/nix-installer-action@main
+    - if: runner.environment == 'github-hosted'
+      uses: DeterminateSystems/nix-installer-action@main
     - uses: cachix/cachix-action@v15
       with:
         name: hax
