@@ -38,49 +38,47 @@ Require Import String.
 Require Import Coq.Floats.Floats.
 From RecordUpdate Require Import RecordSet.
 Import RecordSetNotations.
+From Core Require Import Core.
 
 
 
 (* NotImplementedYet *)
 
-Record t_Foo : Type :=
+Record Foo_record : Type :=
   {
   }.
-Arguments t_Foo:clear implicits.
-Arguments t_Foo.
-Arguments Build_t_Foo.
-#[export] Instance settable_t_Foo : Settable _ :=
-  settable! (@Build_t_Foo) <>.
+Arguments Build_Foo_record.
+#[export]
+Notation "'Foo_Foo_record'" := Build_Foo_record.
 
-Class t_Trait `{v_Self : Type} : Type :=
+Class t_Trait (v_Self : Type) : Type :=
   {
   }.
-Arguments t_Trait:clear implicits.
 Arguments t_Trait (_).
 
 Instance t_Trait_257736684 : t_Trait ((t_Foo)) :=
   {
   }.
 
-Definition main_a_a (_ : unit) : unit :=
+Definition main_a_a '(_ : unit) : unit :=
   tt.
 
-Definition main_b_a (_ : unit) : unit :=
+Definition main_b_a '(_ : unit) : unit :=
   tt.
 
-Definition main_c_a (_ : unit) : unit :=
+Definition main_c_a '(_ : unit) : unit :=
   tt.
 
-Definition main_a_b (_ : unit) : unit :=
+Definition main_a_b '(_ : unit) : unit :=
   tt.
 
-Definition main_b_b (_ : unit) : unit :=
+Definition main_b_b '(_ : unit) : unit :=
   tt.
 
-Definition main_c_b (_ : unit) : unit :=
+Definition main_c_b '(_ : unit) : unit :=
   tt.
 
-Definition main_a_c (_ : unit) : unit :=
+Definition main_a_c '(_ : unit) : unit :=
   tt.
 
 Definition main_a `{v_T : Type} `{t_Sized (v_T)} `{t_Trait (v_T)} (x : v_T) : unit :=
@@ -89,27 +87,33 @@ Definition main_a `{v_T : Type} `{t_Sized (v_T)} `{t_Trait (v_T)} (x : v_T) : un
   let _ := main_a_c (tt) in
   tt.
 
-Definition main_b_c (_ : unit) : unit :=
+Definition main_b_c '(_ : unit) : unit :=
   tt.
 
-Definition main_b (_ : unit) : unit :=
+Definition main_b '(_ : unit) : unit :=
   let _ := main_b_a (tt) in
   let _ := main_b_b (tt) in
   let _ := main_b_c (tt) in
   tt.
 
-Definition main_c_c (_ : unit) : unit :=
+Definition main_c_c '(_ : unit) : unit :=
   tt.
 
-Definition main_c (_ : unit) : unit :=
+Definition main_c '(_ : unit) : unit :=
   let _ := main_c_a (tt) in
   let _ := main_c_b (tt) in
   let _ := main_c_c (tt) in
   tt.
 
-Definition main (_ : unit) : unit :=
-  let _ := main_a (Build_t_Foo) in
+Definition main '(_ : unit) : unit :=
+  let _ := main_a (Build_Foo_record) in
   let _ := main_b (tt) in
   let _ := main_c (tt) in
   tt.
 '''
+_CoqProject = '''
+-R ./ TODO
+-arg -w
+-arg all
+
+Include_flag.v'''

@@ -249,7 +249,6 @@ pub fn modeled_by(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStre
 #[proc_macro_attribute]
 pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
     let mut item: syn::ItemFn = parse_macro_input!(item as ItemFn);
-    use std::borrow::Borrow;
     use syn::{spanned::Spanned, GenericArgument, PathArguments, ReturnType};
 
     fn add_allow_unused_variables_to_args(func: &mut syn::ItemFn) {
@@ -288,29 +287,22 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
     }
     let _ = parse_macro_input!(attr as parse::Nothing);
     let attr = &AttrPayload::Lemma;
+    add_allow_unused_variables_to_args(&mut item);
     if let ReturnType::Type(_, r#type) = &item.sig.output {
-        if !match r#type.borrow() {
-            syn::Type::Tuple(tt) => tt.elems.is_empty(),
-            _ => match parse_proof_type(*r#type.clone()) {
-                Some(ensures_clause) => {
-                    item.sig.output = ReturnType::Default;
-                    return ensures(
-                        quote! {|_| #ensures_clause}.into(),
-                        quote! { #attr #item }.into(),
-                    );
-                }
-                None => false,
-            },
-        } {
-            abort!(
-                item.sig.output.span(),
-                "A lemma is expected to return a `Proof<{STATEMENT}>`, where {STATEMENT} is a `Prop` expression."
+        if let Some(ensures_clause) = parse_proof_type(*r#type.clone()) {
+            use AttrPayload::NeverErased;
+            item.sig.output = ReturnType::Default;
+            return ensures(
+                quote! {|_| #ensures_clause}.into(),
+                quote! { #attr #NeverErased #item }.into(),
             );
         }
     }
-    add_allow_unused_variables_to_args(&mut item);
-    use AttrPayload::NeverErased;
-    quote! { #attr #NeverErased #item }.into()
+
+    abort!(
+        item.sig.output.span(),
+        "A lemma is expected to return a `Proof<{STATEMENT}>`, where {STATEMENT} is a `Prop` expression."
+    )
 }
 
 /// Provide a measure for a function: this measure will be used once

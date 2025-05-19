@@ -24,11 +24,9 @@ jobs:
 
     - name: Install the toolchain
       run: |
-        mkdir binaries
-        # Install binaries in `binaries`
-        nix build nixpkgs#yq .#rustc . -o binaries/result
-        # Add the paths to PATH
-        for path in $PWD/binaries/*/bin; do echo "$path"; done >> $GITHUB_PATH
+        nix profile install nixpkgs#yq
+        nix profile install .#rustc
+        nix profile install .
         
     - name: Ensure readme coherency
       run: |

@@ -1,0 +1,15 @@
+name: Extract and Run - Coq
+
+on: [pull_request]
+jobs:
+  build:
+    runs-on: linux
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.environment == 'github-hosted'
+        uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: ⤵ Install hax
+        run: |
+          nix build .\#check-coq-coverage

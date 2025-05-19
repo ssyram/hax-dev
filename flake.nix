@@ -65,7 +65,17 @@
             cat "${hax-env-file}" | xargs -I{} echo "export {}"
           fi
         '';
-        ocamlPackages = pkgs.ocamlPackages;
+        ocamlPackages = pkgs.ocamlPackages.overrideScope (final: prev: {
+          ocamlgraph = prev.ocamlgraph.overrideAttrs (_: rec {
+            name = "ocamlgraph-${version}";
+            version = "2.2.0";
+            src = pkgs.fetchurl {
+              url =
+                "https://github.com/backtracking/ocamlgraph/releases/download/${version}/ocamlgraph-${version}.tbz";
+              hash = "sha256-sJViEIY8wk9IAgO6PC7wbfrlV5U2oFdENk595YgisjA=";
+            };
+          });
+        });
       in rec {
         packages = {
           inherit rustc ocamlformat rustfmt fstar hax-env rustc-docs;
@@ -98,6 +108,7 @@
 
           check-toolchain = checks.toolchain;
           check-examples = checks.examples;
+          check-coq-coverage = checks.coverage;
           check-readme-coherency = checks.readme-coherency;
 
           rust-by-example-hax-extraction = pkgs.stdenv.mkDerivation {
@@ -126,6 +137,11 @@
           examples = pkgs.callPackage ./examples {
             inherit (packages) hax;
             inherit craneLib fstar hacl-star hax-env;
+          };
+          coverage = pkgs.callPackage ./examples/coverage {
+            inherit (packages) hax;
+            inherit (pkgs) coqPackages;
+            inherit craneLib;
           };
           readme-coherency =
             let src = pkgs.lib.sourceFilesBySuffices ./. [ ".md" ];

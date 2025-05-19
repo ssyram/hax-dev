@@ -82,3 +82,6 @@ let while_loop #acc_t
     else current in 
   while_loop_internal init
   
+
+/// Represents backend failures
+let failure #t (_error: string) (_ast: string): Pure t False (fun _ -> True) = ()

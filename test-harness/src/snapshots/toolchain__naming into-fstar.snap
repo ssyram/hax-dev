@@ -224,4 +224,23 @@ let constants
 
 /// From issue https://github.com/hacspec/hax/issues/839
 let string_shadows (v_string n: string) : Prims.unit = ()
+
+/// From issue https://github.com/cryspen/hax/issues/1450
+let items_under_closures (_: Prims.unit) : Prims.unit =
+  let _: Prims.unit -> Prims.unit =
+    fun temp_0_ ->
+      let _:Prims.unit = temp_0_ in
+      ()
+  in
+  ()
+
+let items_under_closures__anon_const_0__nested_function (_: Prims.unit) : Prims.unit = ()
+
+type items_under_closures__anon_const_0__t_NestedStruct =
+  | C_items_under_closures__anon_const_0__NestedStruct : items_under_closures__anon_const_0__t_NestedStruct
+
+let items_under_closures__nested_function (_: Prims.unit) : Prims.unit = ()
+
+type items_under_closures__t_NestedStruct =
+  | C_items_under_closures__NestedStruct : items_under_closures__t_NestedStruct
 '''

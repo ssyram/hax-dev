@@ -1,3 +1,4 @@
 module Core.Hint
 
-val black_box: #a:Type0 -> x:a -> y:a{y == x}
+let black_box (#a:Type0) (x:a) = x
+let must_use (#a:Type0) (x:a) = x

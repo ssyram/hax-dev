@@ -32,6 +32,22 @@ class t_PartialOrd (v_Self: Type) (v_Rhs:Type) = {
   f_partial_cmp_pre: v_Self -> v_Rhs -> Type0;
   f_partial_cmp_post: v_Self -> v_Rhs -> Core.Option.t_Option t_Ordering -> Type0;
   f_partial_cmp:v_Self -> v_Rhs -> Core.Option.t_Option t_Ordering;
+
+  f_ge_pre: v_Self -> v_Rhs -> Type0;
+  f_ge_post: v_Self -> v_Rhs -> Type0;
+  f_ge: v_Self -> v_Rhs -> bool;
+
+  f_gt_pre: v_Self -> v_Rhs -> Type0;
+  f_gt_post: v_Self -> v_Rhs -> Type0;
+  f_gt: v_Self -> v_Rhs -> bool;
+
+  f_le_pre: v_Self -> v_Rhs -> Type0;
+  f_le_post: v_Self -> v_Rhs -> Type0;
+  f_le: v_Self -> v_Rhs -> bool;
+
+  f_lt_pre: v_Self -> v_Rhs -> Type0;
+  f_lt_post: v_Self -> v_Rhs -> Type0;
+  f_lt: v_Self -> v_Rhs -> bool;
 }
 
 class t_Ord (v_Self: Type) = {
@@ -60,3 +76,6 @@ val ord_int t: t_Ord (int_t t)
 
 [@FStar.Tactics.Typeclasses.tcinstance]
 val ord_reverse t {| t_Ord t |}: t_Ord (t_Reverse t)
+
+[@FStar.Tactics.Typeclasses.tcinstance]
+val partialOrdFloat : t_PartialOrd float float
