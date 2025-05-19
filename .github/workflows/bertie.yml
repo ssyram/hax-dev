@@ -27,6 +27,7 @@ jobs:
 
       - if: runner.environment == 'github-hosted'
         uses: DeterminateSystems/nix-installer-action@main
+
       - name: ⤵ Install hax
         run: |
           nix profile install ./hax

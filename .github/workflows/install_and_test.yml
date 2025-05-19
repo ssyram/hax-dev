@@ -10,7 +10,7 @@ on:
 jobs:
   tests:
     name: nix-action
-    runs-on: LINUX
+    runs-on: linux
     steps:
     - uses: actions/checkout@v4
     - if: runner.environment == 'github-hosted'
