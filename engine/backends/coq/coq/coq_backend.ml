@@ -166,12 +166,10 @@ struct
     let instance = definition_struct (string "Instance") 2
     let class_ = definition_struct (string "Class") 2
     let lemma = proof_struct (string "Lemma")
-
     let comment v = !^"(*" ^^ space ^^ v ^^ space ^^ !^"*)"
 
     let arguments name (explicivity : bool list) =
-      if List.is_empty explicivity
-      then empty
+      if List.is_empty explicivity then empty
       else
         !^"Arguments" ^^ space ^^ name
         ^^ concat_map_with ~pre:space
@@ -291,20 +289,14 @@ struct
         | true, true, None, [] | false, true, _, [] | false, false, _, [] ->
             constructor#p
         | true, true, None, _ | false, true, _, _ | false, false, _, _ ->
-           constructor#p ^^ space ^^ separate_map space (fun x -> parens((snd x)#p)) fields
-            (* ^^ space ^^ !^"|}" *)
+            constructor#p ^^ space
+            ^^ separate_map space (fun x -> parens (snd x)#p) fields
         | _ ->
-            (* constructor#p ^^ space ^^ string "{|" ^^ space *)
-            (* ^^ separate_map (semi ^^ space) *)
-            (*      (fun (ident, exp) -> *)
-            (*        ident#p ^^ space ^^ string ":=" ^^ space ^^ parens exp#p) *)
-            (*      fields *)
-           (* ^^ space ^^ string "|}" *)
-
             constructor#p ^^ space ^^ string "{|" ^^ space
             ^^ separate_map (semi ^^ space)
                  (fun (ident, exp) ->
-                   constructor#p ^^ !^"_" ^^ ident#p ^^ space ^^ string ":=" ^^ space ^^ parens exp#p)
+                   constructor#p ^^ !^"_" ^^ ident#p ^^ space ^^ string ":="
+                   ^^ space ^^ parens exp#p)
                  fields
             ^^ space ^^ string "|}"
 
@@ -1007,7 +999,7 @@ struct
       method module_path_separator = "."
 
       method concrete_ident ~local:_ id : document =
-        (match id.name with
+        match id.name with
         | "not" -> !^"negb"
         | "eq" -> !^"PartialEq_f_eq"
         | "lt" -> !^"PartialOrd_f_lt"
@@ -1021,7 +1013,7 @@ struct
         | "div" -> !^"Div_f_div"
         | "index" -> !^"Index_f_index"
         | "f_to_string" -> CoqNotation.comment !^"f_to_string"
-        | x -> !^x)
+        | x -> !^x
     end
 
   let new_printer : BasePrinter.finalized_printer =
