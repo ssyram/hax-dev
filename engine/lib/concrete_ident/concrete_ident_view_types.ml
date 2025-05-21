@@ -124,6 +124,13 @@ module RelPath = struct
       | `Use of 'disambiguator
       | `AnonConst of 'disambiguator
       | `InlineConst of 'disambiguator
+        (** This is e.g.: {[
+            const {
+                fn f() {}
+            }
+          ]} 
+          Here, `f` is under an `InlineConst`.
+          *)
       | `TraitAlias of 'name
       | `Foreign of 'disambiguator
       | `ForeignTy of 'name
