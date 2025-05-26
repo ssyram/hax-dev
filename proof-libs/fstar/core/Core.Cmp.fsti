@@ -32,23 +32,27 @@ class t_PartialOrd (v_Self: Type) (v_Rhs:Type) = {
   f_partial_cmp_pre: v_Self -> v_Rhs -> Type0;
   f_partial_cmp_post: v_Self -> v_Rhs -> Core.Option.t_Option t_Ordering -> Type0;
   f_partial_cmp:v_Self -> v_Rhs -> Core.Option.t_Option t_Ordering;
-
-  f_ge_pre: v_Self -> v_Rhs -> Type0;
-  f_ge_post: v_Self -> v_Rhs -> Type0;
-  f_ge: v_Self -> v_Rhs -> bool;
-
-  f_gt_pre: v_Self -> v_Rhs -> Type0;
-  f_gt_post: v_Self -> v_Rhs -> Type0;
-  f_gt: v_Self -> v_Rhs -> bool;
-
-  f_le_pre: v_Self -> v_Rhs -> Type0;
-  f_le_post: v_Self -> v_Rhs -> Type0;
-  f_le: v_Self -> v_Rhs -> bool;
-
-  f_lt_pre: v_Self -> v_Rhs -> Type0;
-  f_lt_post: v_Self -> v_Rhs -> Type0;
-  f_lt: v_Self -> v_Rhs -> bool;
 }
+
+let f_lt #v_Self #v_Rhs {| t_PartialOrd v_Self v_Rhs |} (self: v_Self) (rhs: v_Rhs) = 
+  match f_partial_cmp self rhs with 
+  Core.Option.Option_Some Ordering_Less -> true 
+  | _ -> false
+
+let f_le #v_Self #v_Rhs {| t_PartialOrd v_Self v_Rhs |} (self: v_Self) (rhs: v_Rhs) = 
+  match f_partial_cmp self rhs with 
+  Core.Option.Option_Some Ordering_Greater -> false 
+  | _ -> true
+
+let f_gt #v_Self #v_Rhs {| t_PartialOrd v_Self v_Rhs |} (self: v_Self) (rhs: v_Rhs) = 
+  match f_partial_cmp self rhs with 
+  Core.Option.Option_Some Ordering_Greater -> true 
+  | _ -> false
+
+let f_ge #v_Self #v_Rhs {| t_PartialOrd v_Self v_Rhs |} (self: v_Self) (rhs: v_Rhs) = 
+  match f_partial_cmp self rhs with 
+  Core.Option.Option_Some Ordering_Less -> false 
+  | _ -> true
 
 class t_Ord (v_Self: Type) = {
   _super_641474646876120386: t_Eq v_Self;
