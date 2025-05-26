@@ -4,7 +4,7 @@ use std::sync::Arc;
 #[cfg(feature = "rustc")]
 use rustc_hir::def::DefKind as RDefKind;
 #[cfg(feature = "rustc")]
-use rustc_middle::ty;
+use rustc_middle::{mir, ty};
 #[cfg(feature = "rustc")]
 use rustc_span::def_id::DefId as RDefId;
 
@@ -341,11 +341,20 @@ pub enum FullDefKind<Body> {
         #[value(s.base().tcx.constness(s.owner_id()) == rustc_hir::Constness::Const)]
         is_const: bool,
         #[value({
-            let fun_type = s.base().tcx.type_of(s.owner_id()).instantiate_identity();
-            let ty::TyKind::Closure(_, args) = fun_type.kind() else { unreachable!() };
+            let closure_ty = s.base().tcx.type_of(s.owner_id()).instantiate_identity();
+            let ty::TyKind::Closure(_, args) = closure_ty.kind() else { unreachable!() };
             ClosureArgs::sfrom(s, s.owner_id(), args.as_closure())
         })]
         args: ClosureArgs,
+        /// For `FnMut`&`Fn` closures: the MIR for the `call_once` method; it simply calls
+        /// `call_mut`.
+        #[value({
+            let tcx = s.base().tcx;
+            let closure_ty = tcx.type_of(s.owner_id()).instantiate_identity();
+            let opt_body = closure_once_shim(tcx, closure_ty);
+            opt_body.and_then(|body| Body::from_mir(s, body))
+        })]
+        once_shim: Option<Body>,
     },
 
     // Constants
@@ -913,6 +922,25 @@ where
         fields,
         output_ty,
     }
+}
+
+#[cfg(feature = "rustc")]
+fn closure_once_shim<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    closure_ty: ty::Ty<'tcx>,
+) -> Option<mir::Body<'tcx>> {
+    let ty::Closure(def_id, args) = closure_ty.kind() else {
+        unreachable!()
+    };
+    let instance = match args.as_closure().kind() {
+        ty::ClosureKind::Fn | ty::ClosureKind::FnMut => {
+            ty::Instance::fn_once_adapter_instance(tcx, *def_id, args)
+        }
+        ty::ClosureKind::FnOnce => return None,
+    };
+    let mir = tcx.instance_mir(instance.def).clone();
+    let mir = ty::EarlyBinder::bind(mir).instantiate(tcx, instance.args);
+    Some(mir)
 }
 
 #[cfg(feature = "rustc")]
