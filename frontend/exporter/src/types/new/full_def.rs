@@ -8,10 +8,14 @@ use rustc_middle::{mir, ty};
 #[cfg(feature = "rustc")]
 use rustc_span::def_id::DefId as RDefId;
 
+/// Hack: charon used to rely on the old `()` default everywhere. To avoid big merge conflicts with
+/// in-flight PRs we're changing the default here. Eventually this should be removed.
+type DefaultFullDefBody = MirBody<mir_kinds::Unknown>;
+
 /// Gathers a lot of definition information about a [`rustc_hir::def_id::DefId`].
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
-pub struct FullDef<Body = ()> {
+pub struct FullDef<Body = DefaultFullDefBody> {
     pub def_id: DefId,
     /// The enclosing item.
     pub parent: Option<DefId>,

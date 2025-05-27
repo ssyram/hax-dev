@@ -69,6 +69,12 @@ pub mod mir_kinds {
     #[derive(Clone, Copy, Debug, JsonSchema)]
     pub struct CTFE;
 
+    /// MIR of unknown origin. `body()` returns `None`; this is used to get the bodies provided via
+    /// `from_mir` but not attempt to get MIR for functions etc.
+    #[derive_group(Serializers)]
+    #[derive(Clone, Copy, Debug, JsonSchema)]
+    pub struct Unknown;
+
     #[cfg(feature = "rustc")]
     pub use rustc::*;
     #[cfg(feature = "rustc")]
@@ -152,6 +158,16 @@ pub mod mir_kinds {
                 f: impl FnOnce(&Body<'tcx>) -> T,
             ) -> Option<T> {
                 Some(f(tcx.mir_for_ctfe(id)))
+            }
+        }
+
+        impl IsMirKind for Unknown {
+            fn get_mir<'tcx, T>(
+                _tcx: TyCtxt<'tcx>,
+                _id: DefId,
+                _f: impl FnOnce(&Body<'tcx>) -> T,
+            ) -> Option<T> {
+                None
             }
         }
     }
