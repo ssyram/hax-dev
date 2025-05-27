@@ -83,7 +83,9 @@ where
             let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
                 .ty
                 .sinto(&state_with_id);
-            let body = Body::from_mir(&state_with_id, body);
+            // Promoted constants only happen within MIR bodies; we can therefore assume that
+            // `Body` is a MIR body and unwrap.
+            let body = Body::from_mir(&state_with_id, body).s_unwrap(s);
             kind = FullDefKind::PromotedConst {
                 param_env,
                 ty,
@@ -305,7 +307,7 @@ pub enum FullDefKind<Body> {
         is_const: bool,
         #[value(s.base().tcx.fn_sig(s.owner_id()).instantiate_identity().sinto(s))]
         sig: PolyFnSig,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// Associated function: `impl MyStruct { fn associated() {} }` or `trait Foo { fn associated()
@@ -323,7 +325,7 @@ pub enum FullDefKind<Body> {
         is_const: bool,
         #[value(get_method_sig(s).sinto(s))]
         sig: PolyFnSig,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// A closure, coroutine, or coroutine-closure.
@@ -352,7 +354,7 @@ pub enum FullDefKind<Body> {
         param_env: ParamEnv,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// Associated constant: `trait MyTrait { const ASSOC: usize; }`
@@ -365,7 +367,7 @@ pub enum FullDefKind<Body> {
         associated_item: AssocItem,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// Anonymous constant, e.g. the `1 + 2` in `[u8; 1 + 2]`
@@ -374,7 +376,7 @@ pub enum FullDefKind<Body> {
         param_env: ParamEnv,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// An inline constant, e.g. `const { 1 + 2 }`
@@ -383,7 +385,7 @@ pub enum FullDefKind<Body> {
         param_env: ParamEnv,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// A promoted constant, e.g. `&(1 + 2)`
@@ -404,7 +406,7 @@ pub enum FullDefKind<Body> {
         nested: bool,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
 

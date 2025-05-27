@@ -76,13 +76,13 @@ pub mod mir_kinds {
         use super::*;
         use rustc_middle::mir::Body;
         use rustc_middle::ty::TyCtxt;
-        use rustc_span::def_id::LocalDefId;
+        use rustc_span::def_id::DefId;
 
         pub trait IsMirKind: Clone + std::fmt::Debug {
             // CPS to deal with stealable bodies cleanly.
             fn get_mir<'tcx, T>(
                 tcx: TyCtxt<'tcx>,
-                id: LocalDefId,
+                id: DefId,
                 f: impl FnOnce(&Body<'tcx>) -> T,
             ) -> Option<T>;
         }
@@ -90,9 +90,10 @@ pub mod mir_kinds {
         impl IsMirKind for Built {
             fn get_mir<'tcx, T>(
                 tcx: TyCtxt<'tcx>,
-                id: LocalDefId,
+                id: DefId,
                 f: impl FnOnce(&Body<'tcx>) -> T,
             ) -> Option<T> {
+                let id = id.as_local()?;
                 let steal = tcx.mir_built(id);
                 if steal.is_stolen() {
                     None
@@ -105,9 +106,10 @@ pub mod mir_kinds {
         impl IsMirKind for Promoted {
             fn get_mir<'tcx, T>(
                 tcx: TyCtxt<'tcx>,
-                id: LocalDefId,
+                id: DefId,
                 f: impl FnOnce(&Body<'tcx>) -> T,
             ) -> Option<T> {
+                let id = id.as_local()?;
                 let (steal, _) = tcx.mir_promoted(id);
                 if steal.is_stolen() {
                     None
@@ -120,9 +122,10 @@ pub mod mir_kinds {
         impl IsMirKind for Elaborated {
             fn get_mir<'tcx, T>(
                 tcx: TyCtxt<'tcx>,
-                id: LocalDefId,
+                id: DefId,
                 f: impl FnOnce(&Body<'tcx>) -> T,
             ) -> Option<T> {
+                let id = id.as_local()?;
                 let steal = tcx.mir_drops_elaborated_and_const_checked(id);
                 if steal.is_stolen() {
                     None
@@ -135,7 +138,7 @@ pub mod mir_kinds {
         impl IsMirKind for Optimized {
             fn get_mir<'tcx, T>(
                 tcx: TyCtxt<'tcx>,
-                id: LocalDefId,
+                id: DefId,
                 f: impl FnOnce(&Body<'tcx>) -> T,
             ) -> Option<T> {
                 Some(f(tcx.optimized_mir(id)))
@@ -145,7 +148,7 @@ pub mod mir_kinds {
         impl IsMirKind for CTFE {
             fn get_mir<'tcx, T>(
                 tcx: TyCtxt<'tcx>,
-                id: LocalDefId,
+                id: DefId,
                 f: impl FnOnce(&Body<'tcx>) -> T,
             ) -> Option<T> {
                 Some(f(tcx.mir_for_ctfe(id)))
