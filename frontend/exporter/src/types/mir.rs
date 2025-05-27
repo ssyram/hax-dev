@@ -5,8 +5,6 @@
 use crate::prelude::*;
 #[cfg(feature = "rustc")]
 use rustc_middle::{mir, ty};
-#[cfg(feature = "rustc")]
-use tracing::trace;
 
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema)]
@@ -159,28 +157,6 @@ pub mod mir_kinds {
 #[cfg(feature = "rustc")]
 pub use mir_kinds::IsMirKind;
 
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::Promoted, state: S as _s)]
-pub struct PromotedId {
-    #[value(self.as_u32())]
-    pub id: u32,
-}
-
-/// Part of a MIR body that was promoted to be a constant.
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub struct PromotedConstant {
-    /// The `def_id` of the body this was extracted from.
-    pub def_id: DefId,
-    /// The identifier for this sub-body. This is the contents of a `mir::Promoted` identifier.
-    pub promoted_id: PromotedId,
-    /// The generics applied to the definition corresponding to `def_id`.
-    pub args: Vec<GenericArg>,
-    /// The MIR for this sub-body.
-    pub mir: MirBody<()>,
-}
-
 /// The contents of `Operand::Const`.
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
@@ -195,14 +171,20 @@ pub struct ConstOperand {
 pub enum ConstOperandKind {
     /// An evaluated constant represented as an expression.
     Value(ConstantExpr),
-    /// A promoted constant, that may not be evaluatable because of generics.
-    Promoted(PromotedConstant, Option<ConstantExpr>),
+    /// Part of a MIR body that was promoted to be a constant. May not be evaluatable because of
+    /// generics.
+    Promoted {
+        /// The `def_id` of the constant. Note that rustc does not give a DefId to promoted constants,
+        /// but we do in hax.
+        def_id: DefId,
+        /// The generics applied to the definition corresponding to `def_id`.
+        args: Vec<GenericArg>,
+        impl_exprs: Vec<ImplExpr>,
+    },
 }
 
 #[cfg(feature = "rustc")]
-impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
-    for rustc_middle::mir::ConstOperand<'tcx>
-{
+impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand> for mir::ConstOperand<'tcx> {
     fn sinto(&self, s: &S) -> ConstOperand {
         let kind = translate_mir_const(s, self.span, self.const_);
         ConstOperand {
@@ -215,14 +197,12 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstOperand>
 
 /// Retrieve the MIR for a promoted body.
 #[cfg(feature = "rustc")]
-fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
-    s: &S,
-    uneval: mir::UnevaluatedConst<'tcx>,
-) -> PromotedConstant {
-    let tcx = s.base().tcx;
-    let promoted_id = uneval.promoted.unwrap();
-    let def_id = uneval.def;
-    let body = if let Some(local_def_id) = def_id.as_local() {
+pub fn get_promoted_mir<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    def_id: RDefId,
+    promoted_id: mir::Promoted,
+) -> mir::Body<'tcx> {
+    if let Some(local_def_id) = def_id.as_local() {
         let (_, promoteds) = tcx.mir_promoted(local_def_id);
         if !promoteds.is_stolen() {
             promoteds.borrow()[promoted_id].clone()
@@ -231,20 +211,6 @@ fn get_promoted_mir<'tcx, S: UnderOwnerState<'tcx>>(
         }
     } else {
         tcx.promoted_mir(def_id)[promoted_id].clone()
-    };
-    let body = Rc::new(body);
-    let s = &State {
-        base: s.base(),
-        owner_id: s.owner_id(),
-        mir: body.clone(),
-        binder: (),
-        thir: (),
-    };
-    PromotedConstant {
-        def_id: def_id.sinto(s),
-        promoted_id: promoted_id.sinto(s),
-        args: uneval.args.sinto(s),
-        mir: body.sinto(s),
     }
 }
 
@@ -270,17 +236,22 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
             }
         }
         Const::Ty(_ty, c) => Value(c.sinto(s)),
-        Const::Unevaluated(ucv, _ty) => {
+        Const::Unevaluated(ucv, ty) => {
             use crate::rustc_middle::query::Key;
             let span = span.substitute_dummy(
                 tcx.def_ident_span(ucv.def)
                     .unwrap_or_else(|| ucv.def.default_span(tcx)),
             );
             match ucv.promoted {
-                Some(_) => {
-                    let promoted = get_promoted_mir(s, ucv);
-                    let evaluated = eval_mir_constant(s, konst).sinto(s);
-                    Promoted(promoted, evaluated)
+                Some(promoted) => {
+                    // Construct a def_id for the promoted constant.
+                    let def_id = ucv.def.sinto(s).make_promoted_child(s, promoted.sinto(s));
+                    let impl_exprs = solve_item_required_traits(s, ucv.def, ucv.args);
+                    Promoted {
+                        def_id,
+                        args: ucv.args.sinto(s),
+                        impl_exprs,
+                    }
                 }
                 None => Value(match translate_constant_reference(s, span, ucv.shrink()) {
                     Some(val) => val,
@@ -288,7 +259,8 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
                         Some(val) => val.sinto(s),
                         // TODO: This is triggered when compiling using `generic_const_exprs`. We
                         // might be able to get a MIR body from the def_id.
-                        None => supposely_unreachable_fatal!(s, "TranslateUneval"; {konst, ucv}),
+                        None => ConstantExprKind::Todo("TranslateUneval".into())
+                            .decorate(ty.sinto(s), span.sinto(s)),
                     },
                 }),
             }
@@ -301,10 +273,10 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
 impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mir::Const<'tcx> {
     fn sinto(&self, s: &S) -> ConstantExpr {
         match translate_mir_const(s, rustc_span::DUMMY_SP, *self) {
-            ConstOperandKind::Value(val) | ConstOperandKind::Promoted(_, Some(val)) => val,
-            ConstOperandKind::Promoted(body, None) => fatal!(
+            ConstOperandKind::Value(val) => val,
+            ConstOperandKind::Promoted { .. } => fatal!(
                 s, "Cannot convert constant back to an expression";
-                {body}
+                {self}
             ),
         }
     }
@@ -316,17 +288,14 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mi
 pub struct MirBody<KIND> {
     pub span: Span,
     #[map({
-        let mut local_decls: rustc_index::IndexVec<rustc_middle::mir::Local, LocalDecl> = x.iter().map(|local_decl| {
-            local_decl.sinto(s)
-        }).collect();
-        local_decls.iter_enumerated_mut().for_each(|(local, local_decl)| {
+        x.iter_enumerated().map(|(local, local_decl)| {
+            let mut local_decl = local_decl.sinto(s);
             local_decl.name = name_of_local(local, &self.var_debug_info);
-        });
-        let local_decls: rustc_index::IndexVec<Local, LocalDecl> = local_decls.into_iter().collect();
-        local_decls.into()
+            local_decl
+        }).collect()
     })]
     pub local_decls: IndexVec<Local, LocalDecl>,
-    #[map(x.clone().as_mut().sinto(s))]
+    pub arg_count: usize,
     pub basic_blocks: BasicBlocks,
     pub source_scopes: IndexVec<SourceScope, SourceScopeData>,
     pub tainted_by_errors: Option<ErrorGuaranteed>,
@@ -371,58 +340,20 @@ pub struct Terminator {
 }
 
 #[cfg(feature = "rustc")]
-pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + HasOwnerId>(
+/// Compute the
+pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     def_id: rustc_hir::def_id::DefId,
     generics: rustc_middle::ty::GenericArgsRef<'tcx>,
 ) -> (DefId, Vec<GenericArg>, Vec<ImplExpr>, Option<ImplExpr>) {
-    let tcx = s.base().tcx;
+    // Retrieve the trait requirements for the item.
+    let trait_refs = solve_item_required_traits(s, def_id, generics);
 
-    // Retrieve the trait requirements for the **method**.
-    // For instance, if we write:
-    // ```
-    // fn foo<T : Bar>(...)
-    //            ^^^
-    // ```
-    let mut trait_refs = solve_item_required_traits(s, def_id, generics);
-
+    // If this is a trait method call, retreive the impl expr information for that trait.
     // Check if this is a trait method call: retrieve the trait source if
-    // it is the case (i.e., where does the method come from? Does it refer
-    // to a top-level implementation? Or the method of a parameter? etc.).
-    // At the same time, retrieve the trait obligations for this **trait**.
-    // Remark: the trait obligations for the method are not the same as
-    // the trait obligations for the trait. More precisely:
-    //
-    // ```
-    // trait Foo<T : Bar> {
-    //              ^^^^^
-    //      trait level trait obligation
-    //   fn baz(...) where T : ... {
-    //      ...                ^^^
-    //             method level trait obligation
-    //   }
-    // }
-    // ```
-    //
-    // Also, a function doesn't need to belong to a trait to have trait
-    // obligations:
-    // ```
-    // fn foo<T : Bar>(...)
-    //            ^^^
-    //     method level trait obligation
-    // ```
-    let (generics, source) = if let Some(assoc) = tcx.opt_associated_item(def_id) {
-        // There is an associated item.
-        use tracing::*;
-        trace!("def_id: {:?}", def_id);
-        trace!("assoc: def_id: {:?}", assoc.def_id);
-        // Retrieve the `DefId` of the trait declaration or the impl block.
-        let container_def_id = match assoc.container {
-            rustc_middle::ty::AssocItemContainer::Trait => tcx.trait_of_item(assoc.def_id).unwrap(),
-            rustc_middle::ty::AssocItemContainer::Impl => tcx.impl_of_method(assoc.def_id).unwrap(),
-        };
-        // The generics are split in two: the arguments of the container (trait decl or impl block)
-        // and the arguments of the method.
+    let (generics, trait_impl) = if let Some(tinfo) = self_clause_for_item(s, def_id, generics) {
+        // The generics are split in two: the arguments of the container (trait decl or impl
+        // block) and the arguments of the method.
         //
         // For instance, if we have:
         // ```
@@ -437,44 +368,16 @@ pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: BaseState<'tcx> + H
         // ```
         // The generics for the call to `baz` will be the concatenation: `<T, u32, U>`, which we
         // split into `<T, u32>` and `<U>`.
-        //
-        // If we have:
-        // ```
-        // impl<T: Ord> Map<T> {
-        //     pub fn insert<U: Clone>(&mut self, x: U) { ... }
-        // }
-        // pub fn test(mut tree: Map<u32>) {
-        //     tree.insert(false);
-        // }
-        // ```
-        // The generics for `insert` are `<u32>` for the impl and `<bool>` for the method.
-        match assoc.container {
-            rustc_middle::ty::AssocItemContainer::Trait => {
-                let num_container_generics = tcx.generics_of(container_def_id).own_params.len();
-                // Retrieve the trait information
-                let impl_expr = self_clause_for_item(s, &assoc, generics).unwrap();
-                // Return only the method generics; the trait generics are included in `impl_expr`.
-                let method_generics = &generics[num_container_generics..];
-                (method_generics.sinto(s), Some(impl_expr))
-            }
-            rustc_middle::ty::AssocItemContainer::Impl => {
-                // Solve the trait constraints of the impl block.
-                let container_generics = tcx.generics_of(container_def_id);
-                let container_generics = generics.truncate_to(tcx, container_generics);
-                // Prepend the container trait refs.
-                let mut combined_trait_refs =
-                    solve_item_required_traits(s, container_def_id, container_generics);
-                combined_trait_refs.extend(std::mem::take(&mut trait_refs));
-                trait_refs = combined_trait_refs;
-                (generics.sinto(s), None)
-            }
-        }
+        let num_trait_generics = tinfo.r#trait.hax_skip_binder_ref().generic_args.len();
+        // Return only the method generics; the trait generics are included in `trait_impl_expr`.
+        let method_generics = &generics[num_trait_generics..];
+        (method_generics.sinto(s), Some(tinfo))
     } else {
         // Regular function call
         (generics.sinto(s), None)
     };
 
-    (def_id.sinto(s), generics, trait_refs, source)
+    (def_id.sinto(s), generics, trait_refs, trait_impl)
 }
 
 #[cfg(feature = "rustc")]
@@ -639,6 +542,16 @@ pub enum FunOperand {
     },
     /// Use of a closure or a function pointer value. Counts as a move from the given place.
     DynamicMove(Place),
+}
+
+#[derive_group(Serializers)]
+#[derive(AdtInto, Clone, Debug, JsonSchema)]
+#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_middle::mir::UnwindAction, state: S as _s)]
+pub enum UnwindAction {
+    Continue,
+    Unreachable,
+    Terminate(UnwindTerminateReason),
+    Cleanup(BasicBlock),
 }
 
 #[derive_group(Serializers)]
@@ -837,144 +750,87 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
 {
     #[tracing::instrument(level = "info", skip(s))]
     fn sinto(&self, s: &S) -> Place {
-        let local_decl = &s.mir().local_decls[self.local];
-        let mut current_ty: rustc_middle::ty::Ty = local_decl.ty;
-        let mut current_kind = PlaceKind::Local(self.local.sinto(s));
-        let mut elems: &[rustc_middle::mir::PlaceElem] = self.projection.as_slice();
+        let tcx = s.base().tcx;
+        let local_decls = &s.mir().local_decls;
 
-        loop {
+        let mut place_ty: mir::PlaceTy = mir::Place::from(self.local).ty(local_decls, tcx);
+        let mut place = Place {
+            ty: place_ty.ty.sinto(s),
+            kind: PlaceKind::Local(self.local.sinto(s)),
+        };
+        for elem in self.projection.as_slice() {
             use rustc_middle::mir::ProjectionElem::*;
-            let cur_ty = current_ty;
-            let cur_kind = current_kind.clone();
-            use rustc_middle::ty::TyKind;
-            let mk_field = |index: &rustc_abi::FieldIdx,
-                            variant_idx: Option<rustc_abi::VariantIdx>| {
-                ProjectionElem::Field(match cur_ty.kind() {
-                    TyKind::Adt(adt_def, _) => {
-                        assert!(
-                            ((adt_def.is_struct() || adt_def.is_union()) && variant_idx.is_none())
-                                || (adt_def.is_enum() && variant_idx.is_some())
-                        );
-                        ProjectionElemFieldKind::Adt {
-                            typ: adt_def.did().sinto(s),
-                            variant: variant_idx.map(|id| id.sinto(s)),
-                            index: index.sinto(s),
-                        }
-                    }
-                    TyKind::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
-                    ty_kind => {
-                        supposely_unreachable_fatal!(
-                            s, "ProjectionElemFieldBadType";
-                            {index, ty_kind, variant_idx, &cur_ty, &cur_kind}
-                        );
-                    }
-                })
-            };
-            let elem_kind: ProjectionElem = match elems {
-                [Downcast(_, variant_idx), Field(index, ty), rest @ ..] => {
-                    elems = rest;
-                    let r = mk_field(index, Some(*variant_idx));
-                    current_ty = *ty;
-                    r
-                }
-                [elem, rest @ ..] => {
-                    elems = rest;
-                    use rustc_middle::ty::TyKind;
-                    match elem {
-                        Deref => {
-                            current_ty = match current_ty.kind() {
-                                TyKind::Ref(_, ty, _) | TyKind::RawPtr(ty, _) => *ty,
-                                TyKind::Adt(def, generics) if def.is_box() => generics.type_at(0),
-                                _ => supposely_unreachable_fatal!(
-                                    s, "PlaceDerefNotRefNorPtrNorBox";
-                                    {current_ty, current_kind, elem}
-                                ),
-                            };
-                            ProjectionElem::Deref
-                        }
-                        Field(index, ty) => {
-                            if let TyKind::Closure(_, generics) = cur_ty.kind() {
-                                // We get there when we access one of the fields
-                                // of the the state captured by a closure.
-                                use crate::rustc_index::Idx;
-                                let generics = generics.as_closure();
-                                let upvar_tys = generics.upvar_tys();
-                                current_ty = upvar_tys[index.sinto(s).index()];
-                                ProjectionElem::Field(ProjectionElemFieldKind::ClosureState(
-                                    index.sinto(s),
-                                ))
-                            } else {
-                                let r = mk_field(index, None);
-                                current_ty = *ty;
-                                r
-                            }
-                        }
-                        Index(local) => {
-                            let (TyKind::Slice(ty) | TyKind::Array(ty, _)) = current_ty.kind()
-                            else {
-                                supposely_unreachable_fatal!(
-                                    s,
-                                    "PlaceIndexNotSlice";
-                                    {current_ty, current_kind, elem}
+            let projected_place_ty = place_ty.projection_ty(tcx, *elem);
+            if matches!(elem, Downcast { .. }) {
+                // We keep the same `Place`, the variant is tracked in the `PlaceTy` and we can
+                // access it next loop iteration.
+            } else {
+                let elem_kind = match elem {
+                    Deref => ProjectionElem::Deref,
+                    Field(index, _) => {
+                        let field_pj = match place_ty.ty.kind() {
+                            ty::Adt(adt_def, _) => {
+                                let variant = place_ty.variant_index;
+                                assert!(
+                                    ((adt_def.is_struct() || adt_def.is_union())
+                                        && variant.is_none())
+                                        || (adt_def.is_enum() && variant.is_some())
                                 );
-                            };
-                            current_ty = *ty;
-                            ProjectionElem::Index(local.sinto(s))
-                        }
-                        ConstantIndex {
-                            offset,
-                            min_length,
-                            from_end,
-                        } => {
-                            let (TyKind::Slice(ty) | TyKind::Array(ty, _)) = current_ty.kind()
-                            else {
+                                ProjectionElemFieldKind::Adt {
+                                    typ: adt_def.did().sinto(s),
+                                    variant: variant.map(|id| id.sinto(s)),
+                                    index: index.sinto(s),
+                                }
+                            }
+                            ty::Tuple(_types) => ProjectionElemFieldKind::Tuple(index.sinto(s)),
+                            // We get there when we access one of the fields of the the state
+                            // captured by a closure.
+                            ty::Closure(..) => {
+                                ProjectionElemFieldKind::ClosureState(index.sinto(s))
+                            }
+                            ty_kind => {
                                 supposely_unreachable_fatal!(
-                                    s, "PlaceConstantIndexNotSlice";
-                                    {current_ty, current_kind, elem}
-                                )
-                            };
-                            current_ty = *ty;
-                            ProjectionElem::ConstantIndex {
-                                offset: *offset,
-                                min_length: *min_length,
-                                from_end: *from_end,
+                                    s, "ProjectionElemFieldBadType";
+                                    {index, ty_kind, &place_ty, &place}
+                                );
                             }
-                        }
-                        Subslice { from, to, from_end } =>
-                        // TODO: We assume subslice preserves the type
-                        {
-                            ProjectionElem::Subslice {
-                                from: *from,
-                                to: *to,
-                                from_end: *from_end,
-                            }
-                        }
-                        OpaqueCast(ty) => {
-                            current_ty = *ty;
-                            ProjectionElem::OpaqueCast
-                        }
-                        // This is used for casts to a subtype, e.g. between `for<‘a> fn(&’a ())`
-                        // and `fn(‘static ())` (according to @compiler-errors on Zulip).
-                        Subtype { .. } => panic!("unexpected Subtype"),
-                        Downcast { .. } => panic!("unexpected Downcast"),
-                        UnwrapUnsafeBinder { .. } => panic!("unsupported feature: unsafe binders"),
+                        };
+                        ProjectionElem::Field(field_pj)
                     }
-                }
-                [] => break,
-            };
+                    Index(local) => ProjectionElem::Index(local.sinto(s)),
+                    ConstantIndex {
+                        offset,
+                        min_length,
+                        from_end,
+                    } => ProjectionElem::ConstantIndex {
+                        offset: *offset,
+                        min_length: *min_length,
+                        from_end: *from_end,
+                    },
+                    Subslice { from, to, from_end } => ProjectionElem::Subslice {
+                        from: *from,
+                        to: *to,
+                        from_end: *from_end,
+                    },
+                    OpaqueCast(..) => ProjectionElem::OpaqueCast,
+                    // This is used for casts to a subtype, e.g. between `for<‘a> fn(&’a ())`
+                    // and `fn(‘static ())` (according to @compiler-errors on Zulip).
+                    Subtype { .. } => panic!("unexpected Subtype"),
+                    Downcast { .. } => unreachable!(),
+                    UnwrapUnsafeBinder { .. } => panic!("unsupported feature: unsafe binders"),
+                };
 
-            current_kind = PlaceKind::Projection {
-                place: Box::new(Place {
-                    ty: cur_ty.sinto(s),
-                    kind: current_kind.clone(),
-                }),
-                kind: elem_kind,
-            };
+                place = Place {
+                    ty: projected_place_ty.ty.sinto(s),
+                    kind: PlaceKind::Projection {
+                        place: Box::new(place),
+                        kind: elem_kind,
+                    },
+                };
+            }
+            place_ty = projected_place_ty;
         }
-        Place {
-            ty: current_ty.sinto(s),
-            kind: current_kind.clone(),
-        }
+        place
     }
 }
 
@@ -994,7 +850,8 @@ pub enum AggregateKind {
             generics.sinto(s),
             trait_refs,
             annot.sinto(s),
-            fid.sinto(s))
+            fid.sinto(s),
+        )
     })]
     Adt(
         DefId,
@@ -1197,7 +1054,6 @@ sinto_todo!(rustc_ast::ast, InlineAsmTemplatePiece);
 sinto_todo!(rustc_ast::ast, InlineAsmOptions);
 sinto_todo!(rustc_middle::mir, InlineAsmOperand<'tcx>);
 sinto_todo!(rustc_middle::mir, AssertMessage<'tcx>);
-sinto_todo!(rustc_middle::mir, UnwindAction);
 sinto_todo!(rustc_middle::mir, FakeReadCause);
 sinto_todo!(rustc_middle::mir, RetagKind);
 sinto_todo!(rustc_middle::mir, UserTypeProjection);

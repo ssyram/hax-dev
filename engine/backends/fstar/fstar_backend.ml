@@ -318,6 +318,7 @@ struct
       (c Rust_primitives__hax__int__mul, (2, "*"));
       (c Rust_primitives__hax__int__div, (2, "/"));
       (c Rust_primitives__hax__int__rem, (2, "%"));
+      (c Rust_primitives__hax__int__neg, (1, "-"));
       (c Rust_primitives__hax__int__ge, (2, ">="));
       (c Rust_primitives__hax__int__le, (2, "<="));
       (c Rust_primitives__hax__int__gt, (2, ">"));
@@ -592,7 +593,7 @@ struct
           args = [ { e = Literal (String s); _ } ];
           generic_args = _;
         }
-      when Global_ident.eq_name Hax_lib__int__Impl_6___unsafe_from_str f ->
+      when Global_ident.eq_name Hax_lib__int__Impl_7___unsafe_from_str f ->
         (match
            String.chop_prefix ~prefix:"-" s
            |> Option.value ~default:s
@@ -896,7 +897,7 @@ struct
              >> Option.value ~default:Fn.id map_expr
              >> pexpr >> f >> F.term)
     in
-    let decreases =
+    let extract_any_to_unit_payload =
       let visitor =
         object
           inherit [_] U.Visitors.map as super
@@ -909,8 +910,17 @@ struct
             | _ -> super#visit_expr () e
         end
       in
-      attr_term Decreases ~map_expr:(visitor#visit_expr ()) (fun t ->
+      visitor#visit_expr ()
+    in
+    let decreases =
+      attr_term Decreases ~map_expr:extract_any_to_unit_payload (fun t ->
           F.AST.Decreases (t, None))
+    in
+    let smtpat =
+      let smt_pat = F.term_of_lid [ "SMTPat" ] in
+      attr_term SMTPat ~map_expr:extract_any_to_unit_payload (fun t ->
+          let payload = F.mk_e_app smt_pat [ t ] in
+          (F.AST.mkConsList F.dummyRange [ payload ]).tm)
     in
     let is_lemma = Attrs.lemma attrs in
     let prepost_bundle =
@@ -934,7 +944,7 @@ struct
     let args =
       (Option.map ~f:(fun (req, ens) -> [ req; ens ]) prepost_bundle
       |> Option.value ~default:[])
-      @ Option.to_list decreases
+      @ Option.to_list decreases @ Option.to_list smtpat
     in
     match args with
     | [] -> typ

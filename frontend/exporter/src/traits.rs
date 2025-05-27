@@ -185,22 +185,11 @@ pub fn solve_trait<'tcx, S: BaseState<'tcx> + HasOwnerId>(
 }
 
 /// Solve the trait obligations for a specific item use (for example, a method call, an ADT, etc.)
-/// in the current context.
+/// in the current context. Just like generic args include generics of parent items, this includes
+/// impl exprs for parent items.
 #[cfg(feature = "rustc")]
 #[tracing::instrument(level = "trace", skip(s), ret)]
 pub fn solve_item_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
-    s: &S,
-    def_id: RDefId,
-    generics: ty::GenericArgsRef<'tcx>,
-) -> Vec<ImplExpr> {
-    let predicates = required_predicates(s.base().tcx, def_id);
-    solve_item_traits_inner(s, generics, predicates)
-}
-
-/// Like `solve_item_required_traits`, but also includes predicates coming from the parent items.
-#[cfg(feature = "rustc")]
-#[tracing::instrument(level = "trace", skip(s), ret)]
-pub fn solve_item_and_parents_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     def_id: RDefId,
     generics: ty::GenericArgsRef<'tcx>,
@@ -220,7 +209,8 @@ pub fn solve_item_and_parents_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
             }
             _ => {}
         }
-        impl_exprs.extend(solve_item_required_traits(s, def_id, generics));
+        let predicates = required_predicates(tcx, def_id);
+        impl_exprs.extend(solve_item_traits_inner(s, generics, predicates));
     }
     let mut impl_exprs = vec![];
     accumulate(s, def_id, generics, &mut impl_exprs);
@@ -272,13 +262,13 @@ fn solve_item_traits_inner<'tcx, S: UnderOwnerState<'tcx>>(
 #[cfg(feature = "rustc")]
 pub fn self_clause_for_item<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
-    assoc: &rustc_middle::ty::AssocItem,
+    def_id: RDefId,
     generics: rustc_middle::ty::GenericArgsRef<'tcx>,
 ) -> Option<ImplExpr> {
     use rustc_middle::ty::EarlyBinder;
     let tcx = s.base().tcx;
 
-    let tr_def_id = tcx.trait_of_item(assoc.def_id)?;
+    let tr_def_id = tcx.trait_of_item(def_id)?;
     // The "self" predicate in the context of the trait.
     let self_pred = self_predicate(tcx, tr_def_id);
     // Substitute to be in the context of the current item.

@@ -158,3 +158,32 @@ mod ambiguous_names {
 
 /// From issue https://github.com/hacspec/hax/issues/839
 fn string_shadows(string: &str, n: &str) {}
+
+/// From issue https://github.com/cryspen/hax/issues/1411
+mod functions_defined_in_trait_impls {
+    struct A;
+
+    impl PartialEq for A {
+        fn eq(&self, other: &Self) -> bool {
+            panic!()
+        }
+    }
+
+    struct B;
+
+    impl PartialEq for B {
+        fn eq(&self, other: &Self) -> bool {
+            panic!()
+        }
+    }
+}
+
+/// From issue https://github.com/cryspen/hax/issues/1450
+fn items_under_closures() {
+    let _: fn() -> () = || {
+        fn nested_function() {}
+        struct NestedStruct;
+    };
+    fn nested_function() {}
+    struct NestedStruct;
+}

@@ -352,9 +352,11 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
           [
             "impl";
             "anon_const";
+            "inline_const";
             "foreign";
             "use";
             "opaque";
+            "closure";
             "t";
             "v";
             "f";
@@ -513,7 +515,8 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
           else Some (Int64.to_string disambiguator)
 
     (** Renders one chunk *)
-    let rec render_chunk ~namespace (chunk : View.RelPath.Chunk.t) : NameAst.t =
+    let render_chunk ~namespace ~final (chunk : View.RelPath.Chunk.t) :
+        NameAst.t =
       let prefix ?(global = false) ?(disable_when = []) s contents =
         NameAst.Policy
           ( {
@@ -525,33 +528,52 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       in
       let prefix_d s d = prefix s (NameAst.UnsafeString (Int64.to_string d)) in
       let dstr s = NameAst.UnsafeString (render_disambiguated s) in
-      let _render_chunk = render_chunk ~namespace in
+      let render_impl_name ?(always = false) disambiguator impl_infos =
+        match impl_name ~namespace ~always disambiguator impl_infos with
+        | Some name -> prefix "impl" (UnsafeString name)
+        | None -> TrustedString "impl"
+      in
       match chunk with
       | `AnonConst d ->
           prefix ~global:true ~disable_when:[ `SameCase ] "anon_const"
             (NameAst.UnsafeString (Int64.to_string d))
+      | `InlineConst d ->
+          prefix ~global:true ~disable_when:[ `SameCase ] "inline_const"
+            (NameAst.UnsafeString (Int64.to_string d))
       | `Use d -> prefix_d "use" d
       | `Foreign d -> prefix_d "foreign" d
       | `GlobalAsm d -> prefix_d "global_asm" d
+      | `Closure d -> prefix_d "closure" d
       | `Opaque d -> prefix_d "opaque" d
       (* The name of a trait impl *)
-      | `Impl (d, _, impl_infos) -> (
-          match impl_name ~namespace d impl_infos with
-          | Some name -> prefix "impl" (UnsafeString name)
-          | None -> TrustedString "impl")
+      | `Impl (d, _, impl_infos) -> render_impl_name d impl_infos
       (* Print the name of an associated item in a inherent impl *)
       | `AssociatedItem
           ((`Type n | `Const n | `Fn n), `Impl (d, `Inherent, impl_infos)) ->
-          let impl =
-            match impl_name ~always:true ~namespace d impl_infos with
-            | Some name -> prefix "impl" (UnsafeString name)
-            | None -> TrustedString "impl"
-          in
+          let impl = render_impl_name ~always:true d impl_infos in
           Concat (impl, dstr n)
+      (* Print the name of an item defined inside an associated item of a trait impl *)
+      (* `Impl of
+         'disambiguator
+         * [ `Inherent | `Trait ]
+         * Types.impl_infos option*)
+      | `AssociatedItem
+          ((`Type n | `Const n | `Fn n), `Impl (d, `Trait, impl_infos))
+        when not final ->
+          Concat
+            (prefix "f" (dstr n), render_impl_name ~always:true d impl_infos)
       (* Print the name of an associated item in a trait impl *)
       | `AssociatedItem
-          ((`Type n | `Const n | `Fn n), (`Trait _ | `Impl (_, `Trait, _))) ->
-          prefix "f" (dstr n)
+          ((`Type n | `Const n | `Fn n), `Impl (d, `Trait, impl_infos)) ->
+          if NP.prefix_associated_item_with_trait_name then
+            Concat
+              (render_impl_name ~always:true d impl_infos, prefix "f" (dstr n))
+          else prefix "f" (dstr n)
+      | `AssociatedItem ((`Type n | `Const n | `Fn n), `Trait (trait_name, _))
+        ->
+          if NP.prefix_associated_item_with_trait_name then
+            Concat (dstr trait_name, prefix "f" (dstr n))
+          else prefix "f" (dstr n)
       (* The constructor of a struct *)
       | `Constructor (cons, parent) -> (
           let cons = render_disambiguated cons in
@@ -611,8 +633,12 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
           prefix "t" (dstr n)
 
     let render_name ~namespace (rel_path : View.RelPath.t) =
+      let l = List.length rel_path in
       let rel_path =
-        List.map ~f:(render_chunk ~namespace) rel_path |> NameAst.concat_list
+        List.mapi
+          ~f:(fun i -> render_chunk ~final:(i = l - 1) ~namespace)
+          rel_path
+        |> NameAst.concat_list
       in
       NameAst.render rel_path
 
@@ -663,6 +689,7 @@ module DefaultNamePolicy : NAME_POLICY = struct
   let enum_constructor_prefix = Some "C"
   let union_constructor_prefix = Some "C"
   let named_field_prefix = None
+  let prefix_associated_item_with_trait_name = false
 end
 
 module DefaultViewAPI = MakeRenderAPI (DefaultNamePolicy)

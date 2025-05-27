@@ -34,6 +34,15 @@ impl<M: TypeMapper> TypeMap<M> {
             .map(|val: &mut Box<dyn TypeMappable>| &mut **val)
             .and_then(|val: &mut dyn TypeMappable| (val as &mut dyn Any).downcast_mut())
     }
+    pub fn or_default<T: TypeMappable>(&mut self) -> &mut M::Value<T>
+    where
+        M::Value<T>: Default,
+    {
+        if self.get::<T>().is_none() {
+            self.insert::<T>(Default::default());
+        }
+        self.get_mut().unwrap()
+    }
 
     pub fn insert<T: TypeMappable>(&mut self, val: M::Value<T>) -> Option<Box<M::Value<T>>> {
         self.data

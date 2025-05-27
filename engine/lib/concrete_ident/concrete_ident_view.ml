@@ -96,6 +96,11 @@ let rec poly :
           (match List.last_exn (Explicit_def_id.to_def_id did).path with
           | { data = AnonConst; disambiguator } -> into_d did disambiguator
           | _ -> broken_invariant "last path chunk to be AnonConst" did)
+    | Closure ->
+        `AnonConst
+          (match List.last_exn (Explicit_def_id.to_def_id did).path with
+          | { data = Closure; disambiguator } -> into_d did disambiguator
+          | _ -> broken_invariant "last path chunk to be Closure" did)
     | Impl { of_trait } ->
         `Impl
           (match List.last_exn (Explicit_def_id.to_def_id did).path with
@@ -128,12 +133,17 @@ let rec poly :
           (match List.last_exn (Explicit_def_id.to_def_id did).path with
           | { data = GlobalAsm; disambiguator } -> into_d did disambiguator
           | _ -> broken_invariant "last path chunk to be GlobalAsm" did)
-    | TyParam | ConstParam | InlineConst | LifetimeParam | Closure
+    | InlineConst ->
+        `InlineConst
+          (match List.last_exn (Explicit_def_id.to_def_id did).path with
+          | { data = AnonConst; disambiguator } -> into_d did disambiguator
+          | _ -> broken_invariant "last path chunk to be AnonConst" did)
+    | TyParam | ConstParam | PromotedConst | LifetimeParam
     | SyntheticCoroutineBody ->
         (* It should be impossible for such items to ever be referenced by anyting in hax. *)
         broken_invariant
-          "non (TyParam | ConstParam | InlineConst | LifetimeParam | Closure | \
-           SyntheticCoroutineBody) identifier"
+          "non (TyParam | ConstParam | InlineConst | PromotedConst | \
+           LifetimeParam | SyntheticCoroutineBody) identifier"
           did
   in
   result

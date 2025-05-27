@@ -80,6 +80,48 @@ let ff_expand (_: Prims.unit) : Prims.unit =
   let _:Prims.unit = debug (mk_u32 1) a in
   debug (mk_u32 0) a
 '''
+"Naming.Functions_defined_in_trait_impls.fst" = '''
+module Naming.Functions_defined_in_trait_impls
+#set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
+open Core
+open FStar.Mul
+
+type t_A = | A : t_A
+
+let f_eq__impl__panic_cold_explicit (_: Prims.unit) : Rust_primitives.Hax.t_Never =
+  Core.Panicking.panic_explicit ()
+
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+let impl: Core.Cmp.t_PartialEq t_A t_A =
+  {
+    f_eq_pre = (fun (self: t_A) (other: t_A) -> true);
+    f_eq_post = (fun (self: t_A) (other: t_A) (out: bool) -> true);
+    f_eq
+    =
+    fun (self: t_A) (other: t_A) ->
+      Rust_primitives.Hax.never_to_any (f_eq__impl__panic_cold_explicit ()
+          <:
+          Rust_primitives.Hax.t_Never)
+  }
+
+type t_B = | B : t_B
+
+let f_eq__impl_1__panic_cold_explicit (_: Prims.unit) : Rust_primitives.Hax.t_Never =
+  Core.Panicking.panic_explicit ()
+
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+let impl_1: Core.Cmp.t_PartialEq t_B t_B =
+  {
+    f_eq_pre = (fun (self: t_B) (other: t_B) -> true);
+    f_eq_post = (fun (self: t_B) (other: t_B) (out: bool) -> true);
+    f_eq
+    =
+    fun (self: t_B) (other: t_B) ->
+      Rust_primitives.Hax.never_to_any (f_eq__impl_1__panic_cold_explicit ()
+          <:
+          Rust_primitives.Hax.t_Never)
+  }
+'''
 "Naming.fst" = '''
 module Naming
 #set-options "--fuel 0 --ifuel 1 --z3rlimit 15"
@@ -182,4 +224,23 @@ let constants
 
 /// From issue https://github.com/hacspec/hax/issues/839
 let string_shadows (v_string n: string) : Prims.unit = ()
+
+/// From issue https://github.com/cryspen/hax/issues/1450
+let items_under_closures (_: Prims.unit) : Prims.unit =
+  let _: Prims.unit -> Prims.unit =
+    fun temp_0_ ->
+      let _:Prims.unit = temp_0_ in
+      ()
+  in
+  ()
+
+let items_under_closures__anon_const_0__nested_function (_: Prims.unit) : Prims.unit = ()
+
+type items_under_closures__anon_const_0__t_NestedStruct =
+  | C_items_under_closures__anon_const_0__NestedStruct : items_under_closures__anon_const_0__t_NestedStruct
+
+let items_under_closures__nested_function (_: Prims.unit) : Prims.unit = ()
+
+type items_under_closures__t_NestedStruct =
+  | C_items_under_closures__NestedStruct : items_under_closures__t_NestedStruct
 '''

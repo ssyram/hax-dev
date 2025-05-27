@@ -647,6 +647,13 @@ pub struct TyGenerics {
     pub has_late_bound_regions: Option<Span>,
 }
 
+#[cfg(feature = "rustc")]
+impl TyGenerics {
+    pub(crate) fn count_total_params(&self) -> usize {
+        self.parent_count + self.params.len()
+    }
+}
+
 /// This type merges the information from
 /// `rustc_type_ir::AliasKind` and `ty::AliasTy`
 #[derive_group(Serializers)]
@@ -1320,7 +1327,7 @@ impl ClosureArgs {
             parent_trait_refs: {
                 let parent = tcx.generics_of(def_id).parent.unwrap();
                 let parent_generics_ref = tcx.mk_args(from.parent_args());
-                solve_item_and_parents_required_traits(s, parent, parent_generics_ref)
+                solve_item_required_traits(s, parent, parent_generics_ref)
             },
             tupled_sig: sig.sinto(s),
             untupled_sig: tcx

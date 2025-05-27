@@ -364,7 +364,7 @@ let export_record = (fields, path, name) => {
     let record_expression = fields.map(([field, type, _doc], i) => {
         if (field == 'index' && name == 'def_id_contents') {
             // This is a hack to always parse Rust DefId indexes to `(0, 0)`
-            return 'index = Base.Int64.(zero, zero)';
+            return 'index = Base.Int64.(zero, zero, None)';
         }
         let p = [...path, 'field_' + field];
         let sub = mk_match('x', ocaml_arms_of_type_expr(type, p), p);

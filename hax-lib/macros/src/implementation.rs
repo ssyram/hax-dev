@@ -63,13 +63,44 @@ pub fn fstar_options(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenS
 /// `coq`...) are in scope.
 #[proc_macro]
 pub fn loop_invariant(predicate: pm::TokenStream) -> pm::TokenStream {
+    let predicate2: TokenStream = predicate.clone().into();
+    let predicate_expr: syn::Expr = parse_macro_input!(predicate);
+
+    let (invariant_f, predicate) = match predicate_expr {
+        syn::Expr::Closure(_) => (quote!(hax_lib::_internal_loop_invariant), predicate2),
+        _ => (
+            quote!(hax_lib::_internal_while_loop_invariant),
+            quote!(::hax_lib::Prop::from(#predicate2)),
+        ),
+    };
+    let ts: pm::TokenStream = quote! {
+        #[cfg(#HaxCfgOptionName)]
+        {
+            #invariant_f({
+                #HaxQuantifiers
+                #predicate
+            })
+        }
+    }
+    .into();
+    ts
+}
+
+/// Must be used to prove termination of while loops. This takes an
+/// expression that should be a usize that decreases at every iteration
+///
+/// This function must be called just after `loop_invariant`, or at the first
+/// line of the loop if there is no invariant.
+#[proc_macro]
+pub fn loop_decreases(predicate: pm::TokenStream) -> pm::TokenStream {
     let predicate: TokenStream = predicate.into();
     let ts: pm::TokenStream = quote! {
         #[cfg(#HaxCfgOptionName)]
         {
-            hax_lib::_internal_loop_invariant({
+            hax_lib::_internal_loop_decreases({
                 #HaxQuantifiers
-                #predicate
+                use ::hax_lib::int::ToInt;
+                (#predicate).to_int()
             })
         }
     }
@@ -123,6 +154,24 @@ pub fn fstar_verification_status(attr: pm::TokenStream, item: pm::TokenStream) -
         _ => abort_call_site!(format!("Expected `lax` or `panic_free`")),
     }
     .into()
+}
+
+/// Postprocess an item with a given tactic. This macro takes the tactic in
+/// parameter: this may be a Rust identifier or a raw snippet of F* code as a
+/// string literal.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn fstar_postprocess_with(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+    let item: TokenStream = item.into();
+    let payload: String = if let Ok(s) = syn::parse::<LitStr>(attr.clone()) {
+        s.value()
+    } else {
+        let e = parse_macro_input!(attr as Expr);
+        format!(" ${{ {} }} ", e.to_token_stream())
+    };
+    let payload = format!("[@@FStar.Tactics.postprocess_with ({payload})]");
+    let payload: Lit = Lit::Str(syn::LitStr::new(&payload, Span::call_site()));
+    quote! {#[::hax_lib::fstar::before(#payload)] #item}.into()
 }
 
 /// Include this item in the Hax translation.
@@ -200,8 +249,17 @@ pub fn modeled_by(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStre
 #[proc_macro_attribute]
 pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
     let mut item: syn::ItemFn = parse_macro_input!(item as ItemFn);
-    use std::borrow::Borrow;
     use syn::{spanned::Spanned, GenericArgument, PathArguments, ReturnType};
+
+    fn add_allow_unused_variables_to_args(func: &mut syn::ItemFn) {
+        let attr: syn::Attribute = parse_quote!(#[allow(unused_variables)]);
+
+        for input in &mut func.sig.inputs {
+            if let FnArg::Typed(pat_type) = input {
+                pat_type.attrs.push(attr.clone());
+            }
+        }
+    }
 
     /// Parses a `syn::Type` of the shape `Proof<{FORMULA}>`.
     fn parse_proof_type(r#type: syn::Type) -> Option<syn::Expr> {
@@ -229,28 +287,22 @@ pub fn lemma(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
     }
     let _ = parse_macro_input!(attr as parse::Nothing);
     let attr = &AttrPayload::Lemma;
+    add_allow_unused_variables_to_args(&mut item);
     if let ReturnType::Type(_, r#type) = &item.sig.output {
-        if !match r#type.borrow() {
-            syn::Type::Tuple(tt) => tt.elems.is_empty(),
-            _ => match parse_proof_type(*r#type.clone()) {
-                Some(ensures_clause) => {
-                    item.sig.output = ReturnType::Default;
-                    return ensures(
-                        quote! {|_| #ensures_clause}.into(),
-                        quote! { #attr #item }.into(),
-                    );
-                }
-                None => false,
-            },
-        } {
-            abort!(
-                item.sig.output.span(),
-                "A lemma is expected to return a `Proof<{STATEMENT}>`, where {STATEMENT} is a `Prop` expression."
+        if let Some(ensures_clause) = parse_proof_type(*r#type.clone()) {
+            use AttrPayload::NeverErased;
+            item.sig.output = ReturnType::Default;
+            return ensures(
+                quote! {|_| #ensures_clause}.into(),
+                quote! { #attr #NeverErased #item }.into(),
             );
         }
     }
-    use AttrPayload::NeverErased;
-    quote! { #attr #NeverErased #item }.into()
+
+    abort!(
+        item.sig.output.span(),
+        "A lemma is expected to return a `Proof<{STATEMENT}>`, where {STATEMENT} is a `Prop` expression."
+    )
 }
 
 /// Provide a measure for a function: this measure will be used once
@@ -283,6 +335,18 @@ pub fn decreases(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStrea
         None,
         None,
     );
+    quote! {#requires #attr #item}.into()
+}
+
+/// Allows to add SMT patterns to a lemma.
+/// For more informations about SMT patterns, please take a look here: https://fstar-lang.org/tutorial/book/under_the_hood/uth_smt.html#designing-a-library-with-smt-patterns.
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn fstar_smt_pat(attr: pm::TokenStream, item: pm::TokenStream) -> pm::TokenStream {
+    let phi: syn::Expr = parse_macro_input!(attr);
+    let item: FnLike = parse_macro_input!(item);
+    let (requires, attr) =
+        make_fn_decoration(phi, item.sig.clone(), FnDecorationKind::SMTPat, None, None);
     quote! {#requires #attr #item}.into()
 }
 

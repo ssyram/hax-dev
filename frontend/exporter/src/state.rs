@@ -136,13 +136,21 @@ mod types {
         type Value<Body: TypeMappable> = Arc<FullDef<Body>>;
     }
 
+    /// Defines a mapping from types to types, for use with `TypeMap`.
+    pub struct PromotedFullDefsMapper {}
+    impl TypeMapper for PromotedFullDefsMapper {
+        type Value<Body: TypeMappable> = HashMap<PromotedId, Arc<FullDef<Body>>>;
+    }
+
     /// Per-item cache
     #[derive(Default)]
     pub struct ItemCache<'tcx> {
         /// The translated `DefId`.
         pub def_id: Option<DefId>,
-        /// The translated definitions, generic in the body.
+        /// The translated definitions, generic in the Body kind.
         pub full_def: TypeMap<FullDefMapper>,
+        /// The Promoted constants of this body, if any.
+        pub promoteds: TypeMap<PromotedFullDefsMapper>,
         /// Cache the `Ty` translations.
         pub tys: HashMap<ty::Ty<'tcx>, Ty>,
         /// Cache the trait resolution engine for each item.

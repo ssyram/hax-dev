@@ -123,6 +123,14 @@ module RelPath = struct
       | ('name, 'disambiguator) assoc_parent
       | `Use of 'disambiguator
       | `AnonConst of 'disambiguator
+      | `InlineConst of 'disambiguator
+        (** This is e.g.: {[
+            const {
+                fn f() {}
+            }
+          ]} 
+          Here, `f` is under an `InlineConst`.
+          *)
       | `TraitAlias of 'name
       | `Foreign of 'disambiguator
       | `ForeignTy of 'name
@@ -143,7 +151,12 @@ module RelPath = struct
         'name associated * ('name, 'disambiguator) assoc_parent
       | `Mod of 'name
       | `GlobalAsm of 'disambiguator
-      | `Field of 'name * 'name constructor ]
+      | `Field of 'name * 'name constructor
+      | `Closure of 'disambiguator
+        (** We usually never refer to closure: in THIR, we inline closures.
+          However, items can be placed under closures, thus it is present here.
+          See #1450 for more details. *)
+      ]
     [@@deriving show, hash, compare, sexp, hash, eq, map]
     (** [poly] is the (polymorphic) type for a relational chunk: it defines what is a chunk. *)
 
@@ -176,8 +189,10 @@ module RelPath = struct
       | `Opaque n
       | `GlobalAsm n
       | `AnonConst n
+      | `InlineConst n
       | `Impl (n, _, _)
       | `Use n
+      | `Closure n
       | `Foreign n ->
           [ `D n ]
       | `Static n

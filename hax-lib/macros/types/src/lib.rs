@@ -54,6 +54,7 @@ pub enum AssociationRole {
     Requires,
     Ensures,
     Decreases,
+    SMTPat,
     Refine,
     /// A quoted piece of backend code to place after or before the
     /// extraction of the marked item

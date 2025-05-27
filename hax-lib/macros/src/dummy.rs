@@ -46,6 +46,8 @@ identity_proc_macro_attribute!(
     fstar_after,
     coq_after,
     proverif_after,
+    fstar_smt_pat,
+    fstar_postprocess_with,
 );
 
 #[proc_macro]
@@ -187,5 +189,10 @@ pub fn trait_fn_decoration(_attr: TokenStream, _item: TokenStream) -> TokenStrea
 
 #[proc_macro]
 pub fn loop_invariant(_predicate: TokenStream) -> TokenStream {
+    quote! {}.into()
+}
+
+#[proc_macro]
+pub fn loop_decreases(_predicate: TokenStream) -> TokenStream {
     quote! {}.into()
 }

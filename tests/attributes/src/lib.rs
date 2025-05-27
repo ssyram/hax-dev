@@ -38,6 +38,27 @@ mod ensures_on_arity_zero_fns {
 #[hax::lemma]
 fn add3_lemma(x: u32) -> Proof<{ x <= 10 || x >= u32_max / 3 || add3(x, x, x) == x * 3 }> {}
 
+fn dummy_function(x: u32) -> u32 {
+    x
+}
+
+#[hax::lemma]
+#[hax::fstar::smt_pat(x)]
+fn apply_dummy_function_lemma(x: u32) -> Proof<{ x == dummy_function(x) }> {}
+
+mod postprocess_with {
+    #[hax_lib::fstar::postprocess_with("fun _ -> FStar.Tactics.trefl ()")]
+    fn f() {}
+
+    pub mod somewhere {
+        pub fn some_hypothetical_tactic(some_param: u8) {}
+    }
+    use somewhere::some_hypothetical_tactic;
+
+    #[hax_lib::fstar::postprocess_with(|()| some_hypothetical_tactic(12))]
+    fn g() {}
+}
+
 #[hax::exclude]
 pub fn f<'a, T>(c: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     if c {
@@ -341,6 +362,17 @@ mod refinement_types {
     /// Example of a specific constraint on a value
     #[hax_lib::refinement_type(|x| x == 4 || x == 5 || x == 10 || x == 11)]
     pub struct CompressionFactor(u8);
+
+    use hax_lib::int::*;
+    /// Example of a refined int, that derives all common arithmetic operations
+    hax_bounded_integers::refinement_int!(
+        BoundedAbsI16<const B: usize>(i16, 2, |x| B.lift() < int!(32768) && x.lift() >= -B.lift() && x.lift() <= B.lift())
+    );
+
+    #[hax_lib::requires(M.lift() < int!(32768) && M.lift() == N.lift() * int!(2))]
+    fn double_abs_i16<const N: usize, const M: usize>(x: BoundedAbsI16<N>) -> BoundedAbsI16<M> {
+        (x * 2).into_checked()
+    }
 }
 mod nested_refinement_elim {
     use hax_lib::*;

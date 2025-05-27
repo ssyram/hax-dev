@@ -63,6 +63,7 @@ module AssocRole = struct
       | Requires
       | Ensures
       | Decreases
+      | SMTPat
       | Refine
       | ProcessRead
       | ProcessWrite
@@ -84,6 +85,7 @@ module AssocRole = struct
     | Requires -> Requires
     | Ensures -> Ensures
     | Decreases -> Decreases
+    | SMTPat -> SMTPat
     | Refine -> Refine
     | ItemQuote -> ItemQuote
     | ProcessRead -> ProcessRead
