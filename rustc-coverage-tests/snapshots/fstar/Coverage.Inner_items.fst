@@ -44,25 +44,25 @@ Last AST:
 /** print_rust: pitem: not implemented  (item: { Concrete_ident.T.def_id =
   { Explicit_def_id.T.is_constructor = false;
     def_id =
-    { Types.index = (0, 0); is_local = true; kind = Types.Trait;
+    { Types.index = (0, 0, None); is_local = true; kind = Types.Trait;
       krate = "coverage";
       parent =
       (Some { Types.contents =
               { Types.id = 0;
                 value =
-                { Types.index = (0, 0); is_local = true; kind = Types.Fn;
-                  krate = "coverage";
+                { Types.index = (0, 0, None); is_local = true;
+                  kind = Types.Fn; krate = "coverage";
                   parent =
                   (Some { Types.contents =
                           { Types.id = 0;
                             value =
-                            { Types.index = (0, 0); is_local = true;
+                            { Types.index = (0, 0, None); is_local = true;
                               kind = Types.Mod; krate = "coverage";
                               parent =
                               (Some { Types.contents =
                                       { Types.id = 0;
                                         value =
-                                        { Types.index = (0, 0);
+                                        { Types.index = (0, 0, None);
                                           is_local = true; kind = Types.Mod;
                                           krate = "coverage"; parent = None;
                                           path = [] }

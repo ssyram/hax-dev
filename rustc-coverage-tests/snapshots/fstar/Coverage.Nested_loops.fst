@@ -22,6 +22,12 @@ let main (_: Prims.unit) : (i32 & Prims.unit) =
   Rust_primitives.Hax.while_loop (fun countdown ->
         let countdown:i32 = countdown in
         countdown >. mk_i32 0 <: bool)
+    (fun countdown ->
+        let countdown:i32 = countdown in
+        true)
+    (fun countdown ->
+        let countdown:i32 = countdown in
+        Rust_primitives.Hax.Int.from_machine (mk_u32 0) <: Hax_lib.Int.t_Int)
     countdown
     (fun countdown ->
         let countdown:i32 = countdown in
