@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use hax_frontend_exporter as frontend;
 use rust_printer::ast::*;
 

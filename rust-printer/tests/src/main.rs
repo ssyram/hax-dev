@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 mod my_mod {
     pub fn index(index: usize, values: &[u8]) -> u8 {
         values[index]
