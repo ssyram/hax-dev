@@ -797,14 +797,26 @@ pub enum TyKind {
     Float(FloatTy),
 
     #[custom_arm(
-        ty::TyKind::FnDef(def_id, generics) => {
+        ty::TyKind::FnDef(fun_id, generics) => {
             let tcx = s.base().tcx;
-            let sig = tcx.fn_sig(*def_id).instantiate(tcx, generics);
-            TyKind::FnDef(def_id.sinto(s), Box::new(sig.sinto(s)))
+            let def_id = fun_id.sinto(s);
+            let generic_args: Vec<GenericArg> = generics.sinto(s);
+            let trait_refs = solve_item_required_traits(s, *fun_id, generics);
+            let fn_sig = tcx.fn_sig(*fun_id).instantiate(tcx, generics);
+            let fn_sig = Box::new(fn_sig.sinto(s));
+            TyKind::FnDef { def_id, generic_args, trait_refs, fn_sig }
         },
     )]
     /// Reflects [`ty::TyKind::FnDef`]
-    FnDef(DefId, Box<PolyFnSig>),
+    FnDef {
+        /// Reflects [`ty::TyKind::FnDef`]'s substitutions
+        generic_args: Vec<GenericArg>,
+        /// Predicates required by the function, e.g. `T: Sized` for `Option<T>` or `B: 'a + ToOwned`
+        /// for `Cow<'a, B>`.
+        trait_refs: Vec<ImplExpr>,
+        def_id: DefId,
+        fn_sig: Box<PolyFnSig>,
+    },
 
     #[custom_arm(
         ty::TyKind::FnPtr(tys, header) => {
