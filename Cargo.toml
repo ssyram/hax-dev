@@ -82,4 +82,4 @@ hax-engine-names = { path = "engine/names", version = "=0.3.1" }
 hax-types = { path = "hax-types", version = "=0.3.1" }
 
 [workspace.metadata.release]
-owners = ["github:hacspec:crates"]
+owners = ["github:cryspen:tools"]
