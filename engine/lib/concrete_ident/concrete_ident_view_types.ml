@@ -123,6 +123,14 @@ module RelPath = struct
       | ('name, 'disambiguator) assoc_parent
       | `Use of 'disambiguator
       | `AnonConst of 'disambiguator
+      | `InlineConst of 'disambiguator
+        (** This is e.g.: {[
+            const {
+                fn f() {}
+            }
+          ]} 
+          Here, `f` is under an `InlineConst`.
+          *)
       | `TraitAlias of 'name
       | `Foreign of 'disambiguator
       | `ForeignTy of 'name
@@ -181,6 +189,7 @@ module RelPath = struct
       | `Opaque n
       | `GlobalAsm n
       | `AnonConst n
+      | `InlineConst n
       | `Impl (n, _, _)
       | `Use n
       | `Closure n
