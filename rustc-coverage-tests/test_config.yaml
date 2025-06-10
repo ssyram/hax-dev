@@ -82,6 +82,7 @@ tests:
     - json
     - coq
     - fstar
+    - fstar-lax
   color:
     - json
   conditions:
