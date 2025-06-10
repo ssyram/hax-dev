@@ -352,6 +352,7 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
           [
             "impl";
             "anon_const";
+            "inline_const";
             "foreign";
             "use";
             "opaque";
@@ -535,6 +536,9 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       match chunk with
       | `AnonConst d ->
           prefix ~global:true ~disable_when:[ `SameCase ] "anon_const"
+            (NameAst.UnsafeString (Int64.to_string d))
+      | `InlineConst d ->
+          prefix ~global:true ~disable_when:[ `SameCase ] "inline_const"
             (NameAst.UnsafeString (Int64.to_string d))
       | `Use d -> prefix_d "use" d
       | `Foreign d -> prefix_d "foreign" d

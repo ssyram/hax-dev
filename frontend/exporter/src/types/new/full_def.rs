@@ -4,14 +4,18 @@ use std::sync::Arc;
 #[cfg(feature = "rustc")]
 use rustc_hir::def::DefKind as RDefKind;
 #[cfg(feature = "rustc")]
-use rustc_middle::ty;
+use rustc_middle::{mir, ty};
 #[cfg(feature = "rustc")]
 use rustc_span::def_id::DefId as RDefId;
+
+/// Hack: charon used to rely on the old `()` default everywhere. To avoid big merge conflicts with
+/// in-flight PRs we're changing the default here. Eventually this should be removed.
+type DefaultFullDefBody = MirBody<mir_kinds::Unknown>;
 
 /// Gathers a lot of definition information about a [`rustc_hir::def_id::DefId`].
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
-pub struct FullDef<Body = ()> {
+pub struct FullDef<Body = DefaultFullDefBody> {
     pub def_id: DefId,
     /// The enclosing item.
     pub parent: Option<DefId>,
@@ -83,7 +87,9 @@ where
             let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
                 .ty
                 .sinto(&state_with_id);
-            let body = Body::from_mir(&state_with_id, body);
+            // Promoted constants only happen within MIR bodies; we can therefore assume that
+            // `Body` is a MIR body and unwrap.
+            let body = Body::from_mir(&state_with_id, body).s_unwrap(s);
             kind = FullDefKind::PromotedConst {
                 param_env,
                 ty,
@@ -305,7 +311,7 @@ pub enum FullDefKind<Body> {
         is_const: bool,
         #[value(s.base().tcx.fn_sig(s.owner_id()).instantiate_identity().sinto(s))]
         sig: PolyFnSig,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// Associated function: `impl MyStruct { fn associated() {} }` or `trait Foo { fn associated()
@@ -323,7 +329,7 @@ pub enum FullDefKind<Body> {
         is_const: bool,
         #[value(get_method_sig(s).sinto(s))]
         sig: PolyFnSig,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// A closure, coroutine, or coroutine-closure.
@@ -339,11 +345,20 @@ pub enum FullDefKind<Body> {
         #[value(s.base().tcx.constness(s.owner_id()) == rustc_hir::Constness::Const)]
         is_const: bool,
         #[value({
-            let fun_type = s.base().tcx.type_of(s.owner_id()).instantiate_identity();
-            let ty::TyKind::Closure(_, args) = fun_type.kind() else { unreachable!() };
+            let closure_ty = s.base().tcx.type_of(s.owner_id()).instantiate_identity();
+            let ty::TyKind::Closure(_, args) = closure_ty.kind() else { unreachable!() };
             ClosureArgs::sfrom(s, s.owner_id(), args.as_closure())
         })]
         args: ClosureArgs,
+        /// For `FnMut`&`Fn` closures: the MIR for the `call_once` method; it simply calls
+        /// `call_mut`.
+        #[value({
+            let tcx = s.base().tcx;
+            let closure_ty = tcx.type_of(s.owner_id()).instantiate_identity();
+            let opt_body = closure_once_shim(tcx, closure_ty);
+            opt_body.and_then(|body| Body::from_mir(s, body))
+        })]
+        once_shim: Option<Body>,
     },
 
     // Constants
@@ -352,7 +367,7 @@ pub enum FullDefKind<Body> {
         param_env: ParamEnv,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// Associated constant: `trait MyTrait { const ASSOC: usize; }`
@@ -365,7 +380,7 @@ pub enum FullDefKind<Body> {
         associated_item: AssocItem,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// Anonymous constant, e.g. the `1 + 2` in `[u8; 1 + 2]`
@@ -374,7 +389,7 @@ pub enum FullDefKind<Body> {
         param_env: ParamEnv,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// An inline constant, e.g. `const { 1 + 2 }`
@@ -383,7 +398,7 @@ pub enum FullDefKind<Body> {
         param_env: ParamEnv,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
     /// A promoted constant, e.g. `&(1 + 2)`
@@ -404,7 +419,7 @@ pub enum FullDefKind<Body> {
         nested: bool,
         #[value(s.base().tcx.type_of(s.owner_id()).instantiate_identity().sinto(s))]
         ty: Ty,
-        #[value(s.owner_id().as_local().map(|ldid| Body::body(ldid, s)))]
+        #[value(Body::body(s.owner_id(), s))]
         body: Option<Body>,
     },
 
@@ -911,6 +926,25 @@ where
         fields,
         output_ty,
     }
+}
+
+#[cfg(feature = "rustc")]
+fn closure_once_shim<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    closure_ty: ty::Ty<'tcx>,
+) -> Option<mir::Body<'tcx>> {
+    let ty::Closure(def_id, args) = closure_ty.kind() else {
+        unreachable!()
+    };
+    let instance = match args.as_closure().kind() {
+        ty::ClosureKind::Fn | ty::ClosureKind::FnMut => {
+            ty::Instance::fn_once_adapter_instance(tcx, *def_id, args)
+        }
+        ty::ClosureKind::FnOnce => return None,
+    };
+    let mir = tcx.instance_mir(instance.def).clone();
+    let mir = ty::EarlyBinder::bind(mir).instantiate(tcx, instance.args);
+    Some(mir)
 }
 
 #[cfg(feature = "rustc")]

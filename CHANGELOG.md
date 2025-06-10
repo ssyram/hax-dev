@@ -15,6 +15,12 @@ Changes to hax-lib:
 - `hax_lib::BACKEND::replace_body`: [#1321](https://github.com/cryspen/hax/pull/1321)
 - `hax_lib::decreases`: [#1342](https://github.com/cryspen/hax/pull/1342)
 
+## 0.3.1 (2025-05-26)
+
+Changes to hax-lib:
+- Bug fix with PartialOrd in f* lib: [#1473](https://github.com/cryspen/hax/pull/1473)
+- Move `proof-libs` into `hax-lib` to allow dependencies using crates.io
+
 ## [Unreleased]
 
 ## 0.4.0 (2024-01-20)
