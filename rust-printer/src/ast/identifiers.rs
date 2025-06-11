@@ -66,6 +66,56 @@ mod global_id {
         pub fn index() -> Self {
             Self::from_string("index")
         }
+        pub fn tuple_field(field: usize) -> Self {
+            Self::from_string(&format!("tuple_field_{field}"))
+        }
+        pub fn tuple_pat() -> Self {
+            Self::from_string("tuple_pat")
+        }
+        pub fn box_new() -> Self {
+            Self::from_string("Box::new")
+        }
+        pub fn bin_op(bin_op: &hax_frontend_exporter::BinOp) -> Self {
+            Self::from_string(match bin_op {
+                hax_frontend_exporter::BinOp::Add => "add",
+                hax_frontend_exporter::BinOp::AddWithOverflow => "add_with_overflow",
+                hax_frontend_exporter::BinOp::BitAnd => "bit_and",
+                hax_frontend_exporter::BinOp::BitOr => "bit_or",
+                hax_frontend_exporter::BinOp::BitXor => "bit_xor",
+                hax_frontend_exporter::BinOp::Cmp => "cmp",
+                hax_frontend_exporter::BinOp::Div => "div",
+                hax_frontend_exporter::BinOp::Eq => "eq",
+                hax_frontend_exporter::BinOp::Ge => "ge",
+                hax_frontend_exporter::BinOp::Gt => "gt",
+                hax_frontend_exporter::BinOp::Le => "le",
+                hax_frontend_exporter::BinOp::Lt => "lt",
+                hax_frontend_exporter::BinOp::Mul => "mul",
+                hax_frontend_exporter::BinOp::MulWithOverflow => "mul_with_overflow",
+                hax_frontend_exporter::BinOp::Ne => "ne",
+                hax_frontend_exporter::BinOp::Offset => "offset",
+                hax_frontend_exporter::BinOp::Rem => "rem",
+                hax_frontend_exporter::BinOp::Shl => "shl",
+                hax_frontend_exporter::BinOp::Shr => "shr",
+                hax_frontend_exporter::BinOp::Sub => "sub",
+                hax_frontend_exporter::BinOp::SubWithOverflow => "sub_with_overflow",
+            })
+        }
+        pub fn un_op(un_op: &hax_frontend_exporter::UnOp) -> Self {
+            Self::from_string(match un_op {
+                hax_frontend_exporter::UnOp::Neg => "neg",
+                hax_frontend_exporter::UnOp::Not => "not",
+                _ => unimplemented!(),
+            })
+        }
+        pub fn logical_op(logical_op: &hax_frontend_exporter::LogicalOp) -> Self {
+            Self::from_string(match logical_op {
+                hax_frontend_exporter::LogicalOp::And => "and",
+                hax_frontend_exporter::LogicalOp::Or => "or",
+            })
+        }
+        pub fn never_to_any() -> Self {
+            Self::from_string("never_to_any")
+        }
     }
 
     // #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -91,6 +141,11 @@ impl fmt::Display for LocalId {
 impl From<&hax_frontend_exporter::LocalIdent> for LocalId {
     fn from(value: &hax_frontend_exporter::LocalIdent) -> Self {
         Self(Symbol::new(&value.name))
+    }
+}
+impl From<&str> for LocalId {
+    fn from(name: &str) -> Self {
+        Self(Symbol::new(name))
     }
 }
 
