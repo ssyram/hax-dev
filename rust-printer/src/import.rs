@@ -542,12 +542,8 @@ pub fn translate_item_kind(
     span: dst::Span,
 ) -> dst::ItemKind {
     match item_kind {
-        src::ItemKind::Fn {
-            ident,
-            generics,
-            def: fn_def,
-        } => {
-            let params = fn_def
+        src::ItemKind::Fn { def, generics, .. } => {
+            let params = def
                 .params
                 .iter()
                 .map(|param| translate_param(param, span))
@@ -565,7 +561,7 @@ pub fn translate_item_kind(
             dst::ItemKind::Fn {
                 name,
                 generics,
-                body: translate_expr(&fn_def.body),
+                body: translate_expr(&def.body),
                 params,
                 safety: dst::SafetyKind::Safe,
             }
