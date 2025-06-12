@@ -277,7 +277,7 @@ pub enum FullDefKind<Body> {
     TraitAlias {
         #[value(get_param_env(s, s.owner_id()))]
         param_env: ParamEnv,
-        #[value(implied_predicates(s.base().tcx, s.owner_id()).sinto(s))]
+        #[value(implied_predicates(s.base().tcx, s.owner_id(), s.base().options.resolve_drop_bounds).sinto(s))]
         implied_predicates: GenericPredicates,
         /// The special `Self: Trait` clause.
         #[value(get_self_predicate(s))]
