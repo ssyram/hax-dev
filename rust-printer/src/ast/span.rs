@@ -1,5 +1,11 @@
+//! Source positions.
+
+use hax_rust_engine_macros::*;
+
 // TODO: implement, interned (statically -- bumpalo or something)
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Position in the source code
+#[derive_group_for_ast]
+#[derive(Copy)]
 pub struct Span(());
 
 impl From<hax_frontend_exporter::Span> for Span {

@@ -485,7 +485,7 @@ module MakeRenderAPI (NP : NAME_POLICY) : RENDER_API = struct
       let*? _no_generics = List.is_empty impl_infos.generics.params in
       match impl_infos.trait_ref with
       | None -> Some ty
-      | Some { def_id = trait; generic_args = [ _self ] } ->
+      | Some { def_id = trait; generic_args = [ _self ]; _ } ->
           let* trait = Explicit_def_id.of_def_id trait in
           let trait = View.of_def_id trait in
           let*? _same_ns = [%eq: View.ModPath.t] namespace trait.mod_path in
@@ -702,7 +702,7 @@ let map_path_strings ~(f : string -> string) (did : t) : t =
     |> List.map ~f:(fun (chunk : Types.disambiguated_def_path_item) ->
            let data =
              match chunk.data with
-             | TypeNs s -> Types.TypeNs (Option.map ~f s)
+             | TypeNs s -> Types.TypeNs (f s)
              | ValueNs s -> ValueNs (f s)
              | MacroNs s -> MacroNs (f s)
              | LifetimeNs s -> LifetimeNs (f s)
@@ -726,8 +726,7 @@ let matches_namespace (ns : Types.namespace) (did : t) : bool =
     @ List.map
         ~f:(fun (chunk : Types.disambiguated_def_path_item) ->
           match chunk.data with
-          | TypeNs s -> s
-          | ValueNs s | MacroNs s | LifetimeNs s -> Some s
+          | TypeNs s | ValueNs s | MacroNs s | LifetimeNs s -> Some s
           | _ -> None)
         did.path
   in
