@@ -4,34 +4,46 @@
 //! This module is used to attach semantic or translation errors to AST nodes.
 
 use crate::ast::*;
+use hax_rust_engine_macros::*;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Error diagnostic
+#[derive_group_for_ast]
 pub struct Diagnostic {
-    node: Box<Node>,
+    node: Box<Fragment>,
     info: DiagnosticInfo,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Error description and location
+#[derive_group_for_ast]
 pub struct DiagnosticInfo {
+    /// Diagnostic context
     pub context: Context,
+    /// Location in the source code
     pub span: Span,
+    /// Error type
     pub kind: DiagnosticInfoKind,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Description of the error
+#[derive_group_for_ast]
 pub enum DiagnosticInfoKind {
+    /// Custom error
     Custom(String),
+    /// Import of a parameter without pattern
     ImportParamWithoutPattern,
 }
 
 impl Diagnostic {
+    /// Get diagnostic information
     pub fn info(&self) -> &DiagnosticInfo {
         &self.info
     }
-    pub fn node(&self) -> &Node {
+    /// Get diagnostic node of origin
+    pub fn node(&self) -> &Fragment {
         &self.node
     }
-    pub fn new(node: Node, info: DiagnosticInfo) -> Self {
+    /// Report an error
+    pub fn new(node: Fragment, info: DiagnosticInfo) -> Self {
         eprintln!("Todo, error reporting");
         eprintln!("node={node:#?}");
         eprintln!("info={info:#?}");
@@ -42,7 +54,9 @@ impl Diagnostic {
     }
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Context of an error
+#[derive_group_for_ast]
 pub enum Context {
+    /// Error during import from THIR
     Import,
 }

@@ -1,14 +1,22 @@
 //! Literal and numeric type kinds used in constant expressions.
 
 use crate::symbol::Symbol;
+use hax_rust_engine_macros::*;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Size of an integer type
+#[derive_group_for_ast]
 pub enum IntSize {
+    /// 8 bits integer type
     S8,
+    /// 16 bits integer type
     S16,
+    /// 32 bits integer type
     S32,
+    /// 64 bits integer type
     S64,
+    /// 128 bits integer type
     S128,
+    /// Pointer-sized integer type
     SSize,
 }
 
@@ -38,34 +46,62 @@ impl From<UintTy> for IntSize {
     }
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Signedness of a numeric type
+#[derive_group_for_ast]
 pub enum Signedness {
+    /// Signed type (`i32`, `i64`, ...)
     Signed,
+    /// Unsigned type (`u32`, `u64`, ...)
     Unsigned,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Describes a Rust integer type (`u64`, `i32`, ...)
+#[derive_group_for_ast]
 pub struct IntKind {
+    /// Size of this integer type
     pub size: IntSize,
+    /// Whether this integer type is signed or unsigned
     pub signedness: Signedness,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub enum FloatKind {}
+/// Float types
+#[derive_group_for_ast]
+pub enum FloatKind {
+    /// 16 bits float
+    F16,
+    /// 32 bits float
+    F32,
+    /// 64 bits float
+    F64,
+    /// 128 bits float
+    F128,
+}
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+/// Rust literal
+#[derive_group_for_ast]
 pub enum Literal {
+    /// String literal
     String(Symbol),
+    /// Character literal
     Char(char),
+    /// Boolean literal
     Bool(bool),
+    /// Integer literal
     Int {
+        /// Value as u128
         value: u128,
+        /// True if `-`
         negative: bool,
+        /// Rust int type description (size + signedness)
         kind: IntKind,
     },
+    /// Float literal
     Float {
+        /// Value as a string
         value: Symbol,
+        /// True if `-`
         negative: bool,
+        /// Size
         kind: FloatKind,
     },
 }
