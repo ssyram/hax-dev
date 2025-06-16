@@ -17,26 +17,21 @@ use rustc_middle::ty;
 #[cfg(feature = "rustc")]
 use rustc_span::def_id::DefId as RDefId;
 
-#[derive(AdtInto)]
-#[args(<'tcx, S: UnderOwnerState<'tcx> >, from: resolution::PathChunk<'tcx>, state: S as s)]
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, JsonSchema)]
 pub enum ImplExprPathChunk {
     AssocItem {
-        item: AssocItem,
-        /// The arguments provided to the item (for GATs).
-        generic_args: Vec<GenericArg>,
-        /// The impl exprs that must be satisfied to apply the given arguments to the item. E.g.
-        /// `T: Clone` in the following example:
+        /// Reference to the item, with generics (for GATs), e.g. the `T` and `T: Clone` `ImplExpr`
+        /// in the following example:
         /// ```ignore
         /// trait Foo {
         ///     type Type<T: Clone>: Debug;
         /// }
         /// ```
-        impl_exprs: Vec<ImplExpr>,
+        item: ItemRef,
+        assoc_item: AssocItem,
         /// The implemented predicate.
         predicate: Binder<TraitPredicate>,
-        #[value(<_ as SInto<_, Clause>>::sinto(predicate, s).id)]
         predicate_id: PredicateId,
         /// The index of this predicate in the list returned by `implied_predicates`.
         index: usize,
@@ -44,11 +39,43 @@ pub enum ImplExprPathChunk {
     Parent {
         /// The implemented predicate.
         predicate: Binder<TraitPredicate>,
-        #[value(<_ as SInto<_, Clause>>::sinto(predicate, s).id)]
         predicate_id: PredicateId,
         /// The index of this predicate in the list returned by `implied_predicates`.
         index: usize,
     },
+}
+
+#[cfg(feature = "rustc")]
+impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ImplExprPathChunk> for resolution::PathChunk<'tcx> {
+    fn sinto(&self, s: &S) -> ImplExprPathChunk {
+        match self {
+            resolution::PathChunk::AssocItem {
+                item,
+                generic_args,
+                impl_exprs,
+                predicate,
+                index,
+                ..
+            } => ImplExprPathChunk::AssocItem {
+                item: UnboxedItemRef::new(
+                    item.def_id.sinto(s),
+                    generic_args.sinto(s),
+                    impl_exprs.sinto(s),
+                ),
+                assoc_item: item.sinto(s),
+                predicate: predicate.sinto(s),
+                predicate_id: <_ as SInto<_, Clause>>::sinto(predicate, s).id,
+                index: index.sinto(s),
+            },
+            resolution::PathChunk::Parent {
+                predicate, index, ..
+            } => ImplExprPathChunk::Parent {
+                predicate: predicate.sinto(s),
+                predicate_id: <_ as SInto<_, Clause>>::sinto(predicate, s).id,
+                index: index.sinto(s),
+            },
+        }
+    }
 }
 
 /// The source of a particular trait implementation. Most often this is either `Concrete` for a
@@ -59,13 +86,14 @@ pub enum ImplExprPathChunk {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, JsonSchema)]
 pub enum ImplExprAtom {
     /// A concrete `impl Trait for Type {}` item.
-    Concrete {
-        #[from(def_id)]
-        id: GlobalIdent,
-        generics: Vec<GenericArg>,
-        /// The impl exprs that prove the clauses on the impl.
-        impl_exprs: Vec<ImplExpr>,
-    },
+    #[custom_arm(FROM_TYPE::Concrete { def_id, generics, impl_exprs } => TO_TYPE::Concrete(
+        UnboxedItemRef::new(
+            def_id.sinto(s),
+            generics.sinto(s),
+            impl_exprs.sinto(s),
+        )
+    ),)]
+    Concrete(ItemRef),
     /// A context-bound clause like `where T: Trait`.
     LocalBound {
         #[not_in_source]
@@ -217,6 +245,52 @@ pub fn solve_trait<'tcx, S: BaseState<'tcx> + HasOwnerId>(
     };
     s.with_cache(|cache| cache.impl_exprs.insert(trait_ref, impl_expr.clone()));
     impl_expr
+}
+
+/// Translate a reference to an item, resolving the appropriate trait clauses as needed.
+#[cfg(feature = "rustc")]
+#[tracing::instrument(level = "trace", skip(s), ret)]
+pub fn translate_item_ref<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    def_id: RDefId,
+    generics: ty::GenericArgsRef<'tcx>,
+) -> ItemRef {
+    let mut impl_exprs = solve_item_required_traits(s, def_id, generics);
+    let mut generic_args = generics.sinto(s);
+
+    // If this is an associated item, resolve the trait reference.
+    let trait_info = self_clause_for_item(s, def_id, generics);
+    // Fixup the generics.
+    if let Some(tinfo) = &trait_info {
+        // The generics are split in two: the arguments of the trait and the arguments of the
+        // method.
+        //
+        // For instance, if we have:
+        // ```
+        // trait Foo<T> {
+        //     fn baz<U>(...) { ... }
+        // }
+        //
+        // fn test<T : Foo<u32>(x: T) {
+        //     x.baz(...);
+        //     ...
+        // }
+        // ```
+        // The generics for the call to `baz` will be the concatenation: `<T, u32, U>`, which we
+        // split into `<T, u32>` and `<U>`.
+        let trait_ref = tinfo.r#trait.hax_skip_binder_ref();
+        let num_trait_generics = trait_ref.generic_args.len();
+        generic_args.drain(0..num_trait_generics);
+        let num_trait_trait_clauses = trait_ref.impl_exprs.len();
+        impl_exprs.drain(0..num_trait_trait_clauses);
+    }
+
+    Box::new(UnboxedItemRef {
+        def_id: def_id.sinto(s),
+        generic_args,
+        impl_exprs,
+        in_trait: trait_info,
+    })
 }
 
 /// Solve the trait obligations for a specific item use (for example, a method call, an ADT, etc.)

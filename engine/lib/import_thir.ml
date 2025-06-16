@@ -11,6 +11,8 @@ module Thir = struct
   type generic_param_kind = generic_param_kind_for__decorated_for__expr_kind
   type trait_item = trait_item_for__decorated_for__expr_kind
   type ty = node_for__ty_kind
+  type item_ref = unboxed_item_ref
+  type trait_ref = item_ref
 end
 
 open! Prelude
@@ -504,38 +506,29 @@ end) : EXPR = struct
           let then_ = c_expr then' in
           let else_ = Option.map ~f:c_expr else_opt in
           If { cond; else_; then_ }
-      | Call
-          {
-            args;
-            fn_span = _;
-            trait;
-            from_hir_call = _;
-            fun';
-            ty = _;
-            generic_args;
-            bounds_impls;
-          } ->
-          let args = List.map ~f:c_expr args in
-          let bounds_impls = List.map ~f:(c_impl_expr e.span) bounds_impls in
-          let c_generic_values = List.map ~f:(c_generic_value e.span) in
-          let generic_args = c_generic_values generic_args in
-          let f =
-            let f = c_expr fun' in
-            match (trait, fun'.contents) with
-            | Some _, GlobalName { id; _ } ->
-                { f with e = GlobalVar (def_id ~value:true id) }
-            | _ -> f
+      | Call { args; fn_span = _; from_hir_call = _; fun'; ty = _ } -> (
+          let args =
+            if List.is_empty args then [ unit_expr span ]
+            else List.map ~f:c_expr args
           in
-          let args = if List.is_empty args then [ unit_expr span ] else args in
-          App
-            {
-              f;
-              args;
-              generic_args;
-              bounds_impls;
-              trait =
-                Option.map ~f:(c_impl_expr e.span *** c_generic_values) trait;
-            }
+          let f = c_expr fun' in
+          match fun'.contents with
+          | GlobalName
+              { item = { def_id = id; generic_args; impl_exprs; in_trait }; _ }
+            ->
+              let f = { f with e = GlobalVar (def_id ~value:true id) } in
+              let bounds_impls = List.map ~f:(c_impl_expr e.span) impl_exprs in
+              let generic_args =
+                List.map ~f:(c_generic_value e.span) generic_args
+              in
+              let in_trait = Option.map ~f:(c_impl_expr e.span) in_trait in
+              let trait =
+                Option.map ~f:(fun ie -> (ie, ie.goal.args)) in_trait
+              in
+              App { f; args; generic_args; bounds_impls; trait }
+          | _ ->
+              App
+                { f; args; generic_args = []; bounds_impls = []; trait = None })
       | Box { value } ->
           (U.call Rust_primitives__hax__box_new [ c_expr value ] span typ).e
       | Deref { arg } ->
@@ -644,7 +637,8 @@ end) : EXPR = struct
               trait = None (* TODO: see issue #328 *);
               bounds_impls = [];
             }
-      | GlobalName { id; constructor = _ } -> GlobalVar (def_id ~value:true id)
+      | GlobalName { item = { def_id = id; _ }; constructor = _ } ->
+          GlobalVar (def_id ~value:true id)
       | UpvarRef { var_hir_id = id; _ } -> LocalVar (local_ident Expr id)
       | Borrow { arg; borrow_kind = kind } ->
           let e' = c_expr arg in
@@ -731,9 +725,10 @@ end) : EXPR = struct
                        typ = TInt { size = S8; signedness = Unsigned };
                      })
                    l))
-      | NamedConst { def_id = id; impl; args; _ } ->
+      | NamedConst
+          { item = { def_id = id; generic_args; in_trait = impl; _ }; _ } ->
           let f = GlobalVar (def_id ~value:true id) in
-          let args = List.map ~f:(c_generic_value e.span) args in
+          let args = List.map ~f:(c_generic_value e.span) generic_args in
           let const_args =
             List.filter_map args ~f:(function GConst e -> Some e | _ -> None)
           in
@@ -853,7 +848,7 @@ end) : EXPR = struct
           Array { fields = List.map ~f:constant_expr_to_expr fields }
       | Tuple { fields } ->
           Tuple { fields = List.map ~f:constant_expr_to_expr fields }
-      | GlobalName { id; _ } -> GlobalName { id; constructor = None }
+      | GlobalName item -> GlobalName { item; constructor = None }
       | Borrow arg ->
           Borrow { arg = constant_expr_to_expr arg; borrow_kind = Thir.Shared }
       | ConstRef { id } -> ConstRef { id }
@@ -1152,9 +1147,9 @@ end) : EXPR = struct
           Parent { impl = { kind = item_kind; goal = trait_ref }; ident }
     in
     match ie with
-    | Concrete { id; generics; _ } ->
-        let trait = Concrete_ident.of_def_id ~value:false id in
-        let args = List.map ~f:(c_generic_value span) generics in
+    | Concrete { def_id; generic_args; _ } ->
+        let trait = Concrete_ident.of_def_id ~value:false def_id in
+        let args = List.map ~f:(c_generic_value span) generic_args in
         Concrete { trait; args }
     | LocalBound { predicate_id; path; _ } ->
         let init = LocalBound { id = predicate_id } in
@@ -1329,7 +1324,7 @@ include struct
 
   let import_ty : Types.span -> Types.node_for__ty_kind -> Ast.Rust.ty = c_ty
 
-  let import_trait_ref : Types.span -> Types.trait_ref -> Ast.Rust.trait_goal =
+  let import_trait_ref : Types.span -> Thir.trait_ref -> Ast.Rust.trait_goal =
     c_trait_ref
 
   let import_clause :
