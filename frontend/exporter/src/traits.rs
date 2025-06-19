@@ -259,6 +259,10 @@ pub fn translate_item_ref<'tcx, S: UnderOwnerState<'tcx>>(
     def_id: RDefId,
     generics: ty::GenericArgsRef<'tcx>,
 ) -> ItemRef {
+    let key = (def_id, generics);
+    if let Some(item) = s.with_cache(|cache| cache.item_refs.get(&key).cloned()) {
+        return item;
+    }
     let mut impl_exprs = solve_item_required_traits(s, def_id, generics);
     let mut generic_args = generics.sinto(s);
 
@@ -289,13 +293,17 @@ pub fn translate_item_ref<'tcx, S: UnderOwnerState<'tcx>>(
         impl_exprs.drain(0..num_trait_trait_clauses);
     }
 
-    (ItemRefContents {
+    let content = ItemRefContents {
         def_id: def_id.sinto(s),
         generic_args,
         impl_exprs,
         in_trait: trait_info,
-    })
-    .intern(s)
+    };
+    let item = content.intern(s);
+    s.with_cache(|cache| {
+        cache.item_refs.insert(key, item.clone());
+    });
+    item
 }
 
 /// Solve the trait obligations for a specific item use (for example, a method call, an ADT, etc.)
