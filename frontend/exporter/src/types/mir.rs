@@ -373,7 +373,7 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
     let sig = match hax_ty.kind() {
         TyKind::Arrow(sig) => sig,
         TyKind::FnDef { fn_sig, .. } => fn_sig,
-        TyKind::Closure(args) => &args.untupled_sig,
+        TyKind::Closure(args) => &args.fn_sig,
         _ => supposely_unreachable_fatal!(
             s,
             "TerminatorKind_Call_expected_fn_type";

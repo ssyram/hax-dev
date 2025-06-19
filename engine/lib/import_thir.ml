@@ -1018,10 +1018,8 @@ end) : EXPR = struct
     | Float k ->
         TFloat
           (match k with F16 -> F16 | F32 -> F32 | F64 -> F64 | F128 -> F128)
-    | Arrow signature
-    | Closure { untupled_sig = signature; _ }
-    | FnDef { fn_sig = signature; _ } ->
-        let ({ inputs; output; _ } : Thir.ty_fn_sig) = signature.value in
+    | Arrow fn_sig | Closure { fn_sig; _ } | FnDef { fn_sig; _ } ->
+        let ({ inputs; output; _ } : Thir.ty_fn_sig) = fn_sig.value in
         let inputs =
           if List.is_empty inputs then [ U.unit_typ ]
           else List.map ~f:(c_ty span) inputs

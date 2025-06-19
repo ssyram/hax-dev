@@ -1353,11 +1353,8 @@ pub struct ClosureArgs {
     /// The base kind of this closure. The kinds are ordered by inclusion: any `Fn` works as an
     /// `FnMut`, and any `FnMut` works as an `FnOnce`.
     pub kind: ClosureKind,
-    /// The proper `fn(A, B, C) -> D` signature of the closure.
-    pub untupled_sig: PolyFnSig,
-    /// The signature of the closure as one input and one output, where the input arguments are
-    /// tupled. This is relevant to implementing the `Fn*` traits.
-    pub tupled_sig: PolyFnSig,
+    /// The signature of the function that the closure implements, e.g. `fn(A, B, C) -> D`.
+    pub fn_sig: PolyFnSig,
     /// The set of captured variables. Together they form the state of the closure.
     pub upvar_tys: Vec<Ty>,
 }
@@ -1384,8 +1381,7 @@ impl ClosureArgs {
         ClosureArgs {
             item,
             kind: from.kind().sinto(s),
-            tupled_sig: sig.sinto(s),
-            untupled_sig: tcx
+            fn_sig: tcx
                 .signature_unclosure(sig, rustc_hir::Safety::Safe)
                 .sinto(s),
             upvar_tys: from.upvar_tys().sinto(s),
