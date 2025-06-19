@@ -26,6 +26,18 @@ let impl_i128__MIN: i128 = mk_i128 (minint i128_inttype)
 let impl_isize__MAX: isize = mk_isize (maxint isize_inttype)
 let impl_isize__MIN: isize = mk_isize (minint isize_inttype)
 
+let impl_u8__BITS: u32 = mk_int 8
+let impl_u16__BITS: u32 = mk_int 16
+let impl_u32__BITS: u32 = mk_int 32
+let impl_u64__BITS: u32 = mk_int 64
+let impl_u128__BITS: u32 = mk_int 128
+let impl_i8__BITS: u32 = mk_int 8
+let impl_i16__BITS: u32 = mk_int 16
+let impl_i32__BITS: u32 = mk_int 32
+let impl_i64__BITS: u32 = mk_int 64
+let impl_i128__BITS: u32 = mk_int 128
+
+
 let impl_u8__rem_euclid (x: u8) (y: u8 {v y <> 0}): u8 = x %! y
 let impl_u16__rem_euclid (x: u16) (y: u16 {v y <> 0}): u16 = x %! y
 let impl_u32__rem_euclid (x: u32) (y: u32 {v y <> 0}): u32 = x %! y
@@ -62,7 +74,7 @@ val impl_u32__from_be_bytes: t_Array u8 (sz 4) -> u32
 val impl_u32__to_le_bytes: u32 -> t_Array u8 (sz 4)
 val impl_u32__to_be_bytes: u32 -> t_Array u8 (sz 4)
 val impl_u32__rotate_right: u32 -> u32 -> u32
-let impl_u32__BITS: u32 = mk_int 32
+
 
 let impl_u64__wrapping_add: u64 -> u64 -> u64 = add_mod
 val impl_u64__rotate_left: u32 -> u32 -> u32
