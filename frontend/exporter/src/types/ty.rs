@@ -432,8 +432,27 @@ pub enum GenericArg {
     Const(ConstantExpr),
 }
 
+/// Contents of `ItemRef`.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ItemRefContents {
+    /// The item being refered to.
+    pub def_id: DefId,
+    /// The generics passed to the item. If `in_trait` is `Some`, these are only the generics of
+    /// the method/type/const itself; generics for the traits are available in
+    /// `in_trait.unwrap().trait`.
+    pub generic_args: Vec<GenericArg>,
+    /// Witnesses of the trait clauses required by the item, e.g. `T: Sized` for `Option<T>` or `B:
+    /// ToOwned` for `Cow<'a, B>`. Same as above, for associated items this only includes clauses
+    /// for the item itself.
+    pub impl_exprs: Vec<ImplExpr>,
+    /// If we're referring to a trait associated item, this gives the trait clause/impl we're
+    /// referring to.
+    pub in_trait: Option<ImplExpr>,
+}
+
 /// Reference to an item, with generics. Basically any mention of an item (function, type, etc)
-/// uses this. We box it by default because the type is rather large, see [`ItemRef`].
+/// uses this.
 ///
 /// This can refer to a top-level item or to a trait associated item. Example:
 /// ```ignore
@@ -465,35 +484,60 @@ pub enum GenericArg {
 /// ```
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UnboxedItemRef {
-    /// The item being refered to.
-    pub def_id: DefId,
-    /// The generics passed to the item. If `in_trait` is `Some`, these are only the generics of
-    /// the method/type/const itself; generics for the traits are available in
-    /// `in_trait.unwrap().trait`.
-    pub generic_args: Vec<GenericArg>,
-    /// Witnesses of the trait clauses required by the item, e.g. `T: Sized` for `Option<T>` or `B:
-    /// ToOwned` for `Cow<'a, B>`. Same as above, for associated items this only includes clauses
-    /// for the item itself.
-    pub impl_exprs: Vec<ImplExpr>,
-    /// If we're referring to a trait associated item, this gives the trait clause/impl we're
-    /// referring to.
-    pub in_trait: Option<ImplExpr>,
+#[serde(transparent)]
+pub struct ItemRef {
+    pub(crate) contents: id_table::Node<ItemRefContents>,
 }
 
-/// Reference to an item, with generics. Basically any mention of an item (function, type, etc)
-/// uses this.
-pub type ItemRef = Box<UnboxedItemRef>;
+impl ItemRefContents {
+    #[cfg(feature = "rustc")]
+    pub fn intern<'tcx, S: BaseState<'tcx>>(self, s: &S) -> ItemRef {
+        s.with_global_cache(|cache| {
+            let table_session = &mut cache.id_table_session;
+            let contents = id_table::Node::new(self, table_session);
+            ItemRef { contents }
+        })
+    }
+}
 
-impl UnboxedItemRef {
-    /// Reference a top-level  item (i.e. not a trait associated item).
-    pub fn new(def_id: DefId, generic_args: Vec<GenericArg>, impl_exprs: Vec<ImplExpr>) -> ItemRef {
-        Box::new(Self {
+impl ItemRef {
+    #[cfg(feature = "rustc")]
+    pub fn new<'tcx, S: BaseState<'tcx>>(
+        s: &S,
+        def_id: DefId,
+        generic_args: Vec<GenericArg>,
+        impl_exprs: Vec<ImplExpr>,
+        in_trait: Option<ImplExpr>,
+    ) -> ItemRef {
+        let contents = ItemRefContents {
             def_id,
             generic_args,
             impl_exprs,
-            in_trait: None,
-        })
+            in_trait,
+        };
+        contents.intern(s)
+    }
+
+    pub fn contents(&self) -> &ItemRefContents {
+        &self.contents
+    }
+
+    #[cfg(feature = "rustc")]
+    pub fn mutate<'tcx, S: BaseState<'tcx>>(
+        &mut self,
+        s: &S,
+        f: impl FnOnce(&mut ItemRefContents),
+    ) {
+        let mut contents = self.contents().clone();
+        f(&mut contents);
+        *self = contents.intern(s);
+    }
+}
+
+impl std::ops::Deref for ItemRef {
+    type Target = ItemRefContents;
+    fn deref(&self) -> &Self::Target {
+        self.contents()
     }
 }
 
@@ -900,7 +944,7 @@ pub enum TyKind {
 
     #[custom_arm(FROM_TYPE::Adt(adt_def, generics) => TO_TYPE::Adt(translate_item_ref(s, adt_def.did(), generics)),)]
     Adt(ItemRef),
-    #[custom_arm(FROM_TYPE::Foreign(def_id) => TO_TYPE::Foreign(UnboxedItemRef::new(def_id.sinto(s), vec![], vec![])),)]
+    #[custom_arm(FROM_TYPE::Foreign(def_id) => TO_TYPE::Foreign(ItemRef::new(s, def_id.sinto(s), vec![], vec![], None)),)]
     Foreign(ItemRef),
     Str,
     Array(Box<Ty>, #[map(Box::new(x.sinto(s)))] Box<ConstantExpr>),

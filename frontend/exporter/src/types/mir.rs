@@ -259,8 +259,10 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
             match ucv.promoted {
                 Some(promoted) => {
                     let mut item = translate_item_ref(s, ucv.def, ucv.args);
-                    // Construct a def_id for the promoted constant.
-                    item.def_id = item.def_id.make_promoted_child(s, promoted.sinto(s));
+                    item.mutate(s, |item| {
+                        // Construct a def_id for the promoted constant.
+                        item.def_id = item.def_id.make_promoted_child(s, promoted.sinto(s));
+                    });
                     Promoted(item)
                 }
                 None => Value(match translate_constant_reference(s, span, ucv.shrink()) {

@@ -1,7 +1,7 @@
 val import_ty : Types.span -> Types.node_for__ty_kind -> Ast.Rust.ty
 
 val import_trait_ref :
-  Types.span -> Types.unboxed_item_ref -> Ast.Rust.trait_goal
+  Types.span -> Types.node_for__item_ref_contents -> Ast.Rust.trait_goal
 
 val import_clause :
   Types.span -> Types.clause -> Ast.Rust.generic_constraint option

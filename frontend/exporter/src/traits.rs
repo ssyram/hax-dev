@@ -57,10 +57,12 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ImplExprPathChunk> for resolution:
                 index,
                 ..
             } => ImplExprPathChunk::AssocItem {
-                item: UnboxedItemRef::new(
+                item: ItemRef::new(
+                    s,
                     item.def_id.sinto(s),
                     generic_args.sinto(s),
                     impl_exprs.sinto(s),
+                    None,
                 ),
                 assoc_item: item.sinto(s),
                 predicate: predicate.sinto(s),
@@ -87,10 +89,12 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ImplExprPathChunk> for resolution:
 pub enum ImplExprAtom {
     /// A concrete `impl Trait for Type {}` item.
     #[custom_arm(FROM_TYPE::Concrete { def_id, generics, impl_exprs } => TO_TYPE::Concrete(
-        UnboxedItemRef::new(
+        ItemRef::new(
+            s,
             def_id.sinto(s),
             generics.sinto(s),
             impl_exprs.sinto(s),
+            None,
         )
     ),)]
     Concrete(ItemRef),
@@ -285,12 +289,13 @@ pub fn translate_item_ref<'tcx, S: UnderOwnerState<'tcx>>(
         impl_exprs.drain(0..num_trait_trait_clauses);
     }
 
-    Box::new(UnboxedItemRef {
+    (ItemRefContents {
         def_id: def_id.sinto(s),
         generic_args,
         impl_exprs,
         in_trait: trait_info,
     })
+    .intern(s)
 }
 
 /// Solve the trait obligations for a specific item use (for example, a method call, an ADT, etc.)

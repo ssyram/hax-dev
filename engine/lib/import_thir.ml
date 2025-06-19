@@ -11,7 +11,7 @@ module Thir = struct
   type generic_param_kind = generic_param_kind_for__decorated_for__expr_kind
   type trait_item = trait_item_for__decorated_for__expr_kind
   type ty = node_for__ty_kind
-  type item_ref = unboxed_item_ref
+  type item_ref = node_for__item_ref_contents
   type trait_ref = item_ref
 end
 
@@ -514,8 +514,14 @@ end) : EXPR = struct
           let f = c_expr fun' in
           match fun'.contents with
           | GlobalName
-              { item = { def_id = id; generic_args; impl_exprs; in_trait }; _ }
-            ->
+              {
+                item =
+                  {
+                    value = { def_id = id; generic_args; impl_exprs; in_trait };
+                    _;
+                  };
+                _;
+              } ->
               let f = { f with e = GlobalVar (def_id ~value:true id) } in
               let bounds_impls = List.map ~f:(c_impl_expr e.span) impl_exprs in
               let generic_args =
@@ -637,7 +643,8 @@ end) : EXPR = struct
               trait = None (* TODO: see issue #328 *);
               bounds_impls = [];
             }
-      | GlobalName { item = { def_id = id; _ }; constructor = _ } ->
+      | GlobalName { item = { value = { def_id = id; _ }; _ }; constructor = _ }
+        ->
           GlobalVar (def_id ~value:true id)
       | UpvarRef { var_hir_id = id; _ } -> LocalVar (local_ident Expr id)
       | Borrow { arg; borrow_kind = kind } ->
@@ -726,7 +733,11 @@ end) : EXPR = struct
                      })
                    l))
       | NamedConst
-          { item = { def_id = id; generic_args; in_trait = impl; _ }; _ } ->
+          {
+            item =
+              { value = { def_id = id; generic_args; in_trait = impl; _ }; _ };
+            _;
+          } ->
           let f = GlobalVar (def_id ~value:true id) in
           let args = List.map ~f:(c_generic_value e.span) generic_args in
           let const_args =
@@ -1025,7 +1036,7 @@ end) : EXPR = struct
           else List.map ~f:(c_ty span) inputs
         in
         TArrow (inputs, c_ty span output)
-    | Adt { def_id = id; generic_args; _ } ->
+    | Adt { value = { def_id = id; generic_args; _ }; _ } ->
         let ident = def_id ~value:false id in
         let args = List.map ~f:(c_generic_value span) generic_args in
         TApp { ident; args }
@@ -1110,15 +1121,15 @@ end) : EXPR = struct
     let goal = c_trait_ref span ie.trait.value in
     let impl = { kind = c_impl_expr_atom span ie.impl; goal } in
     match ie.impl with
-    | Concrete { impl_exprs = []; _ } -> impl
-    | Concrete { impl_exprs; _ } ->
+    | Concrete { value = { impl_exprs = []; _ }; _ } -> impl
+    | Concrete { value = { impl_exprs; _ }; _ } ->
         let args = List.map ~f:(c_impl_expr span) impl_exprs in
         { kind = ImplApp { impl; args }; goal }
     | _ -> impl
 
   and c_trait_ref span (tr : Thir.trait_ref) : trait_goal =
-    let trait = Concrete_ident.of_def_id ~value:false tr.def_id in
-    let args = List.map ~f:(c_generic_value span) tr.generic_args in
+    let trait = Concrete_ident.of_def_id ~value:false tr.value.def_id in
+    let args = List.map ~f:(c_generic_value span) tr.value.generic_args in
     { trait; args }
 
   and c_impl_expr_atom (span : Thir.span) (ie : Thir.impl_expr_atom) :
@@ -1132,7 +1143,7 @@ end) : EXPR = struct
           let ident =
             { goal = c_trait_ref span trait_ref; name = predicate_id }
           in
-          let item = Concrete_ident.of_def_id ~value:false item.def_id in
+          let item = Concrete_ident.of_def_id ~value:false item.value.def_id in
           let trait_ref = c_trait_ref span trait_ref in
           Projection
             { impl = { kind = item_kind; goal = trait_ref }; ident; item }
@@ -1145,7 +1156,7 @@ end) : EXPR = struct
           Parent { impl = { kind = item_kind; goal = trait_ref }; ident }
     in
     match ie with
-    | Concrete { def_id; generic_args; _ } ->
+    | Concrete { value = { def_id; generic_args; _ }; _ } ->
         let trait = Concrete_ident.of_def_id ~value:false def_id in
         let args = List.map ~f:(c_generic_value span) generic_args in
         Concrete { trait; args }
@@ -1242,8 +1253,12 @@ end) : EXPR = struct
       generic_constraint option =
     match kind with
     | Trait { is_positive = true; trait_ref } ->
-        let args = List.map ~f:(c_generic_value span) trait_ref.generic_args in
-        let trait = Concrete_ident.of_def_id ~value:false trait_ref.def_id in
+        let args =
+          List.map ~f:(c_generic_value span) trait_ref.value.generic_args
+        in
+        let trait =
+          Concrete_ident.of_def_id ~value:false trait_ref.value.def_id
+        in
         Some (GCType { goal = { trait; args }; name = id })
     | Projection { impl_expr; assoc_item; ty } ->
         let impl = c_impl_expr span impl_expr in
@@ -1770,9 +1785,10 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
              generics = c_generics generics;
              self_ty = c_ty item.span self_ty;
              of_trait =
-               ( Concrete_ident.of_def_id ~value:false of_trait.def_id,
-                 List.map ~f:(c_generic_value item.span) of_trait.generic_args
-               );
+               ( Concrete_ident.of_def_id ~value:false of_trait.value.def_id,
+                 List.map
+                   ~f:(c_generic_value item.span)
+                   of_trait.value.generic_args );
              items;
              parent_bounds =
                List.filter_map
