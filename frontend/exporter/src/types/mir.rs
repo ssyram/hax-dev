@@ -373,7 +373,7 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
     let sig = match hax_ty.kind() {
         TyKind::Arrow(sig) => sig,
         TyKind::FnDef { fn_sig, .. } => fn_sig,
-        TyKind::Closure(_, args) => &args.untupled_sig,
+        TyKind::Closure(args) => &args.untupled_sig,
         _ => supposely_unreachable_fatal!(
             s,
             "TerminatorKind_Call_expected_fn_type";
@@ -850,9 +850,9 @@ pub enum AggregateKind {
     #[custom_arm(rustc_middle::mir::AggregateKind::Closure(def_id, generics) => {
         let closure = generics.as_closure();
         let args = ClosureArgs::sfrom(s, *def_id, closure);
-        AggregateKind::Closure(def_id.sinto(s), args)
+        AggregateKind::Closure(args)
     })]
-    Closure(DefId, ClosureArgs),
+    Closure(ClosureArgs),
     #[custom_arm(FROM_TYPE::Coroutine(def_id, generics) => TO_TYPE::Coroutine(translate_item_ref(s, *def_id, generics)),)]
     Coroutine(ItemRef),
     #[custom_arm(FROM_TYPE::CoroutineClosure(def_id, generics) => TO_TYPE::CoroutineClosure(translate_item_ref(s, *def_id, generics)),)]

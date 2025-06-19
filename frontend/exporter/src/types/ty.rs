@@ -893,13 +893,10 @@ pub enum TyKind {
     #[custom_arm(
         ty::TyKind::Closure (def_id, generics) => {
             let closure = generics.as_closure();
-            TyKind::Closure(
-                def_id.sinto(s),
-                ClosureArgs::sfrom(s, *def_id, closure),
-            )
+            TyKind::Closure(ClosureArgs::sfrom(s, *def_id, closure))
         },
     )]
-    Closure(DefId, ClosureArgs),
+    Closure(ClosureArgs),
 
     #[custom_arm(FROM_TYPE::Adt(adt_def, generics) => TO_TYPE::Adt(translate_item_ref(s, adt_def.did(), generics)),)]
     Adt(ItemRef),
@@ -1352,11 +1349,10 @@ pub enum AliasRelationDirection {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, JsonSchema)]
 #[derive_group(Serializers)]
 pub struct ClosureArgs {
+    pub item: ItemRef,
     /// The base kind of this closure. The kinds are ordered by inclusion: any `Fn` works as an
     /// `FnMut`, and any `FnMut` works as an `FnOnce`.
     pub kind: ClosureKind,
-    /// Reference to the item which contains the closure.
-    pub parent: ItemRef,
     /// The proper `fn(A, B, C) -> D` signature of the closure.
     pub untupled_sig: PolyFnSig,
     /// The signature of the closure as one input and one output, where the input arguments are
@@ -1379,13 +1375,15 @@ impl ClosureArgs {
     {
         let tcx = s.base().tcx;
         let sig = from.sig();
+        let item = {
+            // The closure has no generics of its own: it inherits its parent generics and could
+            // have late-bound args but these are part of the signature.
+            let parent_args = tcx.mk_args(from.parent_args());
+            translate_item_ref(s, def_id, parent_args)
+        };
         ClosureArgs {
+            item,
             kind: from.kind().sinto(s),
-            parent: {
-                let parent_id = tcx.generics_of(def_id).parent.unwrap();
-                let parent_args = tcx.mk_args(from.parent_args());
-                translate_item_ref(s, parent_id, parent_args)
-            },
             tupled_sig: sig.sinto(s),
             untupled_sig: tcx
                 .signature_unclosure(sig, rustc_hir::Safety::Safe)

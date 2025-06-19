@@ -1019,7 +1019,7 @@ end) : EXPR = struct
         TFloat
           (match k with F16 -> F16 | F32 -> F32 | F64 -> F64 | F128 -> F128)
     | Arrow signature
-    | Closure (_, { untupled_sig = signature; _ })
+    | Closure { untupled_sig = signature; _ }
     | FnDef { fn_sig = signature; _ } ->
         let ({ inputs; output; _ } : Thir.ty_fn_sig) = signature.value in
         let inputs =
