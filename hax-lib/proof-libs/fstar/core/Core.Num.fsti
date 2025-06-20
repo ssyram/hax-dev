@@ -12,6 +12,7 @@ let impl_u64__MIN: u64 = mk_u64 (minint u64_inttype)
 let impl_u128__MAX: u128 = mk_u128 (maxint u128_inttype)
 let impl_u128__MIN: u128 = mk_u128 (minint u128_inttype)
 let impl_usize__MAX: usize = mk_usize (maxint usize_inttype)
+
 let impl_usize__MIN: usize = mk_usize (minint usize_inttype)
 let impl_i8__MAX: i8 = mk_i8 (maxint i8_inttype)
 let impl_i8__MIN: i8 = mk_i8 (minint i8_inttype)
@@ -114,10 +115,11 @@ let impl_i128__overflowing_mul: i128 -> i128 -> i128 * bool = mul_overflow
 val impl_u16__to_be_bytes: u16 -> t_Array u8 (sz 2)
 val impl_u16__from_be_bytes: t_Array u8 (sz 2) -> u16
 
-
-
+let impl_i8__abs (a:i8{minint i8_inttype < v a}) : i8 = abs_int a
+let impl_i16__abs (a:i16{minint i16_inttype < v a}) : i16 = abs_int a
 let impl_i32__abs (a:i32{minint i32_inttype < v a}) : i32 = abs_int a
-
+let impl_i64__abs (a:i64{minint i64_inttype < v a}) : i64 = abs_int a
+let impl_i128__abs (a:i128{minint i128_inttype < v a}) : i128 = abs_int a
 
 
 let impl_i16__wrapping_mul: i16 -> i16 -> i16 = mul_mod
