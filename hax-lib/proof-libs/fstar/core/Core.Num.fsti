@@ -50,6 +50,18 @@ let impl_i32__wrapping_add: i32 -> i32 -> i32 = add_mod
 let impl_i64__wrapping_add: i64 -> i64 -> i64 = add_mod
 let impl_i128__wrapping_add: i128 -> i128 -> i128 = add_mod
 
+let impl_u8__saturating_add: u8 -> u8 -> u8 = add_sat
+let impl_u16__saturating_add: u16 -> u16 ->  u16 = add_sat
+let impl_u32__saturating_add: u32 -> u32 -> u32 = add_sat
+let impl_u64__saturating_add: u64 -> u64 -> u64 = add_sat
+let impl_u128__saturating_add: u128 -> u128 -> u128 = add_sat
+let impl_i8__saturating_add: i8 -> i8 -> i8 = add_sat
+let impl_i16__saturating_add: i16 -> i16 ->  i16 = add_sat
+let impl_i32__saturating_add: i32 -> i32 -> i32 = add_sat
+let impl_i64__saturating_add: i64 -> i64 -> i64 = add_sat
+let impl_i128__saturating_add: i128 -> i128 -> i128 = add_sat
+
+
 let impl_u8__wrapping_sub: u8 -> u8 -> u8 = sub_mod
 let impl_u16__wrapping_sub: u16 -> u16 ->  u16 = sub_mod
 let impl_u32__wrapping_sub: u32 -> u32 -> u32 = sub_mod
@@ -60,6 +72,18 @@ let impl_i16__wrapping_sub: i16 -> i16 ->  i16 = sub_mod
 let impl_i32__wrapping_sub: i32 -> i32 -> i32 = sub_mod
 let impl_i64__wrapping_sub: i64 -> i64 -> i64 = sub_mod
 let impl_i128__wrapping_sub: i128 -> i128 -> i128 = sub_mod
+
+
+let impl_u8__saturating_sub: u8 -> u8 -> u8 = sub_sat
+let impl_u16__saturating_sub: u16 -> u16 ->  u16 = sub_sat
+let impl_u32__saturating_sub: u32 -> u32 -> u32 = sub_sat
+let impl_u64__saturating_sub: u64 -> u64 -> u64 = sub_sat
+let impl_u128__saturating_sub: u128 -> u128 -> u128 = sub_sat
+let impl_i8__saturating_sub: i8 -> i8 -> i8 = sub_sat
+let impl_i16__saturating_sub: i16 -> i16 ->  i16 = sub_sat
+let impl_i32__saturating_sub: i32 -> i32 -> i32 = sub_sat
+let impl_i64__saturating_sub: i64 -> i64 -> i64 = sub_sat
+let impl_i128__saturating_sub: i128 -> i128 -> i128 = sub_sat
 
 let impl_u8__rem_euclid (x: u8) (y: u8 {v y <> 0}): u8 = x %! y
 let impl_u16__rem_euclid (x: u16) (y: u16 {v y <> 0}): u16 = x %! y
