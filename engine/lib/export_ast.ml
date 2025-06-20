@@ -20,7 +20,7 @@ module SpecialNames = struct
                   match data with
                   | Types.CrateRoot { name } ->
                       Types.CrateRoot { name = f name }
-                  | Types.TypeNs (Some s) -> Types.TypeNs (Some (f s))
+                  | Types.TypeNs s -> Types.TypeNs (f s)
                   | Types.ValueNs s -> Types.ValueNs (f s)
                   | Types.MacroNs s -> Types.MacroNs (f s)
                   | Types.LifetimeNs s -> Types.LifetimeNs (f s)
