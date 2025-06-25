@@ -29,6 +29,13 @@ fn main() {
         panic!()
     };
 
+    // Special hook to use the engine for generating `names/generated.rs`.
+    if let Ok(path) = std::env::var("HAX_RUST_ENGINE_GENERATE_NAMES") {
+        let file = hax_rust_engine::names::codegen::export_def_ids_to_mod(items);
+        std::fs::write(path, file).expect("Unable to write file");
+        return;
+    }
+
     let krate = krate_name(&items);
 
     // For now, the main function always calls the Lean backend
