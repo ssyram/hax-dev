@@ -8,7 +8,8 @@ use crate::symbol::Symbol;
 use hax_rust_engine_macros::*;
 use std::fmt;
 
-mod global_id {
+/// The global identifiers of hax.
+pub mod global_id {
     use hax_frontend_exporter::{DefKind, DisambiguatedDefPathItem};
     use hax_rust_engine_macros::*;
 
@@ -123,8 +124,22 @@ mod global_id {
             }
         }
     }
-}
 
+    impl PartialEq<DefId> for GlobalId {
+        fn eq(&self, other: &DefId) -> bool {
+            if let Self::Concrete(concrete) = self {
+                &concrete.def_id.def_id == other
+            } else {
+                false
+            }
+        }
+    }
+    impl PartialEq<GlobalId> for DefId {
+        fn eq(&self, other: &GlobalId) -> bool {
+            other == self
+        }
+    }
+}
 /// Local identifier
 #[derive_group_for_ast]
 pub struct LocalId(pub Symbol);
