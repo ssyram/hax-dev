@@ -35,7 +35,7 @@ impl From<hax_frontend_exporter::Span> for Span {
         Self {
             data: vec![span],
             id: fresh_id(),
-            owner_hint: None, // TODO: Have something there when we implement the importer
+            owner_hint: None, // TODO: this will be defined properly while addressing issue #1524
         }
     }
 }

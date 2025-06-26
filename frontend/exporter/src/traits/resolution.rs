@@ -20,7 +20,7 @@ pub enum PathChunk<'tcx> {
     AssocItem {
         item: AssocItem,
         /// The arguments provided to the item (for GATs).
-        generic_args: &'tcx [GenericArg<'tcx>],
+        generic_args: GenericArgsRef<'tcx>,
         /// The impl exprs that must be satisfied to apply the given arguments to the item. E.g.
         /// `T: Clone` in the following example:
         /// ```ignore
@@ -332,6 +332,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
             return Ok(());
         };
         let (trait_ref, item_args) = alias_ty.trait_ref_and_own_args(tcx);
+        let item_args = tcx.mk_args(item_args);
         let trait_ref = ty.rebind(trait_ref).upcast(tcx);
 
         // The predicate we're looking for is is `<T as Trait>::Type: OtherTrait`. We look up `T as
