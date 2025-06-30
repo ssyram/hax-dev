@@ -51,17 +51,20 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                 // };
                 docs![
                     allocator,
-                    "def",
-                    allocator.softline(),
+                    "def ",
+                    name,
                     docs![
                         allocator,
-                        name,
                         allocator.line(),
                         allocator.intersperse(params, allocator.line())
                     ]
                     .align()
                     .group()
-                    .flat_alt(allocator.intersperse(params, " ")),
+                    .flat_alt(docs![
+                        allocator,
+                        " ",
+                        allocator.intersperse(params, " "),
+                    ]),
                     docs![allocator, allocator.line(), ": ", &body.ty].group(),
                     " :=",
                     allocator.line(),
@@ -276,7 +279,25 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 is_struct,
                 fields,
                 base,
-            } => constructor.pretty(allocator), // Over-simplification
+            } => {
+                let record_args = if fields.len() > 0 {
+                    Some(
+                        allocator
+                            .intersperse(
+                                fields.iter().map(|field: &(GlobalId, Expr)| {
+                                    docs![allocator, &field.0, " := ", &field.1].group()
+                                }),
+                                allocator.text(", "),
+                            )
+                            .braces(),
+                    )
+                } else {
+                    None
+                };
+                docs![allocator, ".constr_", constructor, record_args]
+                    .group()
+                    .nest(INDENT)
+            }
             ExprKind::Match { scrutinee, arms } => print_todo!(allocator),
             ExprKind::Tuple(exprs) => print_todo!(allocator),
             ExprKind::Borrow { mutable, inner } => print_todo!(allocator),
@@ -289,7 +310,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                     lhs,
                     " :=",
                     allocator.softline(),
-                    docs![allocator, rhs].nest(INDENT).group(),
+                    docs![allocator, rhs].group(),
                     ";",
                     allocator.line(),
                     body,
@@ -320,9 +341,19 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 allocator,
                 allocator.reflow("fun "),
                 allocator.intersperse(params, allocator.softline()),
-                allocator.reflow(" => "),
+                allocator.reflow(" =>"),
+                allocator.line(),
                 body
             ]
+            .nest(INDENT)
+            .flat_alt(docs![
+                allocator,
+                "fun ",
+                allocator.intersperse(params, allocator.text(" ")),
+                " => ",
+                body
+            ])
+            .group()
             .parens(),
             ExprKind::Block { body, safety_mode } => print_todo!(allocator),
             ExprKind::Quote { contents } => print_todo!(allocator),
