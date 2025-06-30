@@ -34,10 +34,22 @@ fn main() {
     // For now, the main function always calls the Lean backend
     let allocator = Allocator::new(Lean);
 
-    let item_docs: DocBuilder<_, Span> = allocator.intersperse(
-        items.iter(),
-        allocator.hardline().append(allocator.hardline()),
+    let header = allocator.intersperse(
+        vec![
+            "-- Experimental lean backend for Hax",
+            "-- Uncomment the following line to use the prelude (requires the Lib.lean file) : ",
+            "-- import Lib",
+        ],
+        allocator.hardline(),
     );
+
+    let item_docs: DocBuilder<_, Span> = header
+        .append(allocator.hardline())
+        .append(allocator.hardline())
+        .append(allocator.intersperse(
+            items.iter(),
+            allocator.hardline().append(allocator.hardline()),
+        ));
 
     hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(File {
         path: krate + ".lean",
