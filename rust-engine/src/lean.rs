@@ -193,10 +193,10 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b PatKind {
                     .nest(INDENT)
                     .group()
             }
-            PatKind::Or { sub_pats } => todo!(),
-            PatKind::Array { args } => todo!(),
-            PatKind::Deref { sub_pat } => todo!(),
-            PatKind::Constant { lit } => todo!(),
+            PatKind::Or { sub_pats } => print_todo!(allocator),
+            PatKind::Array { args } => print_todo!(allocator),
+            PatKind::Deref { sub_pat } => print_todo!(allocator),
+            PatKind::Constant { lit } => print_todo!(allocator),
             PatKind::Binding {
                 mutable,
                 var,
@@ -211,9 +211,9 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b PatKind {
                 is_record,
                 is_struct,
                 fields,
-            } => todo!(),
-            PatKind::Resugared(resugared_pat_kind) => todo!(),
-            PatKind::Error(diagnostic) => todo!(),
+            } => print_todo!(allocator),
+            PatKind::Resugared(resugared_pat_kind) => print_todo!(allocator),
+            PatKind::Error(diagnostic) => print_todo!(allocator),
         }
     }
 }

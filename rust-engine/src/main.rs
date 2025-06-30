@@ -41,7 +41,7 @@ fn main() {
 
     hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(File {
         path: krate + ".lean",
-        contents: item_docs.pretty(80),
+        contents: item_docs.pretty(80).to_string(),
         sourcemap: None,
     }));
 }
