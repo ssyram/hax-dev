@@ -809,27 +809,13 @@ pub fn pv_handwritten(_attr: pm::TokenStream, item: pm::TokenStream) -> pm::Toke
 #[proc_macro_error]
 #[proc_macro]
 pub fn int(payload: pm::TokenStream) -> pm::TokenStream {
-    let mut tokens = payload.into_iter().peekable();
-    let negative = matches!(tokens.peek(), Some(pm::TokenTree::Punct(p)) if p.as_char() == '-');
-    if negative {
-        tokens.next();
+    let n: LitInt = parse_macro_input!(payload);
+    let suffix = n.suffix();
+    if !suffix.is_empty() {
+        abort_call_site!("The literal suffix `{suffix}` was unexpected.")
     }
-    let [pm::TokenTree::Literal(lit)] = &tokens.collect::<Vec<_>>()[..] else {
-        abort_call_site!("Expected exactly one numeric literal");
-    };
-    let lit = format!("{lit}");
-    // Allow negative numbers
-    let mut lit = lit.strip_prefix("-").unwrap_or(lit.as_str()).to_string();
-    if let Some(faulty) = lit.chars().find(|ch| !ch.is_ascii_digit()) {
-        abort_call_site!(format!("Expected a digit, found {faulty}"));
-    }
-    if negative {
-        lit = format!("-{lit}");
-    }
-    quote! {
-        ::hax_lib::int::Int::_unsafe_from_str(#lit)
-    }
-    .into()
+    let digits = n.base10_digits();
+    quote! {::hax_lib::int::Int::_unsafe_from_str(#digits)}.into()
 }
 
 macro_rules! make_quoting_item_proc_macro {
