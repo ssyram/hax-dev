@@ -142,7 +142,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b TyKind {
                 mutable,
                 region,
             } => print_todo!(allocator),
-            TyKind::Param(local_id) => print_todo!(allocator),
+            TyKind::Param(local_id) => local_id.pretty(allocator),
             TyKind::Slice(ty) => docs![allocator, "Array ", ty].parens(),
             TyKind::Array { ty, length } => {
                 docs![allocator, "Vector ", ty, allocator.softline(), &(**length),]
@@ -282,14 +282,24 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
             } => {
                 let record_args = if fields.len() > 0 {
                     Some(
-                        allocator
-                            .intersperse(
-                                fields.iter().map(|field: &(GlobalId, Expr)| {
-                                    docs![allocator, &field.0, " := ", &field.1].group()
-                                }),
-                                allocator.text(", "),
-                            )
-                            .braces(),
+                        allocator.softline().append(
+                            allocator
+                                .intersperse(
+                                    fields.iter().map(|field: &(GlobalId, Expr)| {
+                                        docs![
+                                            allocator,
+                                            &field.0,
+                                            " ",
+                                            allocator.reflow(":= "),
+                                            &field.1
+                                        ]
+                                        .group()
+                                    }),
+                                    allocator.reflow(", "),
+                                )
+                                .group()
+                                .braces(),
+                        ),
                     )
                 } else {
                     None
