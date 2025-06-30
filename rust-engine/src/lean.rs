@@ -48,22 +48,15 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                     allocator,
                     "def ",
                     name,
-                    docs![
-                        allocator,
-                        allocator.line(),
-                        allocator.intersperse(params, allocator.line())
-                    ]
-                    .align()
-                    .group()
-                    .flat_alt(docs![
-                        allocator,
-                        " ",
-                        allocator.intersperse(params, " "),
-                    ]),
+                    allocator.softline(),
+                    allocator
+                        .intersperse(params, allocator.line())
+                        .align()
+                        .group(),
                     docs![allocator, allocator.line(), ": ", &body.ty].group(),
                     " :=",
                     allocator.line(),
-                    &*body.kind,
+                    docs![allocator, &*body.kind].group()
                 ]
                 .nest(INDENT)
                 .group()
@@ -345,19 +338,12 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
             } => docs![
                 allocator,
                 allocator.reflow("fun "),
-                allocator.intersperse(params, allocator.softline()),
+                allocator.intersperse(params, allocator.line()),
                 allocator.reflow(" =>"),
                 allocator.line(),
                 body
             ]
             .nest(INDENT)
-            .flat_alt(docs![
-                allocator,
-                "fun ",
-                allocator.intersperse(params, allocator.text(" ")),
-                " => ",
-                body
-            ])
             .group()
             .parens(),
             ExprKind::Block { body, safety_mode } => print_todo!(allocator),
