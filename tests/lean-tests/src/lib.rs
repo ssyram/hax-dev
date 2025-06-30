@@ -22,3 +22,5 @@ fn closure() -> i32 {
     let f = |y| y + x;
     f(1)
 }
+
+type usizeAlias = usize;

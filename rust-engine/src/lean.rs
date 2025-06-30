@@ -74,7 +74,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                 .group()
             }
             ItemKind::TyAlias { name, generics, ty } => {
-                docs![allocator, "def ", name, allocator.reflow(" : Type := "), ty].group()
+                docs![allocator, "abbrev ", name, allocator.reflow(" := "), ty].group()
             }
             ItemKind::Type {
                 name,
