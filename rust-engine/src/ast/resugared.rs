@@ -1,10 +1,15 @@
-//! This module contains resugared fragments of the AST of hax.
+//! This module defines *resugared fragments* for the Hax Rust engine's AST.
 //!
-//! In hax, a resugared fragment of AST is an extra node that is relevant only for printers.
+//! A resugared fragment is an additional AST node used solely for pretty-printing purposes.
+//! These nodes carry no semantic meaning in hax core logic but enable more accurate
+//! or backend-specific surface syntax reconstruction.
 //!
-//! As an example, we represent (just as Rust does) the type `unit` as a tuple of size zero.
-//! This may be unsuited for some backend: in F* for instance, `unit` is not denoted `()` but `unit.`
-//! Thus, we add a resugared fragment for the type unit.
+//! For example, the engine represents the `unit` type as a zero-sized tuple `()`,
+//! mirroring Rust's internal representation. However, this may not suit all backends:
+//! in F*, `unit` is explicitly written as `unit`, not `()`.
+//!
+//! To accommodate such differences, we introduce resugared fragments (e.g. `UnitType`) that
+//! allow the printer to emit the expected syntax while maintaining the same internal semantics.
 
 use hax_rust_engine_macros::*;
 
