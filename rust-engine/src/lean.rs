@@ -43,12 +43,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                 params,
                 safety,
             } => {
-                // if !(generics.params.is_empty()
-                //     && generics.constraints.is_empty()
-                //     && safety == &SafetyKind::Safe)
-                // {
-                //     panic!()
-                // };
+                // Generics are ignored for now
                 docs![
                     allocator,
                     "def ",

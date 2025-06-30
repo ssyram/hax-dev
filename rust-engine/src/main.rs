@@ -31,20 +31,17 @@ fn main() {
 
     let krate = get_crate_name(&items);
 
+    // For now, the main function always calls the Lean backend
     let allocator = Allocator::new(Lean);
-    // TOOD: print items
+
     let item_docs: DocBuilder<_, Span> = allocator.intersperse(
         items.iter(),
         allocator.hardline().append(allocator.hardline()),
     );
 
-    let mut w = Vec::new();
-    let _ = item_docs.render(80, &mut w);
-    let content = String::from_utf8(w).unwrap();
-
     hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(File {
         path: krate + ".lean",
-        contents: content,
+        contents: item_docs.pretty(80),
         sourcemap: None,
     }));
 }
