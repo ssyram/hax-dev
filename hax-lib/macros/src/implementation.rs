@@ -803,9 +803,14 @@ pub fn pv_handwritten(_attr: pm::TokenStream, item: pm::TokenStream) -> pm::Toke
     quote! {#attr #item}.into()
 }
 
-/// Create a mathematical integer. This macro expects a integer
-/// literal that consists in an optional minus sign followed by one or
-/// more digits.
+/// Create a mathematical integer. This macro expects a Rust integer
+/// literal without suffix.
+///
+/// ## Examples:
+/// - `int!(0x101010)`
+/// - `int!(42)`
+/// - `int!(0o52)`
+/// - `int!(0h2A)`
 #[proc_macro_error]
 #[proc_macro]
 pub fn int(payload: pm::TokenStream) -> pm::TokenStream {
