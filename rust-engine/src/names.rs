@@ -97,8 +97,7 @@ pub mod root {
                 use crate::ast::identifiers::global_id::DefId;
                 use std::sync::LazyLock;
                 static DEF_ID: LazyLock<DefId> = LazyLock::new(|| {
-                    let data = $data;
-                    root::serialization_helpers::deserialize(data, $parent)
+                    root::serialization_helpers::deserialize($data, $parent)
                 });
                 (&*DEF_ID).clone()
             }
