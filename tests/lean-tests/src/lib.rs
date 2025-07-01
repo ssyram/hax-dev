@@ -23,4 +23,4 @@ fn closure() -> i32 {
     f(1)
 }
 
-type usizeAlias = usize;
+type UsizeAlias = usize;
