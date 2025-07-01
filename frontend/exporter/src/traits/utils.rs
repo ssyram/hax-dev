@@ -167,8 +167,10 @@ pub fn implied_predicates<'tcx>(
     }
 }
 
-/// Erase all regions. Largely copied from `tcx.erase_regions`, but erases more regions.
-fn erase_all_regions<'tcx, T>(tcx: TyCtxt<'tcx>, value: T) -> T
+/// Erase free regions from the given value. Largely copied from `tcx.erase_regions`, but also
+/// erases bound regions that are bound outside `value`, so we can call this function inside a
+/// `Binder`.
+fn erase_free_regions<'tcx, T>(tcx: TyCtxt<'tcx>, value: T) -> T
 where
     T: TypeFoldable<TyCtxt<'tcx>>,
 {
@@ -216,7 +218,7 @@ pub fn erase_and_norm<'tcx, T>(tcx: TyCtxt<'tcx>, typing_env: TypingEnv<'tcx>, x
 where
     T: TypeFoldable<TyCtxt<'tcx>> + Copy,
 {
-    erase_all_regions(
+    erase_free_regions(
         tcx,
         tcx.try_normalize_erasing_regions(typing_env, x)
             .unwrap_or(x),
