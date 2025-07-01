@@ -13,13 +13,13 @@ pub mod alloc {
         );
         mk!(
             Impl__1,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"alloc"},0],["Impl",1]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::alloc::alloc())
         );
         mk!(
             Impl__3,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"alloc"},0],["Impl",3]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::alloc::alloc())
         );
@@ -48,7 +48,7 @@ pub mod alloc {
             );
         }
         pub mod Impl {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 concat,
@@ -77,13 +77,13 @@ pub mod alloc {
         );
         mk!(
             Impl,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"slice"},0],["Impl",0]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::alloc::slice())
         );
         mk!(
             Impl__2,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"slice"},0],["Impl",2]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::alloc::slice())
         );
@@ -102,7 +102,7 @@ pub mod alloc {
         #![doc = r##"This is the module [`::alloc::vec`]."##]
         pub use super::root;
         pub mod Impl__1 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 truncate,
@@ -112,7 +112,7 @@ pub mod alloc {
             );
         }
         pub mod Impl__2 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 extend_from_slice,
@@ -123,31 +123,31 @@ pub mod alloc {
         }
         mk!(
             Impl__1,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"vec"},0],["Impl",1]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::alloc::vec())
         );
         mk!(
             Impl__11,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"vec"},0],["Impl",11]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::alloc::vec())
         );
         mk!(
             Impl__13,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"vec"},0],["Impl",13]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::alloc::vec())
         );
         mk!(
             Impl__2,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"vec"},0],["Impl",2]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::alloc::vec())
         );
         mk!(
             Impl__8,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["alloc",[[{"TypeNs":"vec"},0],["Impl",8]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::alloc::vec())
         );
@@ -216,7 +216,7 @@ pub mod core {
             pub use super::root;
             mk!(
                 Impl__1,
-                r##"This is a impl block."##,
+                r##"This is an impl block."##,
                 r##"["core",[[{"TypeNs":"array"},0],[{"TypeNs":"iter"},0],["Impl",1]],{"Impl":{"of_trait":true}}]"##,
                 ::core::option::Option::Some(root::core::array::iter())
             );
@@ -245,7 +245,7 @@ pub mod core {
         );
         mk!(
             Impl__2,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["core",[[{"TypeNs":"borrow"},0],["Impl",2]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::core::borrow())
         );
@@ -268,7 +268,7 @@ pub mod core {
             pub use super::root;
             mk!(
                 Impl__6,
-                r##"This is a impl block."##,
+                r##"This is an impl block."##,
                 r##"["core",[[{"TypeNs":"clone"},0],[{"TypeNs":"impls"},0],["Impl",6]],{"Impl":{"of_trait":true}}]"##,
                 ::core::option::Option::Some(root::core::clone::impls())
             );
@@ -374,13 +374,13 @@ pub mod core {
             pub use super::root;
             mk!(
                 Impl__64,
-                r##"This is a impl block."##,
+                r##"This is an impl block."##,
                 r##"["core",[[{"TypeNs":"convert"},0],[{"TypeNs":"num"},0],["Impl",64]],{"Impl":{"of_trait":true}}]"##,
                 ::core::option::Option::Some(root::core::convert::num())
             );
             mk!(
                 Impl__88,
-                r##"This is a impl block."##,
+                r##"This is an impl block."##,
                 r##"["core",[[{"TypeNs":"convert"},0],[{"TypeNs":"num"},0],["Impl",88]],{"Impl":{"of_trait":true}}]"##,
                 ::core::option::Option::Some(root::core::convert::num())
             );
@@ -393,7 +393,7 @@ pub mod core {
         );
         mk!(
             Impl__3,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["core",[[{"TypeNs":"convert"},0],["Impl",3]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::core::convert())
         );
@@ -578,7 +578,7 @@ pub mod core {
         #![doc = r##"This is the module [`::core::num`]."##]
         pub use super::root;
         pub mod Impl__9 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 to_le_bytes,
@@ -589,7 +589,7 @@ pub mod core {
         }
         mk!(
             Impl__9,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["core",[[{"TypeNs":"num"},0],["Impl",9]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::core::num())
         );
@@ -1170,7 +1170,7 @@ pub mod core {
         #![doc = r##"This is the module [`::core::option`]."##]
         pub use super::root;
         pub mod Impl {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 is_some,
@@ -1207,7 +1207,7 @@ pub mod core {
         }
         mk!(
             Impl,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["core",[[{"TypeNs":"option"},0],["Impl",0]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::core::option())
         );
@@ -1222,7 +1222,7 @@ pub mod core {
         #![doc = r##"This is the module [`::core::result`]."##]
         pub use super::root;
         pub mod Impl {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 map_err,
@@ -1269,13 +1269,13 @@ pub mod core {
         }
         mk!(
             Impl,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["core",[[{"TypeNs":"result"},0],["Impl",0]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::core::result())
         );
         mk!(
             Impl__28,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["core",[[{"TypeNs":"result"},0],["Impl",28]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::core::result())
         );
@@ -1290,7 +1290,7 @@ pub mod core {
         #![doc = r##"This is the module [`::core::slice`]."##]
         pub use super::root;
         pub mod Impl {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 chunks_exact,
@@ -1316,13 +1316,13 @@ pub mod core {
             pub use super::root;
             mk!(
                 Impl__2,
-                r##"This is a impl block."##,
+                r##"This is an impl block."##,
                 r##"["core",[[{"TypeNs":"slice"},0],[{"TypeNs":"index"},0],["Impl",2]],{"Impl":{"of_trait":true}}]"##,
                 ::core::option::Option::Some(root::core::slice::index())
             );
             mk!(
                 Impl__4,
-                r##"This is a impl block."##,
+                r##"This is an impl block."##,
                 r##"["core",[[{"TypeNs":"slice"},0],[{"TypeNs":"index"},0],["Impl",4]],{"Impl":{"of_trait":true}}]"##,
                 ::core::option::Option::Some(root::core::slice::index())
             );
@@ -1351,7 +1351,7 @@ pub mod core {
         }
         mk!(
             Impl,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["core",[[{"TypeNs":"slice"},0],["Impl",0]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::core::slice())
         );
@@ -3578,7 +3578,7 @@ pub mod hax_lib {
         #![doc = r##"This is the module [`::hax_lib::int`]."##]
         pub use super::root;
         pub mod Impl__7 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 _unsafe_from_str,
@@ -3595,13 +3595,13 @@ pub mod hax_lib {
         }
         mk!(
             Impl__7,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib",[[{"TypeNs":"int"},0],["Impl",7]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::hax_lib::int())
         );
         mk!(
             Impl__9,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib",[[{"TypeNs":"int"},0],["Impl",9]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::hax_lib::int())
         );
@@ -3616,7 +3616,7 @@ pub mod hax_lib {
         #![doc = r##"This is the module [`::hax_lib::prop`]."##]
         pub use super::root;
         pub mod Impl {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 from_bool,
@@ -3685,13 +3685,13 @@ pub mod hax_lib {
         }
         mk!(
             Impl,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib",[[{"TypeNs":"prop"},0],["Impl",0]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::hax_lib::prop())
         );
         mk!(
             Impl__3,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib",[[{"TypeNs":"prop"},0],["Impl",3]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::hax_lib::prop())
         );
@@ -3810,7 +3810,7 @@ pub mod hax_lib_protocol {
             );
         }
         pub mod Impl {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 from_bytes,
@@ -3820,7 +3820,7 @@ pub mod hax_lib_protocol {
             );
         }
         pub mod Impl__1 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 from_bytes,
@@ -3830,7 +3830,7 @@ pub mod hax_lib_protocol {
             );
         }
         pub mod Impl__4 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 from_bytes,
@@ -3840,7 +3840,7 @@ pub mod hax_lib_protocol {
             );
         }
         pub mod Impl__5 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 from_bytes,
@@ -3850,7 +3850,7 @@ pub mod hax_lib_protocol {
             );
         }
         pub mod Impl__6 {
-            #![doc = r##"This is a impl block."##]
+            #![doc = r##"This is an impl block."##]
             pub use super::root;
             mk!(
                 from_bytes,
@@ -3915,37 +3915,37 @@ pub mod hax_lib_protocol {
         );
         mk!(
             Impl,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib_protocol",[[{"TypeNs":"crypto"},0],["Impl",0]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::hax_lib_protocol::crypto())
         );
         mk!(
             Impl__1,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib_protocol",[[{"TypeNs":"crypto"},0],["Impl",1]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::hax_lib_protocol::crypto())
         );
         mk!(
             Impl__4,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib_protocol",[[{"TypeNs":"crypto"},0],["Impl",4]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::hax_lib_protocol::crypto())
         );
         mk!(
             Impl__5,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib_protocol",[[{"TypeNs":"crypto"},0],["Impl",5]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::hax_lib_protocol::crypto())
         );
         mk!(
             Impl__6,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib_protocol",[[{"TypeNs":"crypto"},0],["Impl",6]],{"Impl":{"of_trait":false}}]"##,
             ::core::option::Option::Some(root::hax_lib_protocol::crypto())
         );
         mk!(
             Impl__9,
-            r##"This is a impl block."##,
+            r##"This is an impl block."##,
             r##"["hax_lib_protocol",[[{"TypeNs":"crypto"},0],["Impl",9]],{"Impl":{"of_trait":true}}]"##,
             ::core::option::Option::Some(root::hax_lib_protocol::crypto())
         );
