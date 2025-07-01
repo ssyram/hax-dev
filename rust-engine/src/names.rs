@@ -8,7 +8,7 @@
 //!  2. check that global identifier `id: GlobalId` `std::ops::Add::add` is
 //!     indeed `std::ops::Add::add`.
 //!
-//! Point (2.) seems a bit totological, but we need to write a comparison like
+//! Point (2.) seems a bit tautological, but we need to write a comparison like
 //! `x == the_function_add`. This module basically provides such
 //! `the_function_add` symbols.
 //!
@@ -189,7 +189,7 @@ pub mod codegen {
             DefKind::Field => format!("field [`{}`] from {}", def, parent_path_str),
             DefKind::LifetimeParam => return format!("This is a lifetime parameter."),
             DefKind::GlobalAsm => return format!("This is a global ASM block."),
-            DefKind::Impl { .. } => return format!("This is a impl block."),
+            DefKind::Impl { .. } => return format!("This is an impl block."),
             DefKind::Closure => return format!("This is a closure."),
             DefKind::SyntheticCoroutineBody => return format!("This is a coroutine body."),
         };
