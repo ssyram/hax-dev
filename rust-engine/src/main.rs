@@ -4,7 +4,7 @@ use hax_rust_engine::{
     ocaml_engine::{ExtendedToEngine, Response},
     printer::Allocator,
 };
-use hax_types::engine_api::File;
+use hax_types::{cli_options::Backend, engine_api::File};
 
 use pretty::{DocAllocator, DocBuilder};
 
@@ -13,29 +13,7 @@ fn krate_name(items: &Vec<Item>) -> String {
     head_item.ident.krate()
 }
 
-fn main() {
-    let ExtendedToEngine::Query(input) = hax_rust_engine::hax_io::read() else {
-        panic!()
-    };
-    let (value, _map) = input.destruct();
-
-    let query = hax_rust_engine::ocaml_engine::Query {
-        hax_version: value.hax_version,
-        impl_infos: value.impl_infos,
-        kind: hax_rust_engine::ocaml_engine::QueryKind::ImportThir { input: value.input },
-    };
-
-    let Some(Response::ImportThir { output: items }) = query.execute() else {
-        panic!()
-    };
-
-    // Special hook to use the engine for generating `names/generated.rs`.
-    if let Ok(path) = std::env::var("HAX_RUST_ENGINE_GENERATE_NAMES") {
-        let file = hax_rust_engine::names::codegen::export_def_ids_to_mod(items);
-        std::fs::write(path, file).expect("Unable to write file");
-        return;
-    }
-
+fn lean_backend(items: Vec<Item>) {
     let krate = krate_name(&items);
 
     // For now, the main function always calls the Lean backend
@@ -63,4 +41,40 @@ fn main() {
         contents: item_docs.pretty(80).to_string(),
         sourcemap: None,
     }));
+}
+
+fn main() {
+    let ExtendedToEngine::Query(input) = hax_rust_engine::hax_io::read() else {
+        panic!()
+    };
+    let (value, _map) = input.destruct();
+
+    let query = hax_rust_engine::ocaml_engine::Query {
+        hax_version: value.hax_version,
+        impl_infos: value.impl_infos,
+        kind: hax_rust_engine::ocaml_engine::QueryKind::ImportThir { input: value.input },
+    };
+
+    let Some(Response::ImportThir { output: items }) = query.execute() else {
+        panic!()
+    };
+
+    match &value.backend.backend {
+        Backend::Fstar { .. }
+        | Backend::Coq { .. }
+        | Backend::Ssprove { .. }
+        | Backend::Easycrypt { .. }
+        | Backend::ProVerif { .. } => panic!(
+            "The Rust engine cannot be called with backend {}.",
+            value.backend.backend
+        ),
+        Backend::Lean => lean_backend(items),
+        Backend::GenerateRustEngineNames => hax_rust_engine::hax_io::write(
+            &hax_types::engine_api::protocol::FromEngine::File(File {
+                path: "generated.rs".into(),
+                contents: hax_rust_engine::names::codegen::export_def_ids_to_mod(items),
+                sourcemap: None,
+            }),
+        ),
+    }
 }

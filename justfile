@@ -48,9 +48,9 @@ expand *FLAGS:
 # Regenerate names in the Rust engine. Writes to `rust-engine/src/names/generated.rs`.
 regenerate-names:
   #!/usr/bin/env bash
-  export HAX_RUST_ENGINE_GENERATE_NAMES=rust-engine/src/names/generated.rs
-  cargo hax -C --manifest-path engine/names/Cargo.toml \; into lean
-  rustfmt $HAX_RUST_ENGINE_GENERATE_NAMES
+  OUTPUT_FILE=rust-engine/src/names/generated.rs
+  cargo hax -C --manifest-path engine/names/Cargo.toml \; into --output-dir $(dirname -- $OUTPUT_FILE) generate-rust-engine-names
+  rustfmt "$OUTPUT_FILE"
 
 # Format all the code
 fmt:
