@@ -27,11 +27,18 @@
 /// Helper module that provides serialization and deserialization of DefId to
 /// compact representations. This is solely for conciseness purposes of the
 /// generated code.
+///
+/// Concretely, this module defines `Repr` a (JSON-compact) representation of `DefId`s without parents.
+/// It provides a bijection from the fields `krate`, `path`, and `kind` of `DefId` and `Repr`.
+/// The choice of `Repr` itself is irrelevant. Anything that produces compact JSON is good.
 pub(self) mod serialization_helpers {
     use hax_frontend_exporter::{DefKind, DefPathItem, DisambiguatedDefPathItem};
 
     use crate::ast::identifiers::global_id::DefId;
+    /// The compact reperesentation: a tuple (krate name, path, defkind)
+    /// The path is a vector of tuples (DefPathItem, disambiguator).
     type Repr = (String, Vec<(DefPathItem, u32)>, DefKind);
+    //// `BorrowedRepr` is the borrowed variant of `Repr`. Useful for serialization.
     type BorrowedRepr<'a> = (&'a String, Vec<(&'a DefPathItem, &'a u32)>, &'a DefKind);
 
     pub fn serialize(did: &DefId) -> String {
