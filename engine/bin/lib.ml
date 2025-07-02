@@ -186,7 +186,7 @@ let parse_id_table_node (json : Yojson.Safe.t) :
   in
   (table, value)
 
-let load_table (check_version : bool) : Yojson.Safe.t =
+let load_table ?(check_version = true) : Yojson.Safe.t =
   let table, json =
     Hax_io.read_json () |> Option.value_exn |> parse_id_table_node
   in
@@ -212,7 +212,7 @@ Please reinstall hax.
   json
 
 let parse_options () =
-  let json = load_table true in
+  let json = load_table ~check_version:true in
   let options = [%of_yojson: Types.engine_options] json in
   Profiling.enabled := options.backend.profile;
   options
@@ -258,7 +258,7 @@ module ExportFStarAst = Export_ast.Make (Fstar_backend.InputLanguage)
 let driver_for_rust_engine () : unit =
   let query : Rust_engine_types.query =
     (* TODO: support for table *)
-    (* let json = load_table false in *)
+    (* let json = load_table ~check_version:false in *)
     let json = Hax_io.read_json () |> Option.value_exn in
     [%of_yojson: Rust_engine_types.query] json
   in
