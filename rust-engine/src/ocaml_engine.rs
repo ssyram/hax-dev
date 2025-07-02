@@ -100,6 +100,7 @@ impl Query {
         let mut response = None;
         let stdout = std::io::BufReader::new(engine_subprocess.stdout.take().unwrap());
         // TODO: this should be streaming (i.e. use a `LineAsEOF` reader wrapper that consumes a reader until `\n` occurs)
+        //       See https://github.com/cryspen/hax/issues/1537.
         for slice in stdout.split(b'\n') {
             let msg = (|| {
                 let slice = slice.ok()?;
