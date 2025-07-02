@@ -93,7 +93,7 @@ mod global_id {
 
     impl GlobalId {
         /// Extracts the Crate info
-        pub fn get_crate(&self) -> String {
+        pub fn krate(&self) -> String {
             match self {
                 GlobalId::Concrete(concrete_id) | GlobalId::Projector(concrete_id) => {
                     concrete_id.def_id.def_id.krate.clone()

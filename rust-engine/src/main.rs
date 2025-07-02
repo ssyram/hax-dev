@@ -8,9 +8,9 @@ use hax_types::engine_api::File;
 
 use pretty::{DocAllocator, DocBuilder};
 
-fn get_crate_name(items: &Vec<Item>) -> String {
+fn krate_name(items: &Vec<Item>) -> String {
     let head_item = items.get(0).unwrap();
-    head_item.ident.get_crate()
+    head_item.ident.krate()
 }
 
 fn main() {
@@ -29,7 +29,7 @@ fn main() {
         panic!()
     };
 
-    let krate = get_crate_name(&items);
+    let krate = krate_name(&items);
 
     // For now, the main function always calls the Lean backend
     let allocator = Allocator::new(Lean);
