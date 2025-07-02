@@ -94,7 +94,7 @@ impl Query {
                 .expect("Could not write on stdin"),
         );
 
-        // TODO: send a table here
+        // TODO: send a table here (see https://github.com/cryspen/hax/issues/1536)
         send!(stdin, self);
 
         let mut response = None;
