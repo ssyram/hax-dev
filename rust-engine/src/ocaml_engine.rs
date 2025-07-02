@@ -46,7 +46,7 @@ pub enum Response {
     },
 }
 
-/// Extends the common `ToEngine` messages with one extra case: `Input`.
+/// Extends the common `ToEngine` messages with one extra case: `Query`.
 #[derive(::serde::Deserialize, ::serde::Serialize)]
 #[serde(untagged)]
 pub enum ExtendedToEngine {
