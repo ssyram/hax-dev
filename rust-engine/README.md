@@ -10,5 +10,5 @@ The following command will run hax with the rust engine instead of the ocaml one
 For now, this will create a dummy lean file, regardless the backend provided.
 
 ```bash
-HAX_ENGINE_BINARY=hax-rust-engine cargo hax into fstar
+HAX_ENGINE_BINARY=hax-rust-engine cargo hax into lean
 ```
