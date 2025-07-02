@@ -25,8 +25,6 @@ const INDENT: isize = 2;
 /// Placeholder structure for lean printer
 pub struct Lean;
 
-/// Implementations for each part of the AST
-
 impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Item {
     fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
         self.kind.pretty(allocator)
@@ -88,7 +86,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                 path,
                 is_external,
                 rename,
-            } => allocator.text("-- use statement [unsupported]"),
+            } => allocator.nil(),
             ItemKind::Quote { quote, origin } => print_todo!(allocator),
             ItemKind::Error(diagnostic) => print_todo!(allocator),
             ItemKind::Resugared(resugared_ty_kind) => print_todo!(allocator),
@@ -142,7 +140,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b TyKind {
             TyKind::Opaque(global_id) => print_todo!(allocator),
             TyKind::Dyn(dyn_trait_goals) => print_todo!(allocator),
             TyKind::Resugared(resugared_ty_kind) => print_todo!(allocator),
-            TyKind::Error(diagnostic) => panic!(),
+            TyKind::Error(diagnostic) => print_todo!(allocator),
         }
     }
 }
@@ -268,6 +266,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 fields,
                 base,
             } => {
+                // Should be turned into a resugaring once https://github.com/cryspen/hax/pull/1528 have been merged
                 let record_args = if fields.len() > 0 {
                     Some(
                         allocator.softline().append(
