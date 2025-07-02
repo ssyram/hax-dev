@@ -1,14 +1,15 @@
-This crate should implement an AST for which:
- 1. Valid (cargo check) pretty-printed Rust can be produced out of it.
- 2. The Rust THIR AST from the frontend can be imported into this AST.
- 3. The AST defined in the OCaml engine can be imported into this AST.
- 4. This AST can be exported to the OCaml engine.
- 5. This AST should be suitable for AST transformations.
+# Hax Rust Engine
+
+This crate implements an alternative engine for Rust: the main one is implemented in OCaml and is located in `/engine`.
+This Rust engine is designed so that it can re-use some bits of the OCaml engine.
+
+The plan is to slowly deprecate the OCaml engine, rewrite most of its components and drop it.
 
 ## Usage
-The following command will run hax with the rust engine instead of the ocaml one.
-For now, this will create a dummy lean file, regardless the backend provided.
+The Rust engine supports only one backend for now: `Lean`.
+The Lean backend is currently empty and produces only a dummy file.
 
+To run it, use the follwing command:
 ```bash
-HAX_ENGINE_BINARY=hax-rust-engine cargo hax into lean
+cargo hax into lean
 ```
