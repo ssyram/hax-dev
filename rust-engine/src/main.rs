@@ -38,8 +38,8 @@ fn main() {
         .intersperse(
             vec![
             "-- Experimental lean backend for Hax",
-            "-- Uncomment the following line to use the prelude (requires the Lib.lean file) : ",
-            "-- import Lib",
+            "-- Comment the following line to not import the prelude (requires the Lib.lean file) : ",
+            "import Lib",
         ],
             allocator.hardline(),
         )
