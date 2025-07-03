@@ -11,7 +11,7 @@
 //!     indeed `std::ops::Add::add`.
 //!
 //! Point (2.) seems a bit tautological, but we need to write a comparison like
-//! `x == the_function_add`. This module basically provides such
+//! `some_id == the_function_add`. This module basically provides such
 //! `the_function_add` symbols.
 //!
 //! As an example, the names `std::option::Option::Some` and `None` will be provided by this module as:
