@@ -15,7 +15,7 @@
 //! `the_function_add` symbols.
 //!
 //! As an example, the names `std::option::Option::Some` and `None` will be provided by this module as:
-//! ```rust
+//! ```rust,ignore
 //! mod std {
 //!     mod option {
 //!         mod Option {
