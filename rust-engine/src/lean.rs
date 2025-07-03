@@ -36,10 +36,10 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
         match self {
             ItemKind::Fn {
                 name,
-                generics,
+                generics: _,
                 body,
                 params,
-                safety,
+                safety: _,
             } => {
                 // Generics are ignored for now
                 docs![
@@ -59,37 +59,42 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                 .nest(INDENT)
                 .group()
             }
-            ItemKind::TyAlias { name, generics, ty } => {
-                docs![allocator, "abbrev ", name, allocator.reflow(" := "), ty].group()
-            }
-            ItemKind::Type {
+            ItemKind::TyAlias {
                 name,
-                generics,
-                variants,
-                is_struct,
+                generics: _,
+                ty,
+            } => docs![allocator, "abbrev ", name, allocator.reflow(" := "), ty].group(),
+            ItemKind::Type {
+                name: _,
+                generics: _,
+                variants: _,
+                is_struct: _,
             } => print_todo!(allocator),
             ItemKind::Trait {
-                name,
-                generics,
-                items,
+                name: _,
+                generics: _,
+                items: _,
             } => print_todo!(allocator),
             ItemKind::Impl {
-                generics,
-                self_ty,
-                of_trait,
-                items,
-                parent_bounds,
-                safety,
+                generics: _,
+                self_ty: _,
+                of_trait: _,
+                items: _,
+                parent_bounds: _,
+                safety: _,
             } => print_todo!(allocator),
-            ItemKind::Alias { name, item } => print_todo!(allocator),
+            ItemKind::Alias { name: _, item: _ } => print_todo!(allocator),
             ItemKind::Use {
-                path,
-                is_external,
-                rename,
+                path: _,
+                is_external: _,
+                rename: _,
             } => allocator.nil(),
-            ItemKind::Quote { quote, origin } => print_todo!(allocator),
-            ItemKind::Error(diagnostic) => print_todo!(allocator),
-            ItemKind::Resugared(resugared_ty_kind) => print_todo!(allocator),
+            ItemKind::Quote {
+                quote: _,
+                origin: _,
+            } => print_todo!(allocator),
+            ItemKind::Error(_diagnostic) => print_todo!(allocator),
+            ItemKind::Resugared(_resugared_ty_kind) => print_todo!(allocator),
             ItemKind::NotImplementedYet => allocator.text("-- unimplemented yet"),
         }
     }
@@ -124,9 +129,9 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b TyKind {
                 )
                 .parens(),
             TyKind::Ref {
-                inner,
-                mutable,
-                region,
+                inner: _,
+                mutable: _,
+                region: _,
             } => print_todo!(allocator),
             TyKind::Param(local_id) => local_id.pretty(allocator),
             TyKind::Slice(ty) => docs![allocator, "Array ", ty].parens(),
@@ -136,11 +141,11 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b TyKind {
                     .group()
             }
             TyKind::RawPointer => print_todo!(allocator),
-            TyKind::AssociatedType { impl_, item } => print_todo!(allocator),
-            TyKind::Opaque(global_id) => print_todo!(allocator),
-            TyKind::Dyn(dyn_trait_goals) => print_todo!(allocator),
-            TyKind::Resugared(resugared_ty_kind) => print_todo!(allocator),
-            TyKind::Error(diagnostic) => print_todo!(allocator),
+            TyKind::AssociatedType { impl_: _, item: _ } => print_todo!(allocator),
+            TyKind::Opaque(_global_id) => print_todo!(allocator),
+            TyKind::Dyn(_dyn_trait_goals) => print_todo!(allocator),
+            TyKind::Resugared(_resugared_ty_kind) => print_todo!(allocator),
+            TyKind::Error(_diagnostic) => print_todo!(allocator),
         }
     }
 }
@@ -184,10 +189,10 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b PatKind {
                     .nest(INDENT)
                     .group()
             }
-            PatKind::Or { sub_pats } => print_todo!(allocator),
-            PatKind::Array { args } => print_todo!(allocator),
-            PatKind::Deref { sub_pat } => print_todo!(allocator),
-            PatKind::Constant { lit } => print_todo!(allocator),
+            PatKind::Or { sub_pats: _ } => print_todo!(allocator),
+            PatKind::Array { args: _ } => print_todo!(allocator),
+            PatKind::Deref { sub_pat: _ } => print_todo!(allocator),
+            PatKind::Constant { lit: _ } => print_todo!(allocator),
             PatKind::Binding {
                 mutable,
                 var,
@@ -198,13 +203,13 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b PatKind {
                 _ => panic!(),
             },
             PatKind::Construct {
-                constructor,
-                is_record,
-                is_struct,
-                fields,
+                constructor: _,
+                is_record: _,
+                is_struct: _,
+                fields: _,
             } => print_todo!(allocator),
-            PatKind::Resugared(resugared_pat_kind) => print_todo!(allocator),
-            PatKind::Error(diagnostic) => print_todo!(allocator),
+            PatKind::Resugared(_resugared_pat_kind) => print_todo!(allocator),
+            PatKind::Error(_diagnostic) => print_todo!(allocator),
         }
     }
 }
@@ -238,9 +243,9 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
             ExprKind::App {
                 head,
                 args,
-                generic_args,
-                bounds_impls,
-                trait_,
+                generic_args: _,
+                bounds_impls: _,
+                trait_: _,
             } => {
                 let separator = allocator.line();
                 head.pretty(allocator)
@@ -261,10 +266,10 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
             .group(),
             ExprKind::Construct {
                 constructor,
-                is_record,
-                is_struct,
+                is_record: _,
+                is_struct: _,
                 fields,
-                base,
+                base: _,
             } => {
                 // Should be turned into a resugaring once https://github.com/cryspen/hax/pull/1528 have been merged
                 let record_args = if fields.len() > 0 {
@@ -295,11 +300,20 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                     .group()
                     .nest(INDENT)
             }
-            ExprKind::Match { scrutinee, arms } => print_todo!(allocator),
-            ExprKind::Tuple(exprs) => print_todo!(allocator),
-            ExprKind::Borrow { mutable, inner } => print_todo!(allocator),
-            ExprKind::AddressOf { mutable, inner } => print_todo!(allocator),
-            ExprKind::Deref(expr) => print_todo!(allocator),
+            ExprKind::Match {
+                scrutinee: _,
+                arms: _,
+            } => print_todo!(allocator),
+            ExprKind::Tuple(_exprs) => print_todo!(allocator),
+            ExprKind::Borrow {
+                mutable: _,
+                inner: _,
+            } => print_todo!(allocator),
+            ExprKind::AddressOf {
+                mutable: _,
+                inner: _,
+            } => print_todo!(allocator),
+            ExprKind::Deref(_expr) => print_todo!(allocator),
             ExprKind::Let { lhs, rhs, body } => {
                 docs![
                     allocator,
@@ -319,21 +333,21 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 .nest(INDENT)
                 .parens()
                 .group(),
-            ExprKind::Assign { lhs, value } => print_todo!(allocator),
+            ExprKind::Assign { lhs: _, value: _ } => print_todo!(allocator),
             ExprKind::Loop {
-                body,
-                kind,
-                state,
-                control_flow,
-                label,
+                body: _,
+                kind: _,
+                state: _,
+                control_flow: _,
+                label: _,
             } => print_todo!(allocator),
-            ExprKind::Break { value, label } => print_todo!(allocator),
-            ExprKind::Return { value } => print_todo!(allocator),
-            ExprKind::Continue { label } => print_todo!(allocator),
+            ExprKind::Break { value: _, label: _ } => print_todo!(allocator),
+            ExprKind::Return { value: _ } => print_todo!(allocator),
+            ExprKind::Continue { label: _ } => print_todo!(allocator),
             ExprKind::Closure {
                 params,
                 body,
-                captures,
+                captures: _,
             } => docs![
                 allocator,
                 allocator.reflow("fun "),
@@ -345,10 +359,13 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
             .nest(INDENT)
             .group()
             .parens(),
-            ExprKind::Block { body, safety_mode } => print_todo!(allocator),
-            ExprKind::Quote { contents } => print_todo!(allocator),
-            ExprKind::Resugared(resugared_expr_kind) => print_todo!(allocator),
-            ExprKind::Error(diagnostic) => print_todo!(allocator),
+            ExprKind::Block {
+                body: _,
+                safety_mode: _,
+            } => print_todo!(allocator),
+            ExprKind::Quote { contents: _ } => print_todo!(allocator),
+            ExprKind::Resugared(_resugared_expr_kind) => print_todo!(allocator),
+            ExprKind::Error(_diagnostic) => print_todo!(allocator),
         }
     }
 }
@@ -363,13 +380,13 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Literal {
                 Literal::Bool(b) => format!("{}", b),
                 Literal::Int {
                     value,
-                    negative,
-                    kind,
+                    negative: _,
+                    kind: _,
                 } => format!("{}", value),
                 Literal::Float {
-                    value,
-                    negative,
-                    kind,
+                    value: _,
+                    negative: _,
+                    kind: _,
                 } => todo!(),
             }
         ]
