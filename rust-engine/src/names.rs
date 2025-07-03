@@ -145,6 +145,7 @@ pub mod codegen {
 
         // TODO: we don't have visitor yet. For now, we use a hack: we just browse
         // the JSON, trying to parse every possible node as a DefId.
+        // See https://github.com/cryspen/hax/issues/1539.
         let mut def_ids = find(&serde_json::to_value(items).unwrap());
 
         def_ids.sort();
