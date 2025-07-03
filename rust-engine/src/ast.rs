@@ -1156,7 +1156,7 @@ pub enum AttributeKind {
     Tool {
         /// The path to the tool
         path: String,
-        /// The payload        
+        /// The payload
         tokens: String,
     },
     /// A doc comment
@@ -1538,6 +1538,16 @@ pub mod traits {
                 ty,
                 meta: Metadata { span, attributes },
             }
+        }
+    }
+
+    /// Manual implementation of HasKind as the Ty struct contains a Box<TyKind>
+    /// instead of a TyKind directly.
+    impl HasKind for Ty {
+        type Kind = TyKind;
+
+        fn kind(&self) -> &Self::Kind {
+            &(*self.0)
         }
     }
 }

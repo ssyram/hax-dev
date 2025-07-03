@@ -133,7 +133,7 @@ const RUST_ENGINE_BINARY_NOT_FOUND: &str =
 fn find_rust_hax_engine(message_format: MessageFormat) -> process::Command {
     use which::which;
 
-    std::env::var("HAX_RUST_BINARY")
+    std::env::var("HAX_RUST_ENGINE_BINARY")
         .ok()
         .map(process::Command::new)
         .or_else(|| {
