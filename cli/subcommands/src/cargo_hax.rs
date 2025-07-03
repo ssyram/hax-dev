@@ -264,7 +264,10 @@ fn run_engine(
         input: haxmeta.items,
         impl_infos: haxmeta.impl_infos,
     };
-    let mut hax_engine_command = if let Backend::Lean { .. } = &engine_options.backend.backend {
+    let mut hax_engine_command = if let Backend::Lean { .. }
+    | Backend::GenerateRustEngineNames { .. } =
+        &engine_options.backend.backend
+    {
         find_rust_hax_engine(message_format)
     } else {
         find_hax_engine(message_format)

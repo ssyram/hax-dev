@@ -145,7 +145,12 @@ let run (options : Types.engine_options) : Types.output =
             failwith
               "The OCaml hax engine should never be called for lean. The Lean \
                backend uses the newer rust engine. Please report this issue on \
-               our GitHub repository: https://github.com/cryspen/hax.")
+               our GitHub repository: https://github.com/cryspen/hax."
+        | GenerateRustEngineNames ->
+            failwith
+              "The OCaml hax engine should never be called with \
+               `GenerateRustEngineNames`, it is an rust engine only internal \
+               command.")
   in
   {
     diagnostics = List.map ~f:Diagnostics.to_thir_diagnostic diagnostics;

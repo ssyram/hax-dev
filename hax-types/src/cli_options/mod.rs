@@ -185,6 +185,10 @@ pub enum Backend<E: Extension> {
     /// Use the Lean backend (warning: work in progress!)
     #[clap(hide = true)]
     Lean,
+    /// Extract `DefId`s of the crate as a Rust module tree.
+    /// This is a command that regenerates code for the rust engine.
+    #[clap(hide = true)]
+    GenerateRustEngineNames,
 }
 
 impl fmt::Display for Backend<()> {
@@ -196,6 +200,7 @@ impl fmt::Display for Backend<()> {
             Backend::Easycrypt { .. } => write!(f, "easycrypt"),
             Backend::ProVerif { .. } => write!(f, "proverif"),
             Backend::Lean { .. } => write!(f, "lean"),
+            Backend::GenerateRustEngineNames { .. } => write!(f, "generate_rust_engine_names"),
         }
     }
 }
