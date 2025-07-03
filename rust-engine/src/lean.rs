@@ -97,7 +97,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
 
 impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Ty {
     fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        self.0.pretty(allocator)
+        self.kind().pretty(allocator)
     }
 }
 
