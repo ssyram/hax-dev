@@ -1,4 +1,6 @@
 //! This module provides a list of handy `DefId` for the engine.
+//! The list of `DefId`s comes from the crate `/engine/names`: any name mentionned
+//! in that crate will be provided here automatically.
 //!
 //! For example, to be able to resugar `std::ops::Add::add(x, y)` into `x + y`,
 //! we need to:
