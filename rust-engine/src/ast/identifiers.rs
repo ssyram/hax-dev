@@ -120,7 +120,7 @@ pub mod global_id {
                     })
                     .collect::<Vec<String>>()
                     .join("_"),
-                GlobalId::Projector(concrete_id) => todo!(),
+                GlobalId::Projector(_concrete_id) => todo!(),
             }
         }
     }
