@@ -6,8 +6,8 @@ mod resolution;
 mod utils;
 #[cfg(feature = "rustc")]
 pub use utils::{
-    erase_and_norm, implied_predicates, predicates_defined_on, required_predicates, self_predicate,
-    Predicates, ToPolyTraitRef,
+    erase_and_norm, erase_free_regions, implied_predicates, normalize, predicates_defined_on,
+    required_predicates, self_predicate, Predicates, ToPolyTraitRef,
 };
 
 #[cfg(feature = "rustc")]
@@ -140,7 +140,7 @@ pub enum ImplExprAtom {
         /// FnOnce`.
         impl_exprs: Vec<ImplExpr>,
         /// The values of the associated types for this trait.
-        types: Vec<(DefId, Ty)>,
+        types: Vec<(DefId, Ty, Vec<ImplExpr>)>,
     },
     /// An error happened while resolving traits.
     Error(String),

@@ -27,6 +27,7 @@
 //! benefit of reducing the size of signatures. Moreover, the rules on which bounds are required vs
 //! implied are subtle. We may change this if this proves to be a problem.
 use rustc_hir::def::DefKind;
+use rustc_hir::LangItem;
 use rustc_middle::ty::*;
 use rustc_span::def_id::DefId;
 use rustc_span::{Span, DUMMY_SP};
@@ -92,11 +93,21 @@ pub fn required_predicates<'tcx>(
         predicates.to_mut().insert(0, (self_clause, DUMMY_SP));
     }
     if add_drop {
-        // Add a `T: Drop` bound for every generic, unless the current trait is `Drop` itself, or
-        // `Sized`.
-        let drop_trait = tcx.lang_items().drop_trait().unwrap();
-        let sized_trait = tcx.lang_items().sized_trait().unwrap();
-        if def_id != drop_trait && def_id != sized_trait {
+        // Add a `T: Drop` bound for every generic, unless the current trait is `Drop` itself, or a
+        // built-in marker trait that we know doesn't need the bound.
+        let lang_item = tcx.as_lang_item(def_id);
+        if !matches!(
+            lang_item,
+            Some(
+                LangItem::Drop
+                    | LangItem::Sized
+                    | LangItem::MetaSized
+                    | LangItem::PointeeSized
+                    | LangItem::DiscriminantKind
+                    | LangItem::PointeeTrait
+            )
+        ) {
+            let drop_trait = tcx.lang_items().drop_trait().unwrap();
             let extra_bounds = tcx
                 .generics_of(def_id)
                 .own_params
@@ -158,10 +169,27 @@ pub fn implied_predicates<'tcx>(
     }
 }
 
+/// Normalize a value.
+pub fn normalize<'tcx, T>(tcx: TyCtxt<'tcx>, typing_env: TypingEnv<'tcx>, value: T) -> T
+where
+    T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+{
+    use rustc_infer::infer::TyCtxtInferExt;
+    use rustc_middle::traits::ObligationCause;
+    use rustc_trait_selection::traits::query::normalize::QueryNormalizeExt;
+    let (infcx, param_env) = tcx.infer_ctxt().build_with_typing_env(typing_env);
+    infcx
+        .at(&ObligationCause::dummy(), param_env)
+        .query_normalize(value)
+        // We ignore the generated outlives relations. Unsure what we should do with them.
+        .map(|x| x.value)
+        .unwrap_or(value)
+}
+
 /// Erase free regions from the given value. Largely copied from `tcx.erase_regions`, but also
 /// erases bound regions that are bound outside `value`, so we can call this function inside a
 /// `Binder`.
-fn erase_free_regions<'tcx, T>(tcx: TyCtxt<'tcx>, value: T) -> T
+pub fn erase_free_regions<'tcx, T>(tcx: TyCtxt<'tcx>, value: T) -> T
 where
     T: TypeFoldable<TyCtxt<'tcx>>,
 {
