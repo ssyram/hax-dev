@@ -92,9 +92,11 @@ pub fn required_predicates<'tcx>(
         let self_clause = self_predicate(tcx, trait_def_id).upcast(tcx);
         predicates.to_mut().insert(0, (self_clause, DUMMY_SP));
     }
-    if add_drop {
+    if add_drop && !matches!(def_kind, Closure) {
         // Add a `T: Drop` bound for every generic, unless the current trait is `Drop` itself, or a
         // built-in marker trait that we know doesn't need the bound.
+        // We skip closures because they have fictitious weird type parameters in their `own_args`,
+        // that we don't want to add `Drop` bounds for.
         let lang_item = tcx.as_lang_item(def_id);
         if !matches!(
             lang_item,
