@@ -168,6 +168,7 @@ pub fn implied_predicates<'tcx>(
                             | LangItem::PointeeSized
                             | LangItem::DiscriminantKind
                             | LangItem::PointeeTrait
+                            | LangItem::Tuple
                     )
                 ) {
                     add_drop_bounds(tcx, def_id, predicates.to_mut());
