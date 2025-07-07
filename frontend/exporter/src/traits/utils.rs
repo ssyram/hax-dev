@@ -50,6 +50,32 @@ pub fn predicates_defined_on(tcx: TyCtxt<'_>, def_id: DefId) -> Predicates<'_> {
     result
 }
 
+/// Add `T: Drop` bounds for every generic parameter of the given item.
+fn add_drop_bounds<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    predicates: &mut Vec<(Clause<'tcx>, Span)>,
+) {
+    let def_kind = tcx.def_kind(def_id);
+    if matches!(def_kind, DefKind::Closure) {
+        // Closures have fictitious weird type parameters in their `own_args` that we don't want to
+        // add `Drop` bounds for.
+        return;
+    }
+    // Add a `T: Drop` bound for every generic.
+    let drop_trait = tcx.lang_items().drop_trait().unwrap();
+    let extra_bounds = tcx
+        .generics_of(def_id)
+        .own_params
+        .iter()
+        .filter(|param| matches!(param.kind, GenericParamDefKind::Type { .. }))
+        .map(|param| tcx.mk_param_from_def(param))
+        .map(|ty| Binder::dummy(TraitRef::new(tcx, drop_trait, [ty])))
+        .map(|tref| tref.upcast(tcx))
+        .map(|clause| (clause, DUMMY_SP));
+    predicates.extend(extra_bounds);
+}
+
 /// The predicates that must hold to mention this item. E.g.
 ///
 /// ```ignore
@@ -92,33 +118,10 @@ pub fn required_predicates<'tcx>(
         let self_clause = self_predicate(tcx, trait_def_id).upcast(tcx);
         predicates.to_mut().insert(0, (self_clause, DUMMY_SP));
     }
-    if add_drop {
-        // Add a `T: Drop` bound for every generic, unless the current trait is `Drop` itself, or a
-        // built-in marker trait that we know doesn't need the bound.
-        let lang_item = tcx.as_lang_item(def_id);
-        if !matches!(
-            lang_item,
-            Some(
-                LangItem::Drop
-                    | LangItem::Sized
-                    | LangItem::MetaSized
-                    | LangItem::PointeeSized
-                    | LangItem::DiscriminantKind
-                    | LangItem::PointeeTrait
-            )
-        ) {
-            let drop_trait = tcx.lang_items().drop_trait().unwrap();
-            let extra_bounds = tcx
-                .generics_of(def_id)
-                .own_params
-                .iter()
-                .filter(|param| matches!(param.kind, GenericParamDefKind::Type { .. }))
-                .map(|param| tcx.mk_param_from_def(param))
-                .map(|ty| Binder::dummy(TraitRef::new(tcx, drop_trait, [ty])))
-                .map(|tref| tref.upcast(tcx))
-                .map(|clause| (clause, DUMMY_SP));
-            predicates.to_mut().extend(extra_bounds);
-        }
+    if add_drop && !matches!(def_kind, Trait | TraitAlias) {
+        // Add a `T: Drop` bound for every generic. For traits we consider these predicates implied
+        // instead of required.
+        add_drop_bounds(tcx, def_id, predicates.to_mut());
     }
     predicates
 }
@@ -151,7 +154,28 @@ pub fn implied_predicates<'tcx>(
     let parent = tcx.opt_parent(def_id);
     match tcx.def_kind(def_id) {
         // We consider all predicates on traits to be outputs
-        Trait | TraitAlias => predicates_defined_on(tcx, def_id),
+        Trait | TraitAlias => {
+            let mut predicates = predicates_defined_on(tcx, def_id);
+            if add_drop {
+                // Add a `T: Drop` bound for every generic, unless the current trait is `Drop` itself, or a
+                // built-in marker trait that we know doesn't need the bound.
+                if !matches!(
+                    tcx.as_lang_item(def_id),
+                    Some(
+                        LangItem::Drop
+                            | LangItem::Sized
+                            | LangItem::MetaSized
+                            | LangItem::PointeeSized
+                            | LangItem::DiscriminantKind
+                            | LangItem::PointeeTrait
+                            | LangItem::Tuple
+                    )
+                ) {
+                    add_drop_bounds(tcx, def_id, predicates.to_mut());
+                }
+            }
+            predicates
+        }
         AssocTy if matches!(tcx.def_kind(parent.unwrap()), Trait) => {
             // `skip_binder` is for the GAT `EarlyBinder`
             let mut predicates = Cow::Borrowed(tcx.explicit_item_bounds(def_id).skip_binder());
