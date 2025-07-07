@@ -278,12 +278,14 @@ pub enum FullDefKind<Body> {
     /// Note: the (early-bound) generics of a closure are the same as those of the item in which it
     /// is defined.
     Closure {
-        /// The enclosing item. Note: this item could itself be a closure; to get the generics, you
-        /// might have to recurse through several layers of parents until you find a function or
-        /// constant.
-        parent: DefId,
-        is_const: bool,
         args: ClosureArgs,
+        is_const: bool,
+        /// Info required to construct a virtual `FnOnce` impl for this closure.
+        fn_once_impl: Box<VirtualTraitImpl>,
+        /// Info required to construct a virtual `FnMut` impl for this closure.
+        fn_mut_impl: Option<Box<VirtualTraitImpl>>,
+        /// Info required to construct a virtual `Fn` impl for this closure.
+        fn_impl: Option<Box<VirtualTraitImpl>>,
         /// For `FnMut`&`Fn` closures: the MIR for the `call_once` method; it simply calls
         /// `call_mut`.
         once_shim: Option<Body>,
@@ -598,17 +600,32 @@ where
             body: Body::body(def_id, s),
         },
         RDefKind::Closure { .. } => {
+            use ty::ClosureKind::{Fn, FnMut};
             let closure_ty = tcx.type_of(def_id).instantiate_identity();
             let ty::TyKind::Closure(_, args) = closure_ty.kind() else {
                 unreachable!()
             };
+            let closure = args.as_closure();
+            // We lose lifetime information here. Eventually would be nice not to.
+            let input_ty = erase_free_regions(tcx, closure.sig().input(0).skip_binder());
+            let trait_args = [closure_ty, input_ty];
+            let fn_once_trait = tcx.lang_items().fn_once_trait().unwrap();
+            let fn_mut_trait = tcx.lang_items().fn_mut_trait().unwrap();
+            let fn_trait = tcx.lang_items().fn_trait().unwrap();
             FullDefKind::Closure {
-                parent: tcx.parent(def_id).sinto(s),
                 is_const: tcx.constness(def_id) == rustc_hir::Constness::Const,
-                args: ClosureArgs::sfrom(s, def_id, args.as_closure()),
+                args: ClosureArgs::sfrom(s, def_id, closure),
                 once_shim: closure_once_shim(tcx, closure_ty)
                     .and_then(|body| Body::from_mir(s, body)),
                 drop_glue: drop_glue_shim(tcx, def_id).and_then(|body| Body::from_mir(s, body)),
+                fn_once_impl: virtual_impl_for(
+                    s,
+                    ty::TraitRef::new(tcx, fn_once_trait, trait_args),
+                ),
+                fn_mut_impl: matches!(closure.kind(), FnMut | Fn)
+                    .then(|| virtual_impl_for(s, ty::TraitRef::new(tcx, fn_mut_trait, trait_args))),
+                fn_impl: matches!(closure.kind(), Fn)
+                    .then(|| virtual_impl_for(s, ty::TraitRef::new(tcx, fn_trait, trait_args))),
             }
         }
         RDefKind::Const { .. } => FullDefKind::Const {
@@ -714,6 +731,19 @@ pub enum ImplAssocItemValue<Body> {
     /// This is an associated const that reuses the trait declaration default. The default const
     /// value can be found in `decl_def`.
     DefaultedConst,
+}
+
+/// Partial data for a trait impl, used for fake trait impls that we generate ourselves such as
+/// `FnOnce` and `Drop` impls.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub struct VirtualTraitImpl {
+    /// The trait that is implemented by this impl block.
+    pub trait_pred: TraitPredicate,
+    /// The `ImplExpr`s required to satisfy the predicates on the trait declaration.
+    pub implied_impl_exprs: Vec<ImplExpr>,
+    /// Tye associated types and their predicates, in definition order.
+    pub types: Vec<(Ty, Vec<ImplExpr>)>,
 }
 
 impl<Body> FullDef<Body> {
@@ -934,6 +964,40 @@ fn get_self_predicate<'tcx, S: UnderOwnerState<'tcx>>(s: &S) -> TraitPredicate {
         .unwrap()
         .upcast(tcx);
     pred.sinto(s)
+}
+
+/// Do the trait resolution necessary to create a new impl for the given trait_ref. Used when we
+/// generate fake trait impls e.g. for `FnOnce` and `Drop`.
+#[cfg(feature = "rustc")]
+fn virtual_impl_for<'tcx, S>(s: &S, trait_ref: ty::TraitRef<'tcx>) -> Box<VirtualTraitImpl>
+where
+    S: UnderOwnerState<'tcx>,
+{
+    let tcx = s.base().tcx;
+    let trait_pred = TraitPredicate {
+        trait_ref: trait_ref.sinto(s),
+        is_positive: true,
+    };
+    // Impl exprs required by the trait.
+    let required_impl_exprs = solve_item_implied_traits(s, trait_ref.def_id, trait_ref.args);
+    let types = tcx
+        .associated_items(trait_ref.def_id)
+        .in_definition_order()
+        .filter(|assoc| matches!(assoc.kind, ty::AssocKind::Type { .. }))
+        .map(|assoc| {
+            // This assumes non-GAT because this is for builtin-trait (that don't
+            // have GATs).
+            let ty = ty::Ty::new_projection(tcx, assoc.def_id, trait_ref.args).sinto(s);
+            // Impl exprs required by the type.
+            let required_impl_exprs = solve_item_implied_traits(s, assoc.def_id, trait_ref.args);
+            (ty, required_impl_exprs)
+        })
+        .collect();
+    Box::new(VirtualTraitImpl {
+        trait_pred,
+        implied_impl_exprs: required_impl_exprs,
+        types,
+    })
 }
 
 /// The signature of a method impl may be a subtype of the one expected from the trait decl, as in
