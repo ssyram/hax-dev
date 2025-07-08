@@ -182,7 +182,10 @@ pub enum FullDefKind<Body> {
     /// ADts (`Struct`, `Enum` and `Union` map to this variant).
     Adt {
         param_env: ParamEnv,
-        def: AdtDef,
+        adt_kind: AdtKind,
+        variants: IndexVec<VariantIdx, VariantDef>,
+        flags: AdtFlags,
+        repr: ReprOptions,
         /// MIR body of the builtin `drop` impl.
         drop_glue: Option<Body>,
     },
@@ -380,9 +383,30 @@ where
     let tcx = s.base().tcx;
     match get_def_kind(tcx, def_id) {
         RDefKind::Struct { .. } | RDefKind::Union { .. } | RDefKind::Enum { .. } => {
+            let def = tcx.adt_def(def_id);
+            let variants = def
+                .variants()
+                .iter_enumerated()
+                .map(|(variant_idx, variant)| {
+                    let discr = if def.is_enum() {
+                        def.discriminant_for_variant(tcx, variant_idx)
+                    } else {
+                        // Structs and unions have a single variant.
+                        assert_eq!(variant_idx.index(), 0);
+                        ty::util::Discr {
+                            val: 0,
+                            ty: tcx.types.isize,
+                        }
+                    };
+                    VariantDef::sfrom(s, variant, discr)
+                })
+                .collect();
             FullDefKind::Adt {
                 param_env: get_param_env(s, def_id),
-                def: tcx.adt_def(def_id).sinto(s),
+                adt_kind: def.adt_kind().sinto(s),
+                variants,
+                flags: def.flags().sinto(s),
+                repr: def.repr().sinto(s),
                 drop_glue: drop_glue_shim(tcx, def_id).and_then(|body| Body::from_mir(s, body)),
             }
         }
@@ -789,9 +813,11 @@ impl<Body> FullDef<Body> {
                     Some((opt_ident.as_ref()?.0.clone(), def_id.clone()))
                 })
                 .collect(),
-            FullDefKind::Adt { def, .. } if matches!(def.adt_kind, AdtKind::Enum) => def
-                .variants
-                .raw
+            FullDefKind::Adt {
+                adt_kind: AdtKind::Enum,
+                variants,
+                ..
+            } => variants
                 .iter()
                 .map(|variant| (variant.name.clone(), variant.def_id.clone()))
                 .collect(),
