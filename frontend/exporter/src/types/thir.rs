@@ -804,7 +804,7 @@ pub enum ExprKind {
     },
     #[custom_arm(FROM_TYPE::Closure(e) => {
         let (thir, expr_entrypoint) = get_thir(e.closure_id, gstate);
-        let s = &State::from_thir(gstate.base(), gstate.owner_id(), thir.clone());
+        let s = &gstate.with_thir(thir.clone());
         TO_TYPE::Closure {
             params: thir.params.raw.sinto(s),
             body: expr_entrypoint.sinto(s),
@@ -858,7 +858,7 @@ pub trait ExprKindExt<'tcx> {
         &self,
         s: &S,
     ) -> (Option<rustc_hir::HirId>, Vec<Attribute>);
-    fn unroll_scope<S: IsState<'tcx> + HasThir<'tcx>>(&self, s: &S) -> thir::Expr<'tcx>;
+    fn unroll_scope<S: BaseState<'tcx> + HasThir<'tcx>>(&self, s: &S) -> thir::Expr<'tcx>;
 }
 
 #[cfg(feature = "rustc")]
@@ -875,7 +875,7 @@ impl<'tcx> ExprKindExt<'tcx> for thir::Expr<'tcx> {
             _ => (None, vec![]),
         }
     }
-    fn unroll_scope<S: IsState<'tcx> + HasThir<'tcx>>(&self, s: &S) -> thir::Expr<'tcx> {
+    fn unroll_scope<S: BaseState<'tcx> + HasThir<'tcx>>(&self, s: &S) -> thir::Expr<'tcx> {
         // TODO: when we see a loop, we should lookup its label! label is actually a scope id
         // we remove scopes here, whence the TODO
         match self.kind {

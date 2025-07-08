@@ -236,82 +236,62 @@ impl<'tcx> StateWithBase<'tcx> {
     }
 }
 
-impl<'tcx> StateWithOwner<'tcx> {
-    pub fn new_from_state_and_id<S: BaseState<'tcx>>(s: &S, id: rustc_hir::def_id::DefId) -> Self {
+pub trait BaseState<'tcx>: IsState<'tcx> + HasBase<'tcx> + Clone {
+    /// Updates the OnwerId in a state, making sure to override `opt_def_id` in base as well.
+    fn with_owner_id(&self, owner_id: rustc_hir::def_id::DefId) -> StateWithOwner<'tcx> {
+        let mut base = self.base();
+        base.opt_def_id = Some(owner_id);
         State {
+            owner_id,
+            base,
             thir: (),
             mir: (),
-            owner_id: id,
             binder: (),
-            base: s.base().clone(),
         }
     }
 }
-impl<'tcx> StateWithMir<'tcx> {
-    pub fn new_from_mir(
-        tcx: rustc_middle::ty::TyCtxt<'tcx>,
-        options: hax_frontend_exporter_options::Options,
-        mir: rustc_middle::mir::Body<'tcx>,
-        owner_id: rustc_hir::def_id::DefId,
-    ) -> Self {
-        Self {
+impl<'tcx, T: IsState<'tcx> + HasBase<'tcx> + Clone> BaseState<'tcx> for T {}
+
+/// State of anything below an `owner`.
+pub trait UnderOwnerState<'tcx>: BaseState<'tcx> + HasOwnerId {
+    fn with_base(&self, base: types::Base<'tcx>) -> StateWithOwner<'tcx> {
+        State {
+            owner_id: self.owner_id(),
+            base,
             thir: (),
-            mir: Rc::new(mir),
-            owner_id,
+            mir: (),
             binder: (),
-            base: Base::new(tcx, options),
         }
     }
-}
-impl<'tcx> StateWithThir<'tcx> {
-    pub fn from_thir(
-        base: Base<'tcx>,
-        owner_id: rustc_hir::def_id::DefId,
-        thir: types::RcThir<'tcx>,
-    ) -> Self {
-        Self {
+    fn with_binder(&self, binder: types::UnitBinder<'tcx>) -> StateWithBinder<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
+            binder,
+            thir: (),
+            mir: (),
+        }
+    }
+    fn with_thir(&self, thir: types::RcThir<'tcx>) -> StateWithThir<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
             thir,
             mir: (),
-            owner_id,
             binder: (),
-            base,
         }
     }
-}
-
-impl<'tcx> StateWithOwner<'tcx> {
-    pub fn from_under_owner<S: UnderOwnerState<'tcx>>(s: &S) -> Self {
-        Self {
-            base: s.base(),
-            owner_id: s.owner_id(),
+    fn with_mir(&self, mir: types::RcMir<'tcx>) -> StateWithMir<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
+            mir,
             thir: (),
-            mir: (),
             binder: (),
         }
     }
 }
-
-/// Updates the OnwerId in a state, making sure to override `opt_def_id` in base as well.
-pub fn with_owner_id<THIR, MIR>(
-    mut base: types::Base<'_>,
-    thir: THIR,
-    mir: MIR,
-    owner_id: rustc_hir::def_id::DefId,
-) -> State<types::Base<'_>, THIR, MIR, rustc_hir::def_id::DefId, ()> {
-    base.opt_def_id = Some(owner_id);
-    State {
-        thir,
-        owner_id,
-        base,
-        mir,
-        binder: (),
-    }
-}
-
-pub trait BaseState<'tcx> = HasBase<'tcx> + Clone + IsState<'tcx>;
-
-/// State of anything below a `owner_id`.
-pub trait UnderOwnerState<'tcx> = BaseState<'tcx> + HasOwnerId;
+impl<'tcx, T: BaseState<'tcx> + HasOwnerId> UnderOwnerState<'tcx> for T {}
 
 /// State of anything below a binder.
 pub trait UnderBinderState<'tcx> = UnderOwnerState<'tcx> + HasBinder<'tcx>;
@@ -346,9 +326,9 @@ pub trait WithItemCacheExt<'tcx>: UnderOwnerState<'tcx> {
 impl<'tcx, S: UnderOwnerState<'tcx>> WithItemCacheExt<'tcx> for S {}
 
 impl ImplInfos {
-    fn from(base: Base<'_>, did: rustc_hir::def_id::DefId) -> Self {
-        let tcx = base.tcx;
-        let s = &with_owner_id(base, (), (), did);
+    fn from<'tcx, S: BaseState<'tcx>>(s: &S, did: rustc_hir::def_id::DefId) -> Self {
+        let tcx = s.base().tcx;
+        let s = &s.with_owner_id(did);
 
         Self {
             generics: tcx.generics_of(did).sinto(s),
@@ -393,6 +373,6 @@ pub fn impl_def_ids_to_impled_types_and_bounds<'tcx, S: BaseState<'tcx>>(
                 })
             )
         })
-        .map(|did| (did.sinto(s), ImplInfos::from(s.base(), did)))
+        .map(|did| (did.sinto(s), ImplInfos::from(s, did)))
         .collect()
 }

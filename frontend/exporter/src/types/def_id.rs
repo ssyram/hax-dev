@@ -310,7 +310,7 @@ pub(crate) fn translate_def_id<'tcx, S: BaseState<'tcx>>(s: &S, def_id: RDefId) 
     let tcx = s.base().tcx;
     let path = {
         // Set the def_id so the `CrateRoot` path item can fetch the crate name.
-        let state_with_id = with_owner_id(s.base(), (), (), def_id);
+        let state_with_id = s.with_owner_id(def_id);
         tcx.def_path(def_id)
             .data
             .iter()
@@ -367,7 +367,7 @@ impl std::convert::From<DefId> for Path {
 pub type GlobalIdent = DefId;
 
 #[cfg(all(not(feature = "extract_names_mode"), feature = "rustc"))]
-impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, GlobalIdent> for rustc_hir::def_id::LocalDefId {
+impl<'tcx, S: BaseState<'tcx>> SInto<S, GlobalIdent> for rustc_hir::def_id::LocalDefId {
     fn sinto(&self, st: &S) -> DefId {
         self.to_def_id().sinto(st)
     }

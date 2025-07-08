@@ -200,7 +200,7 @@ pub fn super_clause_to_clause_and_impl_expr<'tcx, S: UnderOwnerState<'tcx>>(
     let original_predicate_id = {
         // We don't want the id of the substituted clause id, but the
         // original clause id (with, i.e., `Self`)
-        let s = &with_owner_id(s.base(), (), (), impl_trait_ref.def_id());
+        let s = &s.with_owner_id(impl_trait_ref.def_id());
         clause.sinto(s).id
     };
     let new_clause = clause.instantiate_supertrait(tcx, impl_trait_ref);
@@ -219,7 +219,7 @@ pub fn super_clause_to_clause_and_impl_expr<'tcx, S: UnderOwnerState<'tcx>>(
 /// This is the entrypoint of the solving.
 #[cfg(feature = "rustc")]
 #[tracing::instrument(level = "trace", skip(s))]
-pub fn solve_trait<'tcx, S: BaseState<'tcx> + HasOwnerId>(
+pub fn solve_trait<'tcx, S: UnderOwnerState<'tcx>>(
     s: &S,
     trait_ref: rustc_middle::ty::PolyTraitRef<'tcx>,
 ) -> ImplExpr {

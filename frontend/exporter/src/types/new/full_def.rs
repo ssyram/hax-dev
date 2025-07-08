@@ -44,7 +44,7 @@ where
 {
     let tcx = s.base().tcx;
     let rust_def_id = def_id.underlying_rust_def_id();
-    let state_with_id = with_owner_id(s.base(), (), (), rust_def_id);
+    let state_with_id = s.with_owner_id(rust_def_id);
     let source_span;
     let attributes;
     let visibility;
@@ -388,7 +388,7 @@ where
     S: BaseState<'tcx>,
     Body: IsBody + TypeMappable,
 {
-    let s = &with_owner_id(s.base(), (), (), def_id);
+    let s = &s.with_owner_id(def_id);
     let tcx = s.base().tcx;
     match get_def_kind(tcx, def_id) {
         RDefKind::Struct { .. } => FullDefKind::Struct {
@@ -415,9 +415,11 @@ where
                 let rustc_hir::ItemKind::TyAlias(_, _generics, ty) = &item.kind else {
                     unreachable!()
                 };
-                let mut s = State::from_under_owner(s);
-                s.base.ty_alias_mode = true;
-                ty.sinto(&s)
+                let s = &s.with_base(Base {
+                    ty_alias_mode: true,
+                    ..s.base()
+                });
+                ty.sinto(s)
             }),
         },
         RDefKind::ForeignTy => FullDefKind::ForeignTy,
@@ -519,8 +521,7 @@ where
                                         // Subtlety: we have to add the GAT arguments (if any) to the trait ref arguments.
                                         let args =
                                             item_args.rebase_onto(tcx, def_id, trait_ref.args);
-                                        let state_with_id =
-                                            with_owner_id(s.base(), (), (), impl_assoc.def_id);
+                                        let state_with_id = s.with_owner_id(impl_assoc.def_id);
                                         solve_item_implied_traits(&state_with_id, decl_def_id, args)
                                     };
 
@@ -539,7 +540,7 @@ where
                                             ty::GenericArgs::identity_for_item(tcx, decl_def_id);
                                         let args =
                                             item_args.rebase_onto(tcx, def_id, trait_ref.args);
-                                        let state_with_id = with_owner_id(s.base(), (), (), def_id);
+                                        let state_with_id = s.with_owner_id(def_id);
                                         solve_item_implied_traits(&state_with_id, decl_def_id, args)
                                     } else {
                                         // FIXME: For GATs, we need a param_env that has the arguments of
@@ -1129,7 +1130,7 @@ fn drop_glue_shim<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Option<mir::Bo
 #[cfg(feature = "rustc")]
 fn get_param_env<'tcx, S: BaseState<'tcx>>(s: &S, def_id: RDefId) -> ParamEnv {
     let tcx = s.base().tcx;
-    let s = &with_owner_id(s.base(), (), (), def_id);
+    let s = &s.with_owner_id(def_id);
     ParamEnv {
         generics: tcx.generics_of(def_id).sinto(s),
         predicates: required_predicates(tcx, def_id, s.base().options.resolve_drop_bounds).sinto(s),

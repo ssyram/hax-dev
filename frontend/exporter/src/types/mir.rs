@@ -352,7 +352,7 @@ pub struct Terminator {
 }
 
 #[cfg(feature = "rustc")]
-fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasOwnerId>(
+fn translate_terminator_kind_call<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>>(
     s: &S,
     terminator: &rustc_middle::mir::TerminatorKind<'tcx>,
 ) -> TerminatorKind {
@@ -435,7 +435,7 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
 }
 
 #[cfg(feature = "rustc")]
-fn translate_terminator_kind_drop<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasOwnerId>(
+fn translate_terminator_kind_drop<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>>(
     s: &S,
     terminator: &rustc_middle::mir::TerminatorKind<'tcx>,
 ) -> TerminatorKind {

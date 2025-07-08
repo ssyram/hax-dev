@@ -1382,13 +1382,7 @@ where
     fn sinto(&self, s: &S) -> Binder<T2> {
         let bound_vars = self.bound_vars().sinto(s);
         let value = {
-            let under_binder_s = &State {
-                base: s.base(),
-                owner_id: s.owner_id(),
-                binder: self.as_ref().map_bound(|_| ()),
-                thir: (),
-                mir: (),
-            };
+            let under_binder_s = &s.with_binder(self.as_ref().map_bound(|_| ()));
             self.as_ref().skip_binder().sinto(under_binder_s)
         };
         Binder { value, bound_vars }
@@ -1568,7 +1562,7 @@ fn get_container_for_assoc_item<'tcx, S: BaseState<'tcx>>(
 ) -> AssocItemContainer {
     let tcx = s.base().tcx;
     // We want to solve traits in the context of this item.
-    let state_with_id = &with_owner_id(s.base(), (), (), item.def_id);
+    let state_with_id = &s.with_owner_id(item.def_id);
     let container_id = item.container_id(tcx);
     match item.container {
         ty::AssocItemContainer::Trait => {
