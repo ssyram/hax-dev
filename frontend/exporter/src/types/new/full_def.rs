@@ -179,20 +179,8 @@ pub struct ParamEnv {
 #[derive(Clone, Debug, JsonSchema)]
 pub enum FullDefKind<Body> {
     // Types
-    /// Refers to the struct definition, [`DefKind::Ctor`] refers to its constructor if it exists.
-    Struct {
-        param_env: ParamEnv,
-        def: AdtDef,
-        /// MIR body of the builtin `drop` impl.
-        drop_glue: Option<Body>,
-    },
-    Union {
-        param_env: ParamEnv,
-        def: AdtDef,
-        /// MIR body of the builtin `drop` impl.
-        drop_glue: Option<Body>,
-    },
-    Enum {
+    /// ADts (`Struct`, `Enum` and `Union` map to this variant).
+    Adt {
         param_env: ParamEnv,
         def: AdtDef,
         /// MIR body of the builtin `drop` impl.
@@ -391,21 +379,13 @@ where
     let s = &s.with_owner_id(def_id);
     let tcx = s.base().tcx;
     match get_def_kind(tcx, def_id) {
-        RDefKind::Struct { .. } => FullDefKind::Struct {
-            param_env: get_param_env(s, def_id),
-            def: tcx.adt_def(def_id).sinto(s),
-            drop_glue: drop_glue_shim(tcx, def_id).and_then(|body| Body::from_mir(s, body)),
-        },
-        RDefKind::Union { .. } => FullDefKind::Union {
-            param_env: get_param_env(s, def_id),
-            def: tcx.adt_def(def_id).sinto(s),
-            drop_glue: drop_glue_shim(tcx, def_id).and_then(|body| Body::from_mir(s, body)),
-        },
-        RDefKind::Enum { .. } => FullDefKind::Enum {
-            param_env: get_param_env(s, def_id),
-            def: tcx.adt_def(def_id).sinto(s),
-            drop_glue: drop_glue_shim(tcx, def_id).and_then(|body| Body::from_mir(s, body)),
-        },
+        RDefKind::Struct { .. } | RDefKind::Union { .. } | RDefKind::Enum { .. } => {
+            FullDefKind::Adt {
+                param_env: get_param_env(s, def_id),
+                def: tcx.adt_def(def_id).sinto(s),
+                drop_glue: drop_glue_shim(tcx, def_id).and_then(|body| Body::from_mir(s, body)),
+            }
+        }
         RDefKind::TyAlias { .. } => FullDefKind::TyAlias {
             param_env: get_param_env(s, def_id),
             ty: tcx.hir_get_if_local(def_id).map(|node| {
@@ -780,9 +760,7 @@ impl<Body> FullDef<Body> {
     pub fn param_env(&self) -> Option<&ParamEnv> {
         use FullDefKind::*;
         match &self.kind {
-            Struct { param_env, .. }
-            | Union { param_env, .. }
-            | Enum { param_env, .. }
+            Adt { param_env, .. }
             | Trait { param_env, .. }
             | TraitAlias { param_env, .. }
             | TyAlias { param_env, .. }
@@ -811,7 +789,7 @@ impl<Body> FullDef<Body> {
                     Some((opt_ident.as_ref()?.0.clone(), def_id.clone()))
                 })
                 .collect(),
-            FullDefKind::Enum { def, .. } => def
+            FullDefKind::Adt { def, .. } if matches!(def.adt_kind, AdtKind::Enum) => def
                 .variants
                 .raw
                 .iter()
