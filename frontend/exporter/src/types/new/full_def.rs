@@ -87,13 +87,11 @@ where
             let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
                 .ty
                 .sinto(&state_with_id);
-            // Promoted constants only happen within MIR bodies; we can therefore assume that
-            // `Body` is a MIR body and unwrap.
-            let body = Body::from_mir(&state_with_id, body).s_unwrap(s);
-            kind = FullDefKind::PromotedConst {
+            kind = FullDefKind::Const {
                 param_env,
                 ty,
-                body,
+                kind: ConstKind::PromotedConst,
+                body: Body::from_mir(&state_with_id, body),
             };
 
             // None of these make sense for a promoted constant.
@@ -172,6 +170,20 @@ pub struct ParamEnv {
     pub generics: TyGenerics,
     /// Required predicates for the item (see `traits::utils::required_predicates`).
     pub predicates: GenericPredicates,
+}
+
+/// The kind of a constant item.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub enum ConstKind {
+    /// Top-level constant: `const CONST: usize = 42;`
+    TopLevel,
+    /// Anonymous constant, e.g. the `1 + 2` in `[u8; 1 + 2]`
+    AnonConst,
+    /// An inline constant, e.g. `const { 1 + 2 }`
+    InlineConst,
+    /// A promoted constant, e.g. the `1 + 2` in `&(1 + 2)`
+    PromotedConst,
 }
 
 /// Imbues [`rustc_hir::def::DefKind`] with a lot of extra information.
@@ -288,6 +300,7 @@ pub enum FullDefKind<Body> {
     Const {
         param_env: ParamEnv,
         ty: Ty,
+        kind: ConstKind,
         body: Option<Body>,
     },
     /// Associated constant: `trait MyTrait { const ASSOC: usize; }`
@@ -297,24 +310,6 @@ pub enum FullDefKind<Body> {
         associated_item: AssocItem,
         ty: Ty,
         body: Option<Body>,
-    },
-    /// Anonymous constant, e.g. the `1 + 2` in `[u8; 1 + 2]`
-    AnonConst {
-        param_env: ParamEnv,
-        ty: Ty,
-        body: Option<Body>,
-    },
-    /// An inline constant, e.g. `const { 1 + 2 }`
-    InlineConst {
-        param_env: ParamEnv,
-        ty: Ty,
-        body: Option<Body>,
-    },
-    /// A promoted constant, e.g. `&(1 + 2)`
-    PromotedConst {
-        param_env: ParamEnv,
-        ty: Ty,
-        body: Body,
     },
     Static {
         param_env: ParamEnv,
@@ -633,25 +628,26 @@ where
                     .then(|| virtual_impl_for(s, ty::TraitRef::new(tcx, fn_trait, trait_args))),
             }
         }
-        RDefKind::Const { .. } => FullDefKind::Const {
-            param_env: get_param_env(s, def_id),
-            ty: tcx.type_of(def_id).instantiate_identity().sinto(s),
-            body: Body::body(def_id, s),
-        },
+        kind @ (RDefKind::Const { .. }
+        | RDefKind::AnonConst { .. }
+        | RDefKind::InlineConst { .. }) => {
+            let kind = match kind {
+                RDefKind::Const { .. } => ConstKind::TopLevel,
+                RDefKind::AnonConst { .. } => ConstKind::AnonConst,
+                RDefKind::InlineConst { .. } => ConstKind::InlineConst,
+                _ => unreachable!(),
+            };
+            FullDefKind::Const {
+                param_env: get_param_env(s, def_id),
+                ty: tcx.type_of(def_id).instantiate_identity().sinto(s),
+                kind,
+                body: Body::body(def_id, s),
+            }
+        }
         RDefKind::AssocConst { .. } => FullDefKind::AssocConst {
             parent: tcx.parent(def_id).sinto(s),
             param_env: get_param_env(s, def_id),
             associated_item: tcx.associated_item(def_id).sinto(s),
-            ty: tcx.type_of(def_id).instantiate_identity().sinto(s),
-            body: Body::body(def_id, s),
-        },
-        RDefKind::AnonConst { .. } => FullDefKind::AnonConst {
-            param_env: get_param_env(s, def_id),
-            ty: tcx.type_of(def_id).instantiate_identity().sinto(s),
-            body: Body::body(def_id, s),
-        },
-        RDefKind::InlineConst { .. } => FullDefKind::InlineConst {
-            param_env: get_param_env(s, def_id),
             ty: tcx.type_of(def_id).instantiate_identity().sinto(s),
             body: Body::body(def_id, s),
         },
@@ -793,8 +789,6 @@ impl<Body> FullDef<Body> {
             | AssocFn { param_env, .. }
             | Const { param_env, .. }
             | AssocConst { param_env, .. }
-            | AnonConst { param_env, .. }
-            | InlineConst { param_env, .. }
             | Static { param_env, .. }
             | TraitImpl { param_env, .. }
             | InherentImpl { param_env, .. } => Some(param_env),
