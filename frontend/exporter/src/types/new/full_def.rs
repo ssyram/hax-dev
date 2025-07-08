@@ -676,7 +676,27 @@ where
         RDefKind::ConstParam => FullDefKind::ConstParam,
         RDefKind::LifetimeParam => FullDefKind::LifetimeParam,
         RDefKind::Variant => FullDefKind::Variant,
-        RDefKind::Ctor(ctor_of, _) => get_ctor_contents(s, ctor_of.sinto(s)),
+        RDefKind::Ctor(ctor_of, _) => {
+            let ctor_of = ctor_of.sinto(s);
+
+            // The def_id of the adt this ctor belongs to.
+            let adt_def_id = match ctor_of {
+                CtorOf::Struct => tcx.parent(def_id),
+                CtorOf::Variant => tcx.parent(tcx.parent(def_id)),
+            };
+            let adt_def = tcx.adt_def(adt_def_id);
+            let variant_id = adt_def.variant_index_with_ctor_id(def_id);
+            let fields = adt_def.variant(variant_id).fields.sinto(s);
+            let generic_args = ty::GenericArgs::identity_for_item(tcx, adt_def_id);
+            let output_ty = ty::Ty::new_adt(tcx, adt_def, generic_args).sinto(s);
+            FullDefKind::Ctor {
+                adt_def_id: adt_def_id.sinto(s),
+                ctor_of,
+                variant_id: variant_id.sinto(s),
+                fields,
+                output_ty,
+            }
+        }
         RDefKind::Field => FullDefKind::Field,
         RDefKind::Macro(kind) => FullDefKind::Macro(kind.sinto(s)),
         RDefKind::GlobalAsm => FullDefKind::GlobalAsm,
@@ -1063,34 +1083,6 @@ where
     // (once in impl parameters, second in the method declaration late-bound vars).
     let sig = tcx.anonymize_bound_vars(sig);
     sig
-}
-
-#[cfg(feature = "rustc")]
-fn get_ctor_contents<'tcx, S, Body>(s: &S, ctor_of: CtorOf) -> FullDefKind<Body>
-where
-    S: UnderOwnerState<'tcx>,
-    Body: IsBody + TypeMappable,
-{
-    let tcx = s.base().tcx;
-    let def_id = s.owner_id();
-
-    // The def_id of the adt this ctor belongs to.
-    let adt_def_id = match ctor_of {
-        CtorOf::Struct => tcx.parent(def_id),
-        CtorOf::Variant => tcx.parent(tcx.parent(def_id)),
-    };
-    let adt_def = tcx.adt_def(adt_def_id);
-    let variant_id = adt_def.variant_index_with_ctor_id(def_id);
-    let fields = adt_def.variant(variant_id).fields.sinto(s);
-    let generic_args = ty::GenericArgs::identity_for_item(tcx, adt_def_id);
-    let output_ty = ty::Ty::new_adt(tcx, adt_def, generic_args).sinto(s);
-    FullDefKind::Ctor {
-        adt_def_id: adt_def_id.sinto(s),
-        ctor_of,
-        variant_id: variant_id.sinto(s),
-        fields,
-        output_ty,
-    }
 }
 
 #[cfg(feature = "rustc")]
