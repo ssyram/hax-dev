@@ -12,52 +12,12 @@ macro_rules! mk_aux {
                     self.$field.clone()
                 }
             }
-            pub trait [<Has $field:camel Setter>]<$($lts)*> {
-                type Out;
-                // fn [<with_ $field>]<$($lts,)*$($gen)*>(self: Self, $field: $($field_type)+<$($lts)*>) -> $state<$($params)*>;
-                fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> Self::Out;
-            }
-            // const _: &str = stringify!(
-            #[allow(unused)]
-            impl<$($lts,)*$($gen_full)*> [<Has $field:camel Setter>]<$($lts,)*> for $state<$($gen_full)*> {
-                type Out = $state<$($params)*>;
-                fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> Self::Out {
-                    let __this_field = $field;
-                    let $state { $($fields,)* } = self;
-                    let $field = __this_field;
-                    $state { $($fields,)* }
-                }
-            }
-            // );
-            // pub trait [<Has $field:camel Setter>]<$($lts,)*$($gen_full)*> {
-            //     fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> $state<$($params)*>;
-            // }
-            // impl<$($lts,)*$($gen_full)*> [<Has $field:camel Setter>]<$($lts,)*$($gen_full)*> for $state<$($gen_full)*> {
-            //     fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> $state<$($params)*> {
-            //         let __this_field = $field;
-            //         let $state { $($fields,)* } = self;
-            //         let $field = __this_field;
-            //         $state { $($fields,)* }
-            //     }
-            // }
         }
-    };
-}
-macro_rules! mk_is_state_trait {
-    ($lts:tt {$($finished:tt)*} {{$f0:ident, $($l:tt)*} $($f:tt)*} $($generic:tt)*) => {
-        paste! {mk_is_state_trait!{
-                $lts {$($finished)* [<Has $f0:camel Setter>] <$($l)*> +} {$($f)*} $($generic)*
-                // $lts {$($finished)* [<Has $f0:camel Setter>] <$($l)* $($generic)*> +} {$($f)*} $($generic)*
-        }}
-    };
-    ({$($glts:lifetime,)*} {$($finished:tt)*} {} $($generic:tt)*) => {
-        pub trait IsState<$($glts,)*> = $($finished)*;
     };
 }
 macro_rules! mk {
     (struct $state:ident<$($glts:lifetime),*> {$($field:ident : {$($lts:lifetime),*} $field_type:ty),*$(,)?}) => {
         mk!(@$state {} {$($field)*} {$($field: {$($lts),*} {$field_type},)*});
-        mk_is_state_trait!({$($glts,)*} {} {$({$field, $($lts,)*})*} $([<$field:camel>],)*);
     };
     (@$state:ident {$($acc:tt)*} $fields:tt {
         $field:ident : $lts:tt $field_type:tt
@@ -236,7 +196,7 @@ impl<'tcx> StateWithBase<'tcx> {
     }
 }
 
-pub trait BaseState<'tcx>: IsState<'tcx> + HasBase<'tcx> + Clone {
+pub trait BaseState<'tcx>: HasBase<'tcx> + Clone {
     /// Updates the OnwerId in a state, making sure to override `opt_def_id` in base as well.
     fn with_owner_id(&self, owner_id: rustc_hir::def_id::DefId) -> StateWithOwner<'tcx> {
         let mut base = self.base();
@@ -250,7 +210,7 @@ pub trait BaseState<'tcx>: IsState<'tcx> + HasBase<'tcx> + Clone {
         }
     }
 }
-impl<'tcx, T: IsState<'tcx> + HasBase<'tcx> + Clone> BaseState<'tcx> for T {}
+impl<'tcx, T: HasBase<'tcx> + Clone> BaseState<'tcx> for T {}
 
 /// State of anything below an `owner`.
 pub trait UnderOwnerState<'tcx>: BaseState<'tcx> + HasOwnerId {
