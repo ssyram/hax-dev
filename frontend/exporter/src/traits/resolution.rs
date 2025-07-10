@@ -20,16 +20,8 @@ use super::utils::{
 pub enum PathChunk<'tcx> {
     AssocItem {
         item: AssocItem,
-        /// The arguments provided to the item (for GATs).
+        /// The arguments provided to the item (for GATs). Includes trait args.
         generic_args: GenericArgsRef<'tcx>,
-        /// The impl exprs that must be satisfied to apply the given arguments to the item. E.g.
-        /// `T: Clone` in the following example:
-        /// ```ignore
-        /// trait Foo {
-        ///     type Type<T: Clone>: Debug;
-        /// }
-        /// ```
-        impl_exprs: Vec<ImplExpr<'tcx>>,
         /// The implemented predicate.
         predicate: PolyTraitPredicate<'tcx>,
         /// The index of this predicate in the list returned by `implied_predicates`.
@@ -50,8 +42,6 @@ pub enum ImplExprAtom<'tcx> {
     Concrete {
         def_id: DefId,
         generics: GenericArgsRef<'tcx>,
-        /// The impl exprs that prove the clauses on the impl.
-        impl_exprs: Vec<ImplExpr<'tcx>>,
     },
     /// A context-bound clause like `where T: Trait`.
     LocalBound {
@@ -342,9 +332,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
         let TyKind::Alias(AliasTyKind::Projection, alias_ty) = ty.skip_binder().kind() else {
             return Ok(());
         };
-        let (trait_ref, item_args) = alias_ty.trait_ref_and_own_args(tcx);
-        let item_args = tcx.mk_args(item_args);
-        let trait_ref = ty.rebind(trait_ref).upcast(tcx);
+        let trait_ref = ty.rebind(alias_ty.trait_ref(tcx)).upcast(tcx);
 
         // The predicate we're looking for is is `<T as Trait>::Type: OtherTrait`. We look up `T as
         // Trait` in the current context and add all the bounds on `Trait::Type` to our context.
@@ -362,10 +350,6 @@ impl<'tcx> PredicateSearcher<'tcx> {
             .map(|pred| EarlyBinder::bind(pred).instantiate(tcx, alias_ty.args))
             .enumerate();
 
-        // Resolve predicates required to mention the item.
-        let nested_impl_exprs =
-            self.resolve_item_required_predicates(alias_ty.def_id, alias_ty.args, warn)?;
-
         // Add all the bounds on the corresponding associated item.
         self.extend(item_bounds.map(|(index, pred)| {
             let mut candidate = Candidate {
@@ -375,8 +359,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
             };
             candidate.path.push(PathChunk::AssocItem {
                 item: tcx.associated_item(alias_ty.def_id),
-                generic_args: item_args,
-                impl_exprs: nested_impl_exprs.clone(),
+                generic_args: alias_ty.args,
                 predicate: pred,
                 index,
             });
@@ -441,16 +424,10 @@ impl<'tcx> PredicateSearcher<'tcx> {
                 impl_def_id,
                 args: generics,
                 ..
-            })) => {
-                // Resolve the predicates required by the impl.
-                let impl_exprs =
-                    self.resolve_item_required_predicates(impl_def_id, generics, warn)?;
-                ImplExprAtom::Concrete {
-                    def_id: impl_def_id,
-                    generics,
-                    impl_exprs,
-                }
-            }
+            })) => ImplExprAtom::Concrete {
+                def_id: impl_def_id,
+                generics,
+            },
             Ok(ImplSource::Param(_)) => {
                 match self.resolve_local(erased_tref.upcast(self.tcx), warn)? {
                     Some(candidate) => candidate.into_impl_expr(tcx),
