@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[cfg(feature = "rustc")]
-mod resolution;
+pub mod resolution;
 #[cfg(feature = "rustc")]
 mod utils;
 #[cfg(feature = "rustc")]
@@ -218,18 +218,8 @@ pub fn solve_trait<'tcx, S: UnderOwnerState<'tcx>>(
     if let Some(impl_expr) = s.with_cache(|cache| cache.impl_exprs.get(&trait_ref).cloned()) {
         return impl_expr;
     }
-    let resolved = s.with_cache(|cache| {
-        cache
-            .predicate_searcher
-            .get_or_insert_with(|| {
-                PredicateSearcher::new_for_owner(
-                    s.base().tcx,
-                    s.owner_id(),
-                    s.base().options.resolve_drop_bounds,
-                )
-            })
-            .resolve(&trait_ref, &warn)
-    });
+    let resolved =
+        s.with_predicate_searcher(|pred_searcher| pred_searcher.resolve(&trait_ref, &warn));
     let impl_expr = match resolved {
         Ok(x) => x.sinto(s),
         Err(e) => crate::fatal!(s, "{}", e),

@@ -309,6 +309,17 @@ pub trait WithItemCacheExt<'tcx>: UnderOwnerState<'tcx> {
     fn with_cache<T>(&self, f: impl FnOnce(&mut ItemCache<'tcx>) -> T) -> T {
         self.with_item_cache(self.owner_id(), f)
     }
+    fn with_predicate_searcher<T>(&self, f: impl FnOnce(&mut PredicateSearcher<'tcx>) -> T) -> T {
+        self.with_cache(|cache| {
+            f(cache.predicate_searcher.get_or_insert_with(|| {
+                PredicateSearcher::new_for_owner(
+                    self.base().tcx,
+                    self.owner_id(),
+                    self.base().options.resolve_drop_bounds,
+                )
+            }))
+        })
+    }
 }
 impl<'tcx, S: UnderOwnerState<'tcx>> WithItemCacheExt<'tcx> for S {}
 

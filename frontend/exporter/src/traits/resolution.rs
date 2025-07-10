@@ -229,6 +229,7 @@ impl<'tcx> Candidate<'tcx> {
 }
 
 /// Stores a set of predicates along with where they came from.
+#[derive(Clone)]
 pub struct PredicateSearcher<'tcx> {
     tcx: TyCtxt<'tcx>,
     typing_env: rustc_middle::ty::TypingEnv<'tcx>,
@@ -282,6 +283,12 @@ impl<'tcx> PredicateSearcher<'tcx> {
             }
         }));
         std::mem::swap(&mut count, &mut self.bound_clause_count);
+    }
+
+    /// Override the param env; we use this when resolving `dyn` predicates to add more clauses to
+    /// the scope.
+    pub fn set_param_env(&mut self, param_env: ParamEnv<'tcx>) {
+        self.typing_env.param_env = param_env;
     }
 
     /// Insert annotated predicates in the search context. Prefer inserting them all at once as
