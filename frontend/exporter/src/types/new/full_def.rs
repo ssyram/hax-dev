@@ -418,12 +418,7 @@ where
         RDefKind::ForeignTy => FullDefKind::ForeignTy,
         RDefKind::AssocTy { .. } => FullDefKind::AssocTy {
             param_env: get_param_env(s),
-            implied_predicates: implied_predicates(
-                tcx,
-                def_id,
-                s.base().options.resolve_drop_bounds,
-            )
-            .sinto(s),
+            implied_predicates: get_implied_predicates(s),
             associated_item: tcx.associated_item(def_id).sinto(s),
             value: if tcx.defaultness(def_id).has_value() {
                 Some(tcx.type_of(def_id).instantiate_identity().sinto(s))
@@ -434,12 +429,7 @@ where
         RDefKind::OpaqueTy => FullDefKind::OpaqueTy,
         RDefKind::Trait { .. } => FullDefKind::Trait {
             param_env: get_param_env(s),
-            implied_predicates: implied_predicates(
-                tcx,
-                def_id,
-                s.base().options.resolve_drop_bounds,
-            )
-            .sinto(s),
+            implied_predicates: get_implied_predicates(s),
             self_predicate: get_self_predicate(s),
             items: tcx
                 .associated_items(def_id)
@@ -452,12 +442,7 @@ where
         },
         RDefKind::TraitAlias { .. } => FullDefKind::TraitAlias {
             param_env: get_param_env(s),
-            implied_predicates: implied_predicates(
-                tcx,
-                def_id,
-                s.base().options.resolve_drop_bounds,
-            )
-            .sinto(s),
+            implied_predicates: get_implied_predicates(s),
             self_predicate: get_self_predicate(s),
         },
         RDefKind::Impl { .. } => {
@@ -934,4 +919,11 @@ fn get_param_env<'tcx, S: UnderOwnerState<'tcx>>(s: &S) -> ParamEnv {
         generics: tcx.generics_of(def_id).sinto(s),
         predicates: required_predicates(tcx, def_id, s.base().options.resolve_drop_bounds).sinto(s),
     }
+}
+
+#[cfg(feature = "rustc")]
+fn get_implied_predicates<'tcx, S: UnderOwnerState<'tcx>>(s: &S) -> GenericPredicates {
+    let tcx = s.base().tcx;
+    let def_id = s.owner_id();
+    implied_predicates(tcx, def_id, s.base().options.resolve_drop_bounds).sinto(s)
 }
