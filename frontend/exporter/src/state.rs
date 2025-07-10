@@ -167,19 +167,28 @@ mk!(
         thir: {'tcx} types::RcThir,
         mir: {'tcx} types::RcMir,
         binder: {'tcx} types::UnitBinder,
+        ty: {'tcx} rustc_middle::ty::Ty,
     }
 );
 
 pub use self::types::*;
 
-pub type StateWithBase<'tcx> = State<Base<'tcx>, (), (), (), ()>;
-pub type StateWithOwner<'tcx> = State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), ()>;
+pub type StateWithBase<'tcx> = State<Base<'tcx>, (), (), (), (), ()>;
+pub type StateWithOwner<'tcx> = State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), (), ()>;
 pub type StateWithBinder<'tcx> =
-    State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), types::UnitBinder<'tcx>>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), types::UnitBinder<'tcx>, ()>;
 pub type StateWithThir<'tcx> =
-    State<Base<'tcx>, rustc_hir::def_id::DefId, types::RcThir<'tcx>, (), ()>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, types::RcThir<'tcx>, (), (), ()>;
+pub type StateWithThirAndTy<'tcx> = State<
+    Base<'tcx>,
+    rustc_hir::def_id::DefId,
+    types::RcThir<'tcx>,
+    (),
+    (),
+    rustc_middle::ty::Ty<'tcx>,
+>;
 pub type StateWithMir<'tcx> =
-    State<Base<'tcx>, rustc_hir::def_id::DefId, (), types::RcMir<'tcx>, ()>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, (), types::RcMir<'tcx>, (), ()>;
 
 impl<'tcx> StateWithBase<'tcx> {
     pub fn new(
@@ -187,11 +196,12 @@ impl<'tcx> StateWithBase<'tcx> {
         options: hax_frontend_exporter_options::Options,
     ) -> Self {
         Self {
+            base: Base::new(tcx, options),
+            owner_id: (),
             thir: (),
             mir: (),
-            owner_id: (),
             binder: (),
-            base: Base::new(tcx, options),
+            ty: (),
         }
     }
 }
@@ -207,6 +217,7 @@ pub trait BaseState<'tcx>: HasBase<'tcx> + Clone {
             thir: (),
             mir: (),
             binder: (),
+            ty: (),
         }
     }
 }
@@ -221,6 +232,7 @@ pub trait UnderOwnerState<'tcx>: BaseState<'tcx> + HasOwnerId {
             thir: (),
             mir: (),
             binder: (),
+            ty: (),
         }
     }
     fn with_binder(&self, binder: types::UnitBinder<'tcx>) -> StateWithBinder<'tcx> {
@@ -230,6 +242,7 @@ pub trait UnderOwnerState<'tcx>: BaseState<'tcx> + HasOwnerId {
             binder,
             thir: (),
             mir: (),
+            ty: (),
         }
     }
     fn with_thir(&self, thir: types::RcThir<'tcx>) -> StateWithThir<'tcx> {
@@ -239,6 +252,7 @@ pub trait UnderOwnerState<'tcx>: BaseState<'tcx> + HasOwnerId {
             thir,
             mir: (),
             binder: (),
+            ty: (),
         }
     }
     fn with_mir(&self, mir: types::RcMir<'tcx>) -> StateWithMir<'tcx> {
@@ -248,6 +262,7 @@ pub trait UnderOwnerState<'tcx>: BaseState<'tcx> + HasOwnerId {
             mir,
             thir: (),
             binder: (),
+            ty: (),
         }
     }
 }
@@ -258,7 +273,19 @@ pub trait UnderBinderState<'tcx> = UnderOwnerState<'tcx> + HasBinder<'tcx>;
 
 /// While translating expressions, we expect to always have a THIR
 /// body and an `owner_id` in the state
-pub trait ExprState<'tcx> = UnderOwnerState<'tcx> + HasThir<'tcx>;
+pub trait ExprState<'tcx>: UnderOwnerState<'tcx> + HasThir<'tcx> {
+    fn with_ty(&self, ty: rustc_middle::ty::Ty<'tcx>) -> StateWithThirAndTy<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
+            thir: self.thir(),
+            mir: (),
+            binder: (),
+            ty,
+        }
+    }
+}
+impl<'tcx, T> ExprState<'tcx> for T where T: UnderOwnerState<'tcx> + HasThir<'tcx> {}
 
 pub trait WithGlobalCacheExt<'tcx>: BaseState<'tcx> {
     /// Access the global cache. You must not call `sinto` within this function as this will likely

@@ -190,6 +190,7 @@ impl<'tcx, S: ExprState<'tcx>> SInto<S, Stmt> for thir::StmtId {
 #[cfg(feature = "rustc")]
 impl<'tcx, S: ExprState<'tcx>> SInto<S, Expr> for thir::Expr<'tcx> {
     fn sinto(&self, s: &S) -> Expr {
+        let s = &s.with_ty(self.ty);
         let (hir_id, attributes) = self.hir_id_and_attributes(s);
         let hir_id = hir_id.map(|hir_id| hir_id.index());
         let unrolled = self.unroll_scope(s);
@@ -589,7 +590,7 @@ pub type Expr = Decorated<ExprKind>;
 
 /// Reflects [`thir::ExprKind`]
 #[derive(AdtInto)]
-#[args(<'tcx, S: ExprState<'tcx>>, from: thir::ExprKind<'tcx>, state: S as gstate)]
+#[args(<'tcx, S: ExprState<'tcx> + HasTy<'tcx>>, from: thir::ExprKind<'tcx>, state: S as gstate)]
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
 #[append(
