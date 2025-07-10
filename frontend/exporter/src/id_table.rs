@@ -24,7 +24,7 @@ use std::{
 
 /// Unique IDs in a ID table.
 #[derive_group(Serializers)]
-#[derive(Default, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Clone, Copy, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct Id {
     id: u32,
@@ -208,6 +208,10 @@ impl<T: Sync + Send + 'static + SupportedType<Value>> Node<T> {
 
     pub fn inner(&self) -> &Arc<T> {
         &self.value
+    }
+
+    pub fn id(&self) -> Id {
+        self.id
     }
 }
 

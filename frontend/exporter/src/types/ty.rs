@@ -557,6 +557,9 @@ impl ItemRef {
         s.with_cache(|cache| {
             cache.item_refs.insert(key, item.clone());
         });
+        s.with_global_cache(|cache| {
+            cache.reverse_item_refs_map.insert(item.id(), generics);
+        });
         item
     }
 
@@ -564,15 +567,30 @@ impl ItemRef {
         &self.contents
     }
 
+    /// Get a unique id identitying this `ItemRef`.
+    pub fn id(&self) -> id_table::Id {
+        self.contents.id()
+    }
+
+    /// Recover the original rustc args that generated this `ItemRef`. Will panic if the `ItemRef`
+    /// was built by hand instead of using `translate_item_ref`.
     #[cfg(feature = "rustc")]
-    pub fn mutate<'tcx, S: BaseState<'tcx>>(
-        &mut self,
-        s: &S,
-        f: impl FnOnce(&mut ItemRefContents),
-    ) {
-        let mut contents = self.contents().clone();
-        f(&mut contents);
-        *self = contents.intern(s);
+    pub fn rustc_args<'tcx, S: BaseState<'tcx>>(&self, s: &S) -> ty::GenericArgsRef<'tcx> {
+        s.with_global_cache(|cache| *cache.reverse_item_refs_map.get(&self.id()).unwrap())
+    }
+
+    /// Mutate the `DefId`, keeping the same generic args.
+    #[cfg(feature = "rustc")]
+    pub fn mutate_def_id<'tcx, S: BaseState<'tcx>>(&mut self, s: &S, f: impl FnOnce(&mut DefId)) {
+        let args = self.rustc_args(s);
+        {
+            let mut contents = self.contents().clone();
+            f(&mut contents.def_id);
+            *self = contents.intern(s);
+        };
+        s.with_global_cache(|cache| {
+            cache.reverse_item_refs_map.insert(self.id(), args);
+        });
     }
 }
 

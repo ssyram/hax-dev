@@ -88,6 +88,8 @@ mod types {
         pub per_item: HashMap<RDefId, ItemCache<'tcx>>,
         /// A ID table session, providing fresh IDs.
         pub id_table_session: id_table::Session,
+        /// Map that recovers rustc args for a given `ItemRef`.
+        pub reverse_item_refs_map: HashMap<id_table::Id, ty::GenericArgsRef<'tcx>>,
     }
 
     /// Defines a mapping from types to types, for use with `TypeMap`.
@@ -113,7 +115,7 @@ mod types {
         pub promoteds: TypeMap<PromotedFullDefsMapper>,
         /// Cache the `Ty` translations.
         pub tys: HashMap<ty::Ty<'tcx>, Ty>,
-        /// Cache the `ItemRef` translations.
+        /// Cache the `ItemRef` translations. This is fast because `GenericArgsRef` is interned.
         pub item_refs: HashMap<(RDefId, ty::GenericArgsRef<'tcx>), ItemRef>,
         /// Cache the trait resolution engine for each item.
         pub predicate_searcher: Option<crate::traits::PredicateSearcher<'tcx>>,
