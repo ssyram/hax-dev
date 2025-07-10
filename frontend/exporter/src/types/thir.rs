@@ -705,6 +705,17 @@ pub enum ExprKind {
     NeverToAny {
         source: Expr,
     },
+    #[custom_arm(
+        &FROM_TYPE::PointerCoercion { cast, source, .. } => {
+            let source = &gstate.thir().exprs[source];
+            let src_ty = source.ty;
+            let tgt_ty = gstate.ty();
+            TO_TYPE::PointerCoercion {
+                cast: PointerCoercion::sfrom(gstate, cast, src_ty, tgt_ty),
+                source: source.sinto(gstate),
+            }
+        },
+    )]
     PointerCoercion {
         cast: PointerCoercion,
         source: Expr,
