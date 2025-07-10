@@ -17,8 +17,6 @@ type DefaultFullDefBody = MirBody<mir_kinds::Unknown>;
 #[derive(Clone, Debug, JsonSchema)]
 pub struct FullDef<Body = DefaultFullDefBody> {
     pub def_id: DefId,
-    /// The enclosing item.
-    pub parent: Option<DefId>,
     /// The span of the definition of this item (e.g. for a function this is is signature).
     pub span: Span,
     /// The span of the whole definition (including e.g. the function body).
@@ -107,7 +105,6 @@ where
         .and_then(|source_span| tcx.sess.source_map().span_to_snippet(source_span).ok());
     FullDef {
         def_id: def_id.clone(),
-        parent: def_id.parent.clone(),
         span: def_id.def_span(s),
         source_span: source_span.sinto(s),
         source_text,
@@ -211,7 +208,6 @@ pub enum FullDefKind<Body> {
     ForeignTy,
     /// Associated type: `trait MyTrait { type Assoc; }`
     AssocTy {
-        parent: DefId,
         param_env: ParamEnv,
         implied_predicates: GenericPredicates,
         associated_item: AssocItem,
@@ -268,7 +264,6 @@ pub enum FullDefKind<Body> {
     /// Associated function: `impl MyStruct { fn associated() {} }` or `trait Foo { fn associated()
     /// {} }`
     AssocFn {
-        parent: DefId,
         param_env: ParamEnv,
         associated_item: AssocItem,
         inline: InlineAttr,
@@ -305,7 +300,6 @@ pub enum FullDefKind<Body> {
     },
     /// Associated constant: `trait MyTrait { const ASSOC: usize; }`
     AssocConst {
-        parent: DefId,
         param_env: ParamEnv,
         associated_item: AssocItem,
         ty: Ty,
@@ -423,7 +417,6 @@ where
         },
         RDefKind::ForeignTy => FullDefKind::ForeignTy,
         RDefKind::AssocTy { .. } => FullDefKind::AssocTy {
-            parent: tcx.parent(def_id).sinto(s),
             param_env: get_param_env(s, def_id),
             implied_predicates: implied_predicates(
                 tcx,
@@ -591,7 +584,6 @@ where
             body: Body::body(def_id, s),
         },
         RDefKind::AssocFn { .. } => FullDefKind::AssocFn {
-            parent: tcx.parent(def_id).sinto(s),
             param_env: get_param_env(s, def_id),
             associated_item: tcx.associated_item(def_id).sinto(s),
             inline: tcx.codegen_fn_attrs(def_id).inline.sinto(s),
@@ -645,7 +637,6 @@ where
             }
         }
         RDefKind::AssocConst { .. } => FullDefKind::AssocConst {
-            parent: tcx.parent(def_id).sinto(s),
             param_env: get_param_env(s, def_id),
             associated_item: tcx.associated_item(def_id).sinto(s),
             ty: tcx.type_of(def_id).instantiate_identity().sinto(s),
