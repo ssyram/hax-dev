@@ -201,8 +201,7 @@ pub enum FullDefKind<Body> {
     /// Type alias: `type Foo = Bar;`
     TyAlias {
         param_env: ParamEnv,
-        /// `Some` if the item is in the local crate.
-        ty: Option<Ty>,
+        ty: Ty,
     },
     /// Type from an `extern` block.
     ForeignTy,
@@ -399,22 +398,16 @@ where
                 drop_glue: get_drop_glue_shim(s),
             }
         }
-        RDefKind::TyAlias { .. } => FullDefKind::TyAlias {
-            param_env: get_param_env(s),
-            ty: tcx.hir_get_if_local(def_id).map(|node| {
-                let rustc_hir::Node::Item(item) = node else {
-                    unreachable!()
-                };
-                let rustc_hir::ItemKind::TyAlias(_, _generics, ty) = &item.kind else {
-                    unreachable!()
-                };
-                let s = &s.with_base(Base {
-                    ty_alias_mode: true,
-                    ..s.base()
-                });
-                ty.sinto(s)
-            }),
-        },
+        RDefKind::TyAlias { .. } => {
+            let s = &s.with_base(Base {
+                ty_alias_mode: true,
+                ..s.base()
+            });
+            FullDefKind::TyAlias {
+                param_env: get_param_env(s),
+                ty: tcx.type_of(def_id).instantiate_identity().sinto(s),
+            }
+        }
         RDefKind::ForeignTy => FullDefKind::ForeignTy,
         RDefKind::AssocTy { .. } => FullDefKind::AssocTy {
             param_env: get_param_env(s),
