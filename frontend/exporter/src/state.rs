@@ -163,9 +163,9 @@ mod types {
 mk!(
     struct State<'tcx> {
         base: {'tcx} types::Base,
+        owner_id: {} rustc_hir::def_id::DefId,
         thir: {'tcx} types::RcThir,
         mir: {'tcx} types::RcMir,
-        owner_id: {} rustc_hir::def_id::DefId,
         binder: {'tcx} types::UnitBinder,
     }
 );
@@ -173,13 +173,13 @@ mk!(
 pub use self::types::*;
 
 pub type StateWithBase<'tcx> = State<Base<'tcx>, (), (), (), ()>;
-pub type StateWithOwner<'tcx> = State<Base<'tcx>, (), (), rustc_hir::def_id::DefId, ()>;
+pub type StateWithOwner<'tcx> = State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), ()>;
 pub type StateWithBinder<'tcx> =
-    State<Base<'tcx>, (), (), rustc_hir::def_id::DefId, types::UnitBinder<'tcx>>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), types::UnitBinder<'tcx>>;
 pub type StateWithThir<'tcx> =
-    State<Base<'tcx>, types::RcThir<'tcx>, (), rustc_hir::def_id::DefId, ()>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, types::RcThir<'tcx>, (), ()>;
 pub type StateWithMir<'tcx> =
-    State<Base<'tcx>, (), types::RcMir<'tcx>, rustc_hir::def_id::DefId, ()>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, (), types::RcMir<'tcx>, ()>;
 
 impl<'tcx> StateWithBase<'tcx> {
     pub fn new(
