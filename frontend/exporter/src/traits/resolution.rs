@@ -132,51 +132,44 @@ pub struct AnnotatedTraitPred<'tcx> {
     pub clause: PolyTraitPredicate<'tcx>,
 }
 
+/// Returns the predicate to resolve as `Self`, if that makes sense in the current item.
+/// Currently this predicate is only used inside trait declarations and their asosciated types.
+fn initial_self_pred<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: rustc_span::def_id::DefId,
+) -> Option<PolyTraitPredicate<'tcx>> {
+    use DefKind::*;
+    let trait_def_id = match tcx.def_kind(def_id) {
+        Trait | TraitAlias => def_id,
+        // Hack: we don't support GATs well so for now we let assoc types refer to the
+        // implicit trait `Self` clause. Other associated items get an explicit `Self:
+        // Trait` clause passed to them so they don't need that.
+        AssocTy => tcx.parent(def_id),
+        _ => return None,
+    };
+    let self_pred = self_predicate(tcx, trait_def_id).upcast(tcx);
+    Some(self_pred)
+}
+
 /// The predicates to use as a starting point for resolving trait references within this item. This
-/// includes the "self" predicate if applicable and the `required_predicates` of this item and all
-/// its parents, numbered starting from the parents.
-fn initial_search_predicates<'tcx>(
+/// includes the `required_predicates` of this item and all its parents.
+fn local_bound_predicates<'tcx>(
     tcx: TyCtxt<'tcx>,
     def_id: rustc_span::def_id::DefId,
     add_drop: bool,
-) -> Vec<AnnotatedTraitPred<'tcx>> {
+) -> Vec<PolyTraitPredicate<'tcx>> {
     fn acc_predicates<'tcx>(
         tcx: TyCtxt<'tcx>,
         def_id: rustc_span::def_id::DefId,
         add_drop: bool,
-        include_self_pred: bool,
-        predicates: &mut Vec<AnnotatedTraitPred<'tcx>>,
-        pred_id: &mut usize,
+        predicates: &mut Vec<PolyTraitPredicate<'tcx>>,
     ) {
-        let next_item_origin = |pred_id: &mut usize| {
-            let origin = BoundPredicateOrigin::Item(*pred_id);
-            *pred_id += 1;
-            origin
-        };
         use DefKind::*;
         match tcx.def_kind(def_id) {
-            // These inherit some predicates from their parent.
-            dk @ (AssocTy | AssocFn | AssocConst | Closure | Ctor(..) | Variant) => {
+            // These inherit predicates from their parent.
+            AssocTy | AssocFn | AssocConst | Closure | Ctor(..) | Variant => {
                 let parent = tcx.parent(def_id);
-                // Hack: we don't support GATs well so for now we let assoc types refer to the
-                // implicit trait `Self` clause. Other associated items get an explicit `Self:
-                // Trait` clause passed to them so they don't need that.
-                let include_self_pred = include_self_pred && matches!(dk, AssocTy);
-                acc_predicates(
-                    tcx,
-                    parent,
-                    add_drop,
-                    include_self_pred,
-                    predicates,
-                    pred_id,
-                );
-            }
-            Trait | TraitAlias if include_self_pred => {
-                let self_pred = self_predicate(tcx, def_id).upcast(tcx);
-                predicates.push(AnnotatedTraitPred {
-                    origin: BoundPredicateOrigin::SelfPred,
-                    clause: self_pred,
-                })
+                acc_predicates(tcx, parent, add_drop, predicates);
             }
             _ => {}
         }
@@ -184,17 +177,12 @@ fn initial_search_predicates<'tcx>(
             required_predicates(tcx, def_id, add_drop)
                 .iter()
                 .map(|(clause, _span)| *clause)
-                .filter_map(|clause| {
-                    clause.as_trait_clause().map(|clause| AnnotatedTraitPred {
-                        origin: next_item_origin(pred_id),
-                        clause,
-                    })
-                }),
+                .filter_map(|clause| clause.as_trait_clause()),
         );
     }
 
     let mut predicates = vec![];
-    acc_predicates(tcx, def_id, add_drop, true, &mut predicates, &mut 0);
+    acc_predicates(tcx, def_id, add_drop, &mut predicates);
     predicates
 }
 
@@ -248,6 +236,8 @@ pub struct PredicateSearcher<'tcx> {
     candidates: HashMap<PolyTraitPredicate<'tcx>, Candidate<'tcx>>,
     /// Whether to add `T: Drop` bounds for every type generic and associated item.
     add_drop: bool,
+    /// Count the number of bound clauses in scope; used to identify clauses uniquely.
+    bound_clause_count: usize,
 }
 
 impl<'tcx> PredicateSearcher<'tcx> {
@@ -261,22 +251,52 @@ impl<'tcx> PredicateSearcher<'tcx> {
             },
             candidates: Default::default(),
             add_drop,
+            bound_clause_count: 0,
         };
-        out.extend(
-            initial_search_predicates(tcx, owner_id, add_drop)
-                .into_iter()
-                .map(|clause| Candidate {
-                    path: vec![],
-                    pred: clause.clause,
-                    origin: clause,
-                }),
+        out.insert_predicates(
+            initial_self_pred(tcx, owner_id).map(|clause| AnnotatedTraitPred {
+                origin: BoundPredicateOrigin::SelfPred,
+                clause,
+            }),
         );
+        out.insert_bound_predicates(local_bound_predicates(tcx, owner_id, add_drop));
         out
+    }
+
+    /// Insert the bound clauses in the search context. Prefer inserting them all at once as this
+    /// will give priority to shorter resolution paths. Bound clauses are numbered from `0` in
+    /// insertion order.
+    pub fn insert_bound_predicates(
+        &mut self,
+        clauses: impl IntoIterator<Item = PolyTraitPredicate<'tcx>>,
+    ) {
+        let mut count = usize::MAX;
+        // Swap to avoid borrow conflicts.
+        std::mem::swap(&mut count, &mut self.bound_clause_count);
+        self.insert_predicates(clauses.into_iter().map(|clause| {
+            let i = count;
+            count += 1;
+            AnnotatedTraitPred {
+                origin: BoundPredicateOrigin::Item(i),
+                clause,
+            }
+        }));
+        std::mem::swap(&mut count, &mut self.bound_clause_count);
+    }
+
+    /// Insert annotated predicates in the search context. Prefer inserting them all at once as
+    /// this will give priority to shorter resolution paths.
+    fn insert_predicates(&mut self, preds: impl IntoIterator<Item = AnnotatedTraitPred<'tcx>>) {
+        self.insert_candidates(preds.into_iter().map(|clause| Candidate {
+            path: vec![],
+            pred: clause.clause,
+            origin: clause,
+        }))
     }
 
     /// Insert new candidates and all their parent predicates. This deduplicates predicates
     /// to avoid divergence.
-    fn extend(&mut self, candidates: impl IntoIterator<Item = Candidate<'tcx>>) {
+    fn insert_candidates(&mut self, candidates: impl IntoIterator<Item = Candidate<'tcx>>) {
         let tcx = self.tcx;
         // Filter out duplicated candidates.
         let mut new_candidates = Vec::new();
@@ -289,19 +309,20 @@ impl<'tcx> PredicateSearcher<'tcx> {
             }
         }
         if !new_candidates.is_empty() {
-            self.extend_parents(new_candidates);
+            // Insert the parents all at once.
+            self.insert_candidate_parents(new_candidates);
         }
     }
 
     /// Add the parents of these candidates. This is a separate function to avoid
     /// polymorphic recursion due to the closures capturing the type parameters of this
     /// function.
-    fn extend_parents(&mut self, new_candidates: Vec<Candidate<'tcx>>) {
+    fn insert_candidate_parents(&mut self, new_candidates: Vec<Candidate<'tcx>>) {
         let tcx = self.tcx;
         // Then recursively add their parents. This way ensures a breadth-first order,
         // which means we select the shortest path when looking up predicates.
         let add_drop = self.add_drop;
-        self.extend(new_candidates.into_iter().flat_map(|candidate| {
+        self.insert_candidates(new_candidates.into_iter().flat_map(|candidate| {
             parents_trait_predicates(tcx, candidate.pred, add_drop)
                 .into_iter()
                 .enumerate()
@@ -351,7 +372,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
             .enumerate();
 
         // Add all the bounds on the corresponding associated item.
-        self.extend(item_bounds.map(|(index, pred)| {
+        self.insert_candidates(item_bounds.map(|(index, pred)| {
             let mut candidate = Candidate {
                 path: trait_candidate.path.clone(),
                 pred,
