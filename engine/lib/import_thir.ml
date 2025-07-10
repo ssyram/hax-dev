@@ -993,7 +993,7 @@ end) : EXPR = struct
     | ClosureFnPointer Safe | ReifyFnPointer ->
         (* we have arrow types, we do not distinguish between top-level functions and closures *)
         (c_expr source).e
-    | Unsize ->
+    | Unsize _ ->
         (* https://doc.rust-lang.org/std/marker/trait.Unsize.html *)
         (U.call Rust_primitives__unsize [ c_expr source ] span typ).e
         (* let source = c_expr source in *)

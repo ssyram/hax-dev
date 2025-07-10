@@ -12,52 +12,12 @@ macro_rules! mk_aux {
                     self.$field.clone()
                 }
             }
-            pub trait [<Has $field:camel Setter>]<$($lts)*> {
-                type Out;
-                // fn [<with_ $field>]<$($lts,)*$($gen)*>(self: Self, $field: $($field_type)+<$($lts)*>) -> $state<$($params)*>;
-                fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> Self::Out;
-            }
-            // const _: &str = stringify!(
-            #[allow(unused)]
-            impl<$($lts,)*$($gen_full)*> [<Has $field:camel Setter>]<$($lts,)*> for $state<$($gen_full)*> {
-                type Out = $state<$($params)*>;
-                fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> Self::Out {
-                    let __this_field = $field;
-                    let $state { $($fields,)* } = self;
-                    let $field = __this_field;
-                    $state { $($fields,)* }
-                }
-            }
-            // );
-            // pub trait [<Has $field:camel Setter>]<$($lts,)*$($gen_full)*> {
-            //     fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> $state<$($params)*>;
-            // }
-            // impl<$($lts,)*$($gen_full)*> [<Has $field:camel Setter>]<$($lts,)*$($gen_full)*> for $state<$($gen_full)*> {
-            //     fn [<with_ $field>](self: Self, $field: $($field_type)+<$($lts)*>) -> $state<$($params)*> {
-            //         let __this_field = $field;
-            //         let $state { $($fields,)* } = self;
-            //         let $field = __this_field;
-            //         $state { $($fields,)* }
-            //     }
-            // }
         }
-    };
-}
-macro_rules! mk_is_state_trait {
-    ($lts:tt {$($finished:tt)*} {{$f0:ident, $($l:tt)*} $($f:tt)*} $($generic:tt)*) => {
-        paste! {mk_is_state_trait!{
-                $lts {$($finished)* [<Has $f0:camel Setter>] <$($l)*> +} {$($f)*} $($generic)*
-                // $lts {$($finished)* [<Has $f0:camel Setter>] <$($l)* $($generic)*> +} {$($f)*} $($generic)*
-        }}
-    };
-    ({$($glts:lifetime,)*} {$($finished:tt)*} {} $($generic:tt)*) => {
-        pub trait IsState<$($glts,)*> = $($finished)*;
     };
 }
 macro_rules! mk {
     (struct $state:ident<$($glts:lifetime),*> {$($field:ident : {$($lts:lifetime),*} $field_type:ty),*$(,)?}) => {
         mk!(@$state {} {$($field)*} {$($field: {$($lts),*} {$field_type},)*});
-        mk_is_state_trait!({$($glts,)*} {} {$({$field, $($lts,)*})*} $([<$field:camel>],)*);
     };
     (@$state:ident {$($acc:tt)*} $fields:tt {
         $field:ident : $lts:tt $field_type:tt
@@ -203,23 +163,32 @@ mod types {
 mk!(
     struct State<'tcx> {
         base: {'tcx} types::Base,
+        owner_id: {} rustc_hir::def_id::DefId,
         thir: {'tcx} types::RcThir,
         mir: {'tcx} types::RcMir,
-        owner_id: {} rustc_hir::def_id::DefId,
         binder: {'tcx} types::UnitBinder,
+        ty: {'tcx} rustc_middle::ty::Ty,
     }
 );
 
 pub use self::types::*;
 
-pub type StateWithBase<'tcx> = State<Base<'tcx>, (), (), (), ()>;
-pub type StateWithOwner<'tcx> = State<Base<'tcx>, (), (), rustc_hir::def_id::DefId, ()>;
+pub type StateWithBase<'tcx> = State<Base<'tcx>, (), (), (), (), ()>;
+pub type StateWithOwner<'tcx> = State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), (), ()>;
 pub type StateWithBinder<'tcx> =
-    State<Base<'tcx>, (), (), rustc_hir::def_id::DefId, types::UnitBinder<'tcx>>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, (), (), types::UnitBinder<'tcx>, ()>;
 pub type StateWithThir<'tcx> =
-    State<Base<'tcx>, types::RcThir<'tcx>, (), rustc_hir::def_id::DefId, ()>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, types::RcThir<'tcx>, (), (), ()>;
+pub type StateWithThirAndTy<'tcx> = State<
+    Base<'tcx>,
+    rustc_hir::def_id::DefId,
+    types::RcThir<'tcx>,
+    (),
+    (),
+    rustc_middle::ty::Ty<'tcx>,
+>;
 pub type StateWithMir<'tcx> =
-    State<Base<'tcx>, (), types::RcMir<'tcx>, rustc_hir::def_id::DefId, ()>;
+    State<Base<'tcx>, rustc_hir::def_id::DefId, (), types::RcMir<'tcx>, (), ()>;
 
 impl<'tcx> StateWithBase<'tcx> {
     pub fn new(
@@ -227,98 +196,96 @@ impl<'tcx> StateWithBase<'tcx> {
         options: hax_frontend_exporter_options::Options,
     ) -> Self {
         Self {
+            base: Base::new(tcx, options),
+            owner_id: (),
             thir: (),
             mir: (),
-            owner_id: (),
             binder: (),
-            base: Base::new(tcx, options),
+            ty: (),
         }
     }
 }
 
-impl<'tcx> StateWithOwner<'tcx> {
-    pub fn new_from_state_and_id<S: BaseState<'tcx>>(s: &S, id: rustc_hir::def_id::DefId) -> Self {
+pub trait BaseState<'tcx>: HasBase<'tcx> + Clone {
+    /// Updates the OnwerId in a state, making sure to override `opt_def_id` in base as well.
+    fn with_owner_id(&self, owner_id: rustc_hir::def_id::DefId) -> StateWithOwner<'tcx> {
+        let mut base = self.base();
+        base.opt_def_id = Some(owner_id);
         State {
+            owner_id,
+            base,
             thir: (),
             mir: (),
-            owner_id: id,
             binder: (),
-            base: s.base().clone(),
+            ty: (),
         }
     }
 }
-impl<'tcx> StateWithMir<'tcx> {
-    pub fn new_from_mir(
-        tcx: rustc_middle::ty::TyCtxt<'tcx>,
-        options: hax_frontend_exporter_options::Options,
-        mir: rustc_middle::mir::Body<'tcx>,
-        owner_id: rustc_hir::def_id::DefId,
-    ) -> Self {
-        Self {
+impl<'tcx, T: HasBase<'tcx> + Clone> BaseState<'tcx> for T {}
+
+/// State of anything below an `owner`.
+pub trait UnderOwnerState<'tcx>: BaseState<'tcx> + HasOwnerId {
+    fn with_base(&self, base: types::Base<'tcx>) -> StateWithOwner<'tcx> {
+        State {
+            owner_id: self.owner_id(),
+            base,
             thir: (),
-            mir: Rc::new(mir),
-            owner_id,
+            mir: (),
             binder: (),
-            base: Base::new(tcx, options),
+            ty: (),
         }
     }
-}
-impl<'tcx> StateWithThir<'tcx> {
-    pub fn from_thir(
-        base: Base<'tcx>,
-        owner_id: rustc_hir::def_id::DefId,
-        thir: types::RcThir<'tcx>,
-    ) -> Self {
-        Self {
+    fn with_binder(&self, binder: types::UnitBinder<'tcx>) -> StateWithBinder<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
+            binder,
+            thir: (),
+            mir: (),
+            ty: (),
+        }
+    }
+    fn with_thir(&self, thir: types::RcThir<'tcx>) -> StateWithThir<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
             thir,
             mir: (),
-            owner_id,
             binder: (),
-            base,
+            ty: (),
         }
     }
-}
-
-impl<'tcx> StateWithOwner<'tcx> {
-    pub fn from_under_owner<S: UnderOwnerState<'tcx>>(s: &S) -> Self {
-        Self {
-            base: s.base(),
-            owner_id: s.owner_id(),
+    fn with_mir(&self, mir: types::RcMir<'tcx>) -> StateWithMir<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
+            mir,
             thir: (),
-            mir: (),
             binder: (),
+            ty: (),
         }
     }
 }
-
-/// Updates the OnwerId in a state, making sure to override `opt_def_id` in base as well.
-pub fn with_owner_id<THIR, MIR>(
-    mut base: types::Base<'_>,
-    thir: THIR,
-    mir: MIR,
-    owner_id: rustc_hir::def_id::DefId,
-) -> State<types::Base<'_>, THIR, MIR, rustc_hir::def_id::DefId, ()> {
-    base.opt_def_id = Some(owner_id);
-    State {
-        thir,
-        owner_id,
-        base,
-        mir,
-        binder: (),
-    }
-}
-
-pub trait BaseState<'tcx> = HasBase<'tcx> + Clone + IsState<'tcx>;
-
-/// State of anything below a `owner_id`.
-pub trait UnderOwnerState<'tcx> = BaseState<'tcx> + HasOwnerId;
+impl<'tcx, T: BaseState<'tcx> + HasOwnerId> UnderOwnerState<'tcx> for T {}
 
 /// State of anything below a binder.
 pub trait UnderBinderState<'tcx> = UnderOwnerState<'tcx> + HasBinder<'tcx>;
 
 /// While translating expressions, we expect to always have a THIR
 /// body and an `owner_id` in the state
-pub trait ExprState<'tcx> = UnderOwnerState<'tcx> + HasThir<'tcx>;
+pub trait ExprState<'tcx>: UnderOwnerState<'tcx> + HasThir<'tcx> {
+    fn with_ty(&self, ty: rustc_middle::ty::Ty<'tcx>) -> StateWithThirAndTy<'tcx> {
+        State {
+            base: self.base(),
+            owner_id: self.owner_id(),
+            thir: self.thir(),
+            mir: (),
+            binder: (),
+            ty,
+        }
+    }
+}
+impl<'tcx, T> ExprState<'tcx> for T where T: UnderOwnerState<'tcx> + HasThir<'tcx> {}
 
 pub trait WithGlobalCacheExt<'tcx>: BaseState<'tcx> {
     /// Access the global cache. You must not call `sinto` within this function as this will likely
@@ -346,9 +313,9 @@ pub trait WithItemCacheExt<'tcx>: UnderOwnerState<'tcx> {
 impl<'tcx, S: UnderOwnerState<'tcx>> WithItemCacheExt<'tcx> for S {}
 
 impl ImplInfos {
-    fn from(base: Base<'_>, did: rustc_hir::def_id::DefId) -> Self {
-        let tcx = base.tcx;
-        let s = &with_owner_id(base, (), (), did);
+    fn from<'tcx, S: BaseState<'tcx>>(s: &S, did: rustc_hir::def_id::DefId) -> Self {
+        let tcx = s.base().tcx;
+        let s = &s.with_owner_id(did);
 
         Self {
             generics: tcx.generics_of(did).sinto(s),
@@ -393,6 +360,6 @@ pub fn impl_def_ids_to_impled_types_and_bounds<'tcx, S: BaseState<'tcx>>(
                 })
             )
         })
-        .map(|did| (did.sinto(s), ImplInfos::from(s.base(), did)))
+        .map(|did| (did.sinto(s), ImplInfos::from(s, did)))
         .collect()
 }

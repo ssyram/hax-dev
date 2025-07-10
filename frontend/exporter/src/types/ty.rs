@@ -1095,8 +1095,6 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, AdtDef> for ty::AdtDef<'tcx> {
 }
 
 /// Reflects [`ty::adjustment::PointerCoercion`]
-#[derive(AdtInto)]
-#[args(<S>, from: ty::adjustment::PointerCoercion, state: S as gstate)]
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
 pub enum PointerCoercion {
@@ -1105,7 +1103,73 @@ pub enum PointerCoercion {
     ClosureFnPointer(Safety),
     MutToConstPointer,
     ArrayToPointer,
-    Unsize,
+    Unsize(UnsizingMetadata),
+}
+
+/// The metadata to attach to the newly-unsized ptr.
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, JsonSchema)]
+pub enum UnsizingMetadata {
+    Length(ConstantExpr),
+    VTablePtr(ImplExpr),
+    Unknown,
+}
+
+#[cfg(feature = "rustc")]
+impl PointerCoercion {
+    pub fn sfrom<'tcx, S: UnderOwnerState<'tcx>>(
+        s: &S,
+        coercion: ty::adjustment::PointerCoercion,
+        src_ty: ty::Ty<'tcx>,
+        tgt_ty: ty::Ty<'tcx>,
+    ) -> PointerCoercion {
+        match coercion {
+            ty::adjustment::PointerCoercion::ReifyFnPointer => PointerCoercion::ReifyFnPointer,
+            ty::adjustment::PointerCoercion::UnsafeFnPointer => PointerCoercion::UnsafeFnPointer,
+            ty::adjustment::PointerCoercion::ClosureFnPointer(x) => {
+                PointerCoercion::ClosureFnPointer(x.sinto(s))
+            }
+            ty::adjustment::PointerCoercion::MutToConstPointer => {
+                PointerCoercion::MutToConstPointer
+            }
+            ty::adjustment::PointerCoercion::ArrayToPointer => PointerCoercion::ArrayToPointer,
+            ty::adjustment::PointerCoercion::Unsize => {
+                // We only support unsizing behind references, pointers and boxes for now.
+                let meta = match (src_ty.builtin_deref(true), tgt_ty.builtin_deref(true)) {
+                    (Some(src_ty), Some(tgt_ty)) => {
+                        let tcx = s.base().tcx;
+                        let typing_env = s.typing_env();
+                        let (src_ty, tgt_ty) =
+                            tcx.struct_lockstep_tails_raw(src_ty, tgt_ty, |ty| {
+                                normalize(tcx, typing_env, ty)
+                            });
+                        match tgt_ty.kind() {
+                            ty::Slice(_) | ty::Str => match src_ty.kind() {
+                                ty::Array(_, len) => {
+                                    let len = len.sinto(s);
+                                    UnsizingMetadata::Length(len)
+                                }
+                                _ => UnsizingMetadata::Unknown,
+                            },
+                            ty::Dynamic(preds, ..) => {
+                                let pred = preds[0].with_self_ty(tcx, src_ty);
+                                let clause = pred.as_trait_clause().expect(
+                                    "the first `ExistentialPredicate` of `TyKind::Dynamic` \
+                                        should be a trait clause",
+                                );
+                                let tref = clause.rebind(clause.skip_binder().trait_ref);
+                                let impl_expr = solve_trait(s, tref);
+                                UnsizingMetadata::VTablePtr(impl_expr)
+                            }
+                            _ => UnsizingMetadata::Unknown,
+                        }
+                    }
+                    _ => UnsizingMetadata::Unknown,
+                };
+                PointerCoercion::Unsize(meta)
+            }
+        }
+    }
 }
 
 sinto_todo!(rustc_middle::ty, ScalarInt);
@@ -1382,13 +1446,7 @@ where
     fn sinto(&self, s: &S) -> Binder<T2> {
         let bound_vars = self.bound_vars().sinto(s);
         let value = {
-            let under_binder_s = &State {
-                base: s.base(),
-                owner_id: s.owner_id(),
-                binder: self.as_ref().map_bound(|_| ()),
-                thir: (),
-                mir: (),
-            };
+            let under_binder_s = &s.with_binder(self.as_ref().map_bound(|_| ()));
             self.as_ref().skip_binder().sinto(under_binder_s)
         };
         Binder { value, bound_vars }
@@ -1568,7 +1626,7 @@ fn get_container_for_assoc_item<'tcx, S: BaseState<'tcx>>(
 ) -> AssocItemContainer {
     let tcx = s.base().tcx;
     // We want to solve traits in the context of this item.
-    let state_with_id = &with_owner_id(s.base(), (), (), item.def_id);
+    let state_with_id = &s.with_owner_id(item.def_id);
     let container_id = item.container_id(tcx);
     match item.container {
         ty::AssocItemContainer::Trait => {
