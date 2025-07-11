@@ -57,7 +57,7 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ImplExprPathChunk> for resolution:
                 ..
             } => ImplExprPathChunk::AssocItem {
                 item: translate_item_ref(s, item.def_id, generic_args),
-                assoc_item: item.sinto(s),
+                assoc_item: AssocItem::sfrom(s, item),
                 predicate: predicate.sinto(s),
                 predicate_id: <_ as SInto<_, Clause>>::sinto(predicate, s).id,
                 index: index.sinto(s),
