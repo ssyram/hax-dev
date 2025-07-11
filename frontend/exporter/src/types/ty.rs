@@ -1652,22 +1652,60 @@ pub enum PredicateKind {
 }
 
 /// Reflects [`ty::AssocItem`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: ty::AssocItem, state: S as s)]
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AssocItem {
     pub def_id: DefId,
     /// This is `None` for RPTITs.
-    #[value(self.opt_name().sinto(s))]
     pub name: Option<Symbol>,
     pub kind: AssocKind,
-    #[value(get_container_for_assoc_item(s, self))]
     pub container: AssocItemContainer,
     /// Whether this item has a value (e.g. this is `false` for trait methods without default
     /// implementations).
-    #[value(self.defaultness(s.base().tcx).has_value())]
     pub has_value: bool,
+}
+
+#[cfg(feature = "rustc")]
+impl<'tcx, S: BaseState<'tcx>> SInto<S, AssocItem> for ty::AssocItem {
+    fn sinto(&self, s: &S) -> AssocItem {
+        let tcx = s.base().tcx;
+        // We want to solve traits in the context of this item.
+        let state_with_id = &s.with_owner_id(self.def_id);
+        let container_id = self.container_id(tcx);
+        let container = match self.container {
+            ty::AssocItemContainer::Trait => {
+                let trait_ref = ty::TraitRef::identity(tcx, container_id).sinto(state_with_id);
+                AssocItemContainer::TraitContainer { trait_ref }
+            }
+            ty::AssocItemContainer::Impl => {
+                if let Some(implemented_trait_item) = self.trait_item_def_id {
+                    let impl_generics = ty::GenericArgs::identity_for_item(tcx, container_id);
+                    let item = translate_item_ref(state_with_id, container_id, impl_generics);
+                    let implemented_trait_ref = tcx
+                        .impl_trait_ref(container_id)
+                        .unwrap()
+                        .instantiate_identity();
+                    AssocItemContainer::TraitImplContainer {
+                        impl_: item,
+                        implemented_trait_ref: implemented_trait_ref.sinto(state_with_id),
+                        implemented_trait_item: implemented_trait_item.sinto(s),
+                        overrides_default: tcx.defaultness(implemented_trait_item).has_value(),
+                    }
+                } else {
+                    AssocItemContainer::InherentImplContainer {
+                        impl_id: container_id.sinto(s),
+                    }
+                }
+            }
+        };
+        AssocItem {
+            def_id: self.def_id.sinto(s),
+            name: self.opt_name().sinto(s),
+            kind: self.kind.sinto(s),
+            container,
+            has_value: self.defaultness(tcx).has_value(),
+        }
+    }
 }
 
 /// Reflects [`ty::AssocKind`]
@@ -1711,43 +1749,6 @@ pub enum AssocItemContainer {
     InherentImplContainer {
         impl_id: DefId,
     },
-}
-
-#[cfg(feature = "rustc")]
-fn get_container_for_assoc_item<'tcx, S: BaseState<'tcx>>(
-    s: &S,
-    item: &ty::AssocItem,
-) -> AssocItemContainer {
-    let tcx = s.base().tcx;
-    // We want to solve traits in the context of this item.
-    let state_with_id = &s.with_owner_id(item.def_id);
-    let container_id = item.container_id(tcx);
-    match item.container {
-        ty::AssocItemContainer::Trait => {
-            let trait_ref = ty::TraitRef::identity(tcx, container_id).sinto(state_with_id);
-            AssocItemContainer::TraitContainer { trait_ref }
-        }
-        ty::AssocItemContainer::Impl => {
-            if let Some(implemented_trait_item) = item.trait_item_def_id {
-                let impl_generics = ty::GenericArgs::identity_for_item(tcx, container_id);
-                let item = translate_item_ref(state_with_id, container_id, impl_generics);
-                let implemented_trait_ref = tcx
-                    .impl_trait_ref(container_id)
-                    .unwrap()
-                    .instantiate_identity();
-                AssocItemContainer::TraitImplContainer {
-                    impl_: item,
-                    implemented_trait_ref: implemented_trait_ref.sinto(state_with_id),
-                    implemented_trait_item: implemented_trait_item.sinto(s),
-                    overrides_default: tcx.defaultness(implemented_trait_item).has_value(),
-                }
-            } else {
-                AssocItemContainer::InherentImplContainer {
-                    impl_id: container_id.sinto(s),
-                }
-            }
-        }
-    }
 }
 
 /// Reflects [`ty::ImplTraitInTraitData`]
