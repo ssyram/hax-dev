@@ -495,7 +495,7 @@ pub struct ItemRef {
 
 impl ItemRefContents {
     #[cfg(feature = "rustc")]
-    pub fn intern<'tcx, S: BaseState<'tcx>>(self, s: &S) -> ItemRef {
+    fn intern<'tcx, S: BaseState<'tcx>>(self, s: &S) -> ItemRef {
         s.with_global_cache(|cache| {
             let table_session = &mut cache.id_table_session;
             let contents = id_table::Node::new(self, table_session);
@@ -506,20 +506,58 @@ impl ItemRefContents {
 
 impl ItemRef {
     #[cfg(feature = "rustc")]
-    pub fn new<'tcx, S: BaseState<'tcx>>(
+    pub fn translate<'tcx, S: UnderOwnerState<'tcx>>(
         s: &S,
-        def_id: DefId,
-        generic_args: Vec<GenericArg>,
-        impl_exprs: Vec<ImplExpr>,
-        in_trait: Option<ImplExpr>,
+        def_id: RDefId,
+        generics: ty::GenericArgsRef<'tcx>,
     ) -> ItemRef {
-        let contents = ItemRefContents {
-            def_id,
+        let key = (def_id, generics);
+        if let Some(item) = s.with_cache(|cache| cache.item_refs.get(&key).cloned()) {
+            return item;
+        }
+        let mut impl_exprs = solve_item_required_traits(s, def_id, generics);
+        let mut generic_args = generics.sinto(s);
+
+        // If this is an associated item, resolve the trait reference.
+        let trait_info = self_clause_for_item(s, def_id, generics);
+        // Fixup the generics.
+        if let Some(tinfo) = &trait_info {
+            // The generics are split in two: the arguments of the trait and the arguments of the
+            // method.
+            //
+            // For instance, if we have:
+            // ```
+            // trait Foo<T> {
+            //     fn baz<U>(...) { ... }
+            // }
+            //
+            // fn test<T : Foo<u32>(x: T) {
+            //     x.baz(...);
+            //     ...
+            // }
+            // ```
+            // The generics for the call to `baz` will be the concatenation: `<T, u32, U>`, which we
+            // split into `<T, u32>` and `<U>`.
+            let trait_ref = tinfo.r#trait.hax_skip_binder_ref();
+            let num_trait_generics = trait_ref.generic_args.len();
+            generic_args.drain(0..num_trait_generics);
+            let num_trait_trait_clauses = trait_ref.impl_exprs.len();
+            // Associated items take a `Self` clause as first clause, we skip that one too. Note: that
+            // clause is the same as `tinfo`.
+            impl_exprs.drain(0..num_trait_trait_clauses + 1);
+        }
+
+        let content = ItemRefContents {
+            def_id: def_id.sinto(s),
             generic_args,
             impl_exprs,
-            in_trait,
+            in_trait: trait_info,
         };
-        contents.intern(s)
+        let item = content.intern(s);
+        s.with_cache(|cache| {
+            cache.item_refs.insert(key, item.clone());
+        });
+        item
     }
 
     pub fn contents(&self) -> &ItemRefContents {
@@ -983,14 +1021,22 @@ pub enum TyKind {
 
     #[custom_arm(FROM_TYPE::Adt(adt_def, generics) => TO_TYPE::Adt(translate_item_ref(s, adt_def.did(), generics)),)]
     Adt(ItemRef),
-    #[custom_arm(FROM_TYPE::Foreign(def_id) => TO_TYPE::Foreign(ItemRef::new(s, def_id.sinto(s), vec![], vec![], None)),)]
+    #[custom_arm(FROM_TYPE::Foreign(def_id) => TO_TYPE::Foreign(translate_item_ref(s, *def_id, Default::default())),)]
     Foreign(ItemRef),
     Str,
     Array(Box<Ty>, #[map(Box::new(x.sinto(s)))] Box<ConstantExpr>),
     Slice(Box<Ty>),
     RawPtr(Box<Ty>, Mutability),
     Ref(Region, Box<Ty>, Mutability),
-    Dynamic(Vec<Binder<ExistentialPredicate>>, Region, DynKind),
+    #[custom_arm(FROM_TYPE::Dynamic(preds, region, _) => make_dyn(s, preds, region),)]
+    Dynamic(
+        /// Fresh type parameter that we use as the `Self` type in the prediates below.
+        ParamTy,
+        /// Clauses that define the trait object. These clauses use the fresh type parameter above
+        /// as `Self` type.
+        GenericPredicates,
+        Region,
+    ),
     #[custom_arm(FROM_TYPE::Coroutine(def_id, generics) => TO_TYPE::Coroutine(translate_item_ref(s, *def_id, generics)),)]
     Coroutine(ItemRef),
     Never,
@@ -1005,6 +1051,97 @@ pub enum TyKind {
     Error,
     #[todo]
     Todo(String),
+}
+
+/// Transform existential predicates into properly resolved predicates.
+#[cfg(feature = "rustc")]
+fn make_dyn<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    epreds: &'tcx ty::List<ty::Binder<'tcx, ty::ExistentialPredicate<'tcx>>>,
+    region: &ty::Region<'tcx>,
+) -> TyKind {
+    let tcx = s.base().tcx;
+    let def_id = s.owner_id();
+    let span = rustc_span::DUMMY_SP.sinto(s);
+
+    // Pretend there's an extra type in the environment.
+    let new_param_ty = {
+        let generics = tcx.generics_of(def_id);
+        let param_count = generics.parent_count + generics.own_params.len();
+        ty::ParamTy::new(param_count as u32 + 1, rustc_span::Symbol::intern("_dyn"))
+    };
+    let new_ty = new_param_ty.to_ty(tcx);
+
+    // Set the new type as the `Self` parameter of our predicates.
+    let clauses: Vec<ty::Clause<'_>> = epreds
+        .iter()
+        .map(|epred| epred.with_self_ty(tcx, new_ty))
+        .collect();
+
+    // Populate a predicate searcher that knows about the `dyn` clauses.
+    let mut predicate_searcher = s.with_predicate_searcher(|ps| ps.clone());
+    predicate_searcher
+        .insert_bound_predicates(clauses.iter().filter_map(|clause| clause.as_trait_clause()));
+    predicate_searcher.set_param_env(rustc_trait_selection::traits::normalize_param_env_or_error(
+        tcx,
+        ty::ParamEnv::new(
+            tcx.mk_clauses_from_iter(
+                s.param_env()
+                    .caller_bounds()
+                    .iter()
+                    .chain(clauses.iter().copied()),
+            ),
+        ),
+        rustc_trait_selection::traits::ObligationCause::dummy(),
+    ));
+
+    // Using the predicate searcher, translate the predicates. Only the projection predicates need
+    // to be handled specially.
+    let predicates = clauses
+        .into_iter()
+        .map(|clause| {
+            let clause = match clause.as_projection_clause() {
+                // Translate normally
+                None => clause.sinto(s),
+                // Translate by hand using our predicate searcher. This does the same as
+                // `clause.sinto(s)` except that it uses our predicate searcher to resolve the
+                // projection `ImplExpr`.
+                Some(proj) => {
+                    let bound_vars = proj.bound_vars().sinto(s);
+                    let proj = {
+                        let alias_ty = &proj.skip_binder().projection_term.expect_ty(tcx);
+                        let impl_expr = {
+                            let poly_trait_ref = proj.rebind(alias_ty.trait_ref(tcx));
+                            predicate_searcher
+                                .resolve(&poly_trait_ref, &|_| {})
+                                .s_unwrap(s)
+                                .sinto(s)
+                        };
+                        let Term::Ty(ty) = proj.skip_binder().term.sinto(s) else {
+                            unreachable!()
+                        };
+                        ProjectionPredicate {
+                            impl_expr,
+                            assoc_item: tcx.associated_item(alias_ty.def_id).sinto(s),
+                            ty,
+                        }
+                    };
+                    let kind = Binder {
+                        value: ClauseKind::Projection(proj),
+                        bound_vars,
+                    };
+                    let id = kind.clone().map(PredicateKind::Clause).predicate_id();
+                    Clause { kind, id }
+                }
+            };
+            (clause, span.clone())
+        })
+        .collect();
+
+    let predicates = GenericPredicates { predicates };
+    let param_ty = new_param_ty.sinto(s);
+    let region = region.sinto(s);
+    TyKind::Dynamic(param_ty, predicates, region)
 }
 
 /// Reflects [`ty::CanonicalUserTypeAnnotation`]
