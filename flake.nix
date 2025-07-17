@@ -7,13 +7,7 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    fstar = {
-      url = "github:FStarLang/FStar/v2025.02.17";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
-      };
-    };
+    fstar.url = "github:FStarLang/FStar/v2025.03.25";
     hacl-star = {
       url = "github:hacl-star/hacl-star";
       flake = false;
@@ -146,6 +140,7 @@
           replace-fstar-versions-md = {
             type = "app";
             program = "${pkgs.writeScript "replace-fstar-versions-md" ''
+              #!${pkgs.bash}/bin/bash
               FSTAR_VERSION=$(cat ${
                 ./flake.lock
               } | ${pkgs.jq}/bin/jq '.nodes.fstar.original.ref' -r)
