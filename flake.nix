@@ -127,8 +127,8 @@
           };
           coverage = pkgs.callPackage ./examples/coverage {
             inherit (packages) hax;
-            inherit (pkgs) coqPackages;
             inherit craneLib;
+            coqPackages = pkgs.coqPackages_8_19;
           };
           readme-coherency =
             let src = pkgs.lib.sourceFilesBySuffices ./. [ ".md" ];

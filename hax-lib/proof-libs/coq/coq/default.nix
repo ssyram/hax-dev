@@ -1,7 +1,5 @@
-{
-  stdenv ? (import <nixpkgs> {}).stdenv,
-  coqPackages ? (import <nixpkgs> {}).coqPackages,
-}:
+{ stdenv ? (import <nixpkgs> { }).stdenv
+, coqPackages ? (import <nixpkgs> { }).coqPackages_8_19, }:
 stdenv.mkDerivation {
   name = "hax-coq-generated-core";
   src = ./generated-core;
