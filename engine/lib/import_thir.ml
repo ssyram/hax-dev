@@ -1082,21 +1082,25 @@ end) : EXPR = struct
     | Error ->
         assertion_failure [ span ]
           "got type `Error`: Rust compilation probably failed."
-    | Dynamic (predicates, _region, Dyn) -> (
+    | Dynamic (_, predicates, _region) -> (
         let goals, non_traits =
           List.partition_map
-            ~f:(fun pred ->
-              match pred.value with
-              | Trait { args; def_id } ->
+            ~f:(fun ((clause, _span) : Types.clause * _) ->
+              match clause.kind.value with
+              | Trait { trait_ref; _ } ->
                   let goal : dyn_trait_goal =
                     {
-                      trait = Concrete_ident.of_def_id ~value:false def_id;
-                      non_self_args = List.map ~f:(c_generic_value span) args;
+                      trait =
+                        Concrete_ident.of_def_id ~value:false
+                          trait_ref.value.def_id;
+                      non_self_args =
+                        List.map ~f:(c_generic_value span)
+                          (List.tl_exn trait_ref.value.generic_args);
                     }
                   in
                   First goal
               | _ -> Second ())
-            predicates
+            predicates.predicates
         in
         match non_traits with
         | [] -> TDyn { witness = W.dyn; goals }

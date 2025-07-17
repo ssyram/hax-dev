@@ -352,7 +352,7 @@ pub struct VariantDef {
 
 #[cfg(feature = "rustc")]
 impl VariantDef {
-    fn sfrom<'tcx, S: UnderOwnerState<'tcx>>(
+    pub(crate) fn sfrom<'tcx, S: UnderOwnerState<'tcx>>(
         s: &S,
         def: &ty::VariantDef,
         discr_val: ty::util::Discr<'tcx>,
@@ -1165,19 +1165,6 @@ pub enum AdtKind {
     Enum,
 }
 
-// This comes from MIR
-// TODO: add the generics and the predicates
-/// Reflects [`ty::AdtDef`]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub struct AdtDef {
-    pub did: DefId,
-    pub adt_kind: AdtKind,
-    pub variants: IndexVec<VariantIdx, VariantDef>,
-    pub flags: AdtFlags,
-    pub repr: ReprOptions,
-}
-
 sinto_todo!(rustc_middle::ty, AdtFlags);
 
 /// Reflects [`ty::ReprOptions`]
@@ -1200,36 +1187,6 @@ pub struct ReprOptions {
 sinto_todo!(rustc_abi, IntegerType);
 sinto_todo!(rustc_abi, ReprFlags);
 sinto_todo!(rustc_abi, Align);
-
-#[cfg(feature = "rustc")]
-impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, AdtDef> for ty::AdtDef<'tcx> {
-    fn sinto(&self, s: &S) -> AdtDef {
-        let variants = self
-            .variants()
-            .iter_enumerated()
-            .map(|(variant_idx, variant)| {
-                let discr = if self.is_enum() {
-                    self.discriminant_for_variant(s.base().tcx, variant_idx)
-                } else {
-                    // Structs and unions have a single variant.
-                    assert_eq!(variant_idx.index(), 0);
-                    ty::util::Discr {
-                        val: 0,
-                        ty: s.base().tcx.types.isize,
-                    }
-                };
-                VariantDef::sfrom(s, variant, discr)
-            })
-            .collect();
-        AdtDef {
-            did: self.did().sinto(s),
-            adt_kind: self.adt_kind().sinto(s),
-            variants,
-            flags: self.flags().sinto(s),
-            repr: self.repr().sinto(s),
-        }
-    }
-}
 
 /// Reflects [`ty::adjustment::PointerCoercion`]
 #[derive_group(Serializers)]
