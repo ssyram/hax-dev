@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::sync::Arc;
 
 #[cfg(feature = "rustc")]
 use rustc_hir::def::DefKind as RDefKind;
@@ -7,6 +6,8 @@ use rustc_hir::def::DefKind as RDefKind;
 use rustc_middle::ty;
 #[cfg(feature = "rustc")]
 use rustc_span::def_id::DefId as RDefId;
+#[cfg(feature = "rustc")]
+use std::sync::Arc;
 
 /// Hack: charon used to rely on the old `()` default everywhere. To avoid big merge conflicts with
 /// in-flight PRs we're changing the default here. Eventually this should be removed.
@@ -224,7 +225,7 @@ pub enum FullDefKind<Body> {
         /// The special `Self: Trait` clause.
         self_predicate: TraitPredicate,
         /// Associated items, in definition order.
-        items: Vec<(AssocItem, Arc<FullDef<Body>>)>,
+        items: Vec<AssocItem>,
     },
     /// Trait alias: `trait IntIterator = Iterator<Item = i32>;`
     TraitAlias {
@@ -244,14 +245,14 @@ pub enum FullDefKind<Body> {
         /// ```
         implied_impl_exprs: Vec<ImplExpr>,
         /// Associated items, in the order of the trait declaration. Includes defaulted items.
-        items: Vec<ImplAssocItem<Body>>,
+        items: Vec<ImplAssocItem>,
     },
     InherentImpl {
         param_env: ParamEnv,
         /// The type to which this block applies.
         ty: Ty,
         /// Associated items, in definition order.
-        items: Vec<(AssocItem, Arc<FullDef<Body>>)>,
+        items: Vec<AssocItem>,
     },
 
     // Functions
@@ -441,10 +442,7 @@ where
             items: tcx
                 .associated_items(def_id)
                 .in_definition_order()
-                .map(|assoc| {
-                    let def_id = assoc.def_id.sinto(s);
-                    (assoc.sinto(s), def_id.full_def(s))
-                })
+                .map(|assoc| assoc.sinto(s))
                 .collect::<Vec<_>>(),
         },
         RDefKind::TraitAlias { .. } => FullDefKind::TraitAlias {
@@ -460,10 +458,7 @@ where
                     let items = tcx
                         .associated_items(def_id)
                         .in_definition_order()
-                        .map(|assoc| {
-                            let def_id = assoc.def_id.sinto(s);
-                            (assoc.sinto(s), def_id.full_def(s))
-                        })
+                        .map(|assoc| assoc.sinto(s))
                         .collect::<Vec<_>>();
                     FullDefKind::InherentImpl {
                         param_env,
@@ -492,7 +487,6 @@ where
                         .in_definition_order()
                         .map(|decl_assoc| {
                             let decl_def_id = decl_assoc.def_id;
-                            let decl_def = decl_def_id.sinto(s).full_def(s);
                             // Impl exprs required by the item.
                             let required_impl_exprs;
                             let value = match item_map.remove(&decl_def_id) {
@@ -510,7 +504,7 @@ where
                                     };
 
                                     ImplAssocItemValue::Provided {
-                                        def: impl_assoc.def_id.sinto(s).full_def(s),
+                                        def_id: impl_assoc.def_id.sinto(s),
                                         is_override: decl_assoc.defaultness(tcx).has_value(),
                                     }
                                 }
@@ -554,7 +548,7 @@ where
                                 name: decl_assoc.opt_name().sinto(s),
                                 value,
                                 required_impl_exprs,
-                                decl_def,
+                                decl_def_id: decl_def_id.sinto(s),
                             }
                         })
                         .collect();
@@ -699,12 +693,12 @@ where
 /// that reuses the trait decl default value.
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
-pub struct ImplAssocItem<Body> {
+pub struct ImplAssocItem {
     /// This is `None` for RPTITs.
     pub name: Option<Symbol>,
-    /// The definition of the item from the trait declaration. This is `AssocTy`, `AssocFn` or
+    /// The definition of the item from the trait declaration. This is an `AssocTy`, `AssocFn` or
     /// `AssocConst`.
-    pub decl_def: Arc<FullDef<Body>>,
+    pub decl_def_id: DefId,
     /// The `ImplExpr`s required to satisfy the predicates on the associated type. E.g.:
     /// ```ignore
     /// trait Foo {
@@ -717,17 +711,17 @@ pub struct ImplAssocItem<Body> {
     /// Empty if this item is an associated const or fn.
     pub required_impl_exprs: Vec<ImplExpr>,
     /// The value of the implemented item.
-    pub value: ImplAssocItemValue<Body>,
+    pub value: ImplAssocItemValue,
 }
 
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
-pub enum ImplAssocItemValue<Body> {
+pub enum ImplAssocItemValue {
     /// The item is provided by the trait impl.
     Provided {
-        /// The definition of the item in the trait impl. This is `AssocTy`, `AssocFn` or
+        /// The definition of the item in the trait impl. This is an `AssocTy`, `AssocFn` or
         /// `AssocConst`.
-        def: Arc<FullDef<Body>>,
+        def_id: DefId,
         /// Whether the trait had a default value for this item (which is therefore overriden).
         is_override: bool,
     },
@@ -808,11 +802,11 @@ impl<Body> FullDef<Body> {
                 .collect(),
             FullDefKind::InherentImpl { items, .. } | FullDefKind::Trait { items, .. } => items
                 .iter()
-                .filter_map(|(item, _)| Some((item.name.clone()?, item.def_id.clone())))
+                .filter_map(|item| Some((item.name.clone()?, item.def_id.clone())))
                 .collect(),
             FullDefKind::TraitImpl { items, .. } => items
                 .iter()
-                .filter_map(|item| Some((item.name.clone()?, item.def().def_id.clone())))
+                .filter_map(|item| Some((item.name.clone()?, item.def_id().clone())))
                 .collect(),
             _ => vec![],
         };
@@ -831,29 +825,13 @@ impl<Body> FullDef<Body> {
     }
 }
 
-impl<Body> ImplAssocItem<Body> {
+impl ImplAssocItem {
     /// The relevant definition: the provided implementation if any, otherwise the default
     /// declaration from the trait declaration.
-    pub fn def(&self) -> &FullDef<Body> {
+    pub fn def_id(&self) -> &DefId {
         match &self.value {
-            ImplAssocItemValue::Provided { def, .. } => def.as_ref(),
-            _ => self.decl_def.as_ref(),
-        }
-    }
-
-    /// The kind of item this is.
-    pub fn assoc_kind(&self) -> &AssocKind {
-        match self.def().kind() {
-            FullDefKind::AssocTy {
-                associated_item, ..
-            }
-            | FullDefKind::AssocFn {
-                associated_item, ..
-            }
-            | FullDefKind::AssocConst {
-                associated_item, ..
-            } => &associated_item.kind,
-            _ => unreachable!(),
+            ImplAssocItemValue::Provided { def_id, .. } => def_id,
+            _ => &self.decl_def_id,
         }
     }
 }
