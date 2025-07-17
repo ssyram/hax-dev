@@ -65,17 +65,7 @@
             cat "${hax-env-file}" | xargs -I{} echo "export {}"
           fi
         '';
-        ocamlPackages = pkgs.ocamlPackages.overrideScope (final: prev: {
-          ocamlgraph = prev.ocamlgraph.overrideAttrs (_: rec {
-            name = "ocamlgraph-${version}";
-            version = "2.2.0";
-            src = pkgs.fetchurl {
-              url =
-                "https://github.com/backtracking/ocamlgraph/releases/download/${version}/ocamlgraph-${version}.tbz";
-              hash = "sha256-sJViEIY8wk9IAgO6PC7wbfrlV5U2oFdENk595YgisjA=";
-            };
-          });
-        });
+        ocamlPackages = pkgs.ocamlPackages;
       in rec {
         packages = {
           inherit rustc ocamlformat rustfmt fstar hax-env rustc-docs;
