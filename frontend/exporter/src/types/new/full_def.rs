@@ -197,6 +197,8 @@ pub enum FullDefKind<Body> {
         repr: ReprOptions,
         /// MIR body of the builtin `drop` impl.
         drop_glue: Option<Body>,
+        /// Info required to construct a virtual `Drop` impl for this adt.
+        drop_impl: Box<VirtualTraitImpl>,
     },
     /// Type alias: `type Foo = Bar;`
     TyAlias {
@@ -288,6 +290,8 @@ pub enum FullDefKind<Body> {
         once_shim: Option<Body>,
         /// MIR body of the builtin `drop` impl.
         drop_glue: Option<Body>,
+        /// Info required to construct a virtual `Drop` impl for this closure.
+        drop_impl: Box<VirtualTraitImpl>,
     },
 
     // Constants
@@ -389,6 +393,8 @@ where
                     VariantDef::sfrom(s, variant, discr)
                 })
                 .collect();
+
+            let drop_trait = tcx.lang_items().drop_trait().unwrap();
             FullDefKind::Adt {
                 param_env: get_param_env(s),
                 adt_kind: def.adt_kind().sinto(s),
@@ -396,6 +402,14 @@ where
                 flags: def.flags().sinto(s),
                 repr: def.repr().sinto(s),
                 drop_glue: get_drop_glue_shim(s),
+                drop_impl: virtual_impl_for(
+                    s,
+                    ty::TraitRef::new(
+                        tcx,
+                        drop_trait,
+                        [tcx.type_of(def_id).instantiate_identity()],
+                    ),
+                ),
             }
         }
         RDefKind::TyAlias { .. } => {
@@ -582,11 +596,20 @@ where
             let fn_once_trait = tcx.lang_items().fn_once_trait().unwrap();
             let fn_mut_trait = tcx.lang_items().fn_mut_trait().unwrap();
             let fn_trait = tcx.lang_items().fn_trait().unwrap();
+            let drop_trait = tcx.lang_items().drop_trait().unwrap();
             FullDefKind::Closure {
                 is_const: tcx.constness(def_id) == rustc_hir::Constness::Const,
                 args: ClosureArgs::sfrom(s, def_id, closure),
                 once_shim: get_closure_once_shim(s, closure_ty),
                 drop_glue: get_drop_glue_shim(s),
+                drop_impl: virtual_impl_for(
+                    s,
+                    ty::TraitRef::new(
+                        tcx,
+                        drop_trait,
+                        [tcx.type_of(def_id).instantiate_identity()],
+                    ),
+                ),
                 fn_once_impl: virtual_impl_for(
                     s,
                     ty::TraitRef::new(tcx, fn_once_trait, trait_args),
