@@ -17,7 +17,9 @@ type DefaultFullDefBody = MirBody<mir_kinds::Unknown>;
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, JsonSchema)]
 pub struct FullDef<Body = DefaultFullDefBody> {
-    pub def_id: DefId,
+    /// A reference to the current item. If the item was provided with generic args, they are
+    /// stored here; otherwise the args are the identity_args for this item.
+    pub this: ItemRef,
     /// The span of the definition of this item (e.g. for a function this is is signature).
     pub span: Span,
     /// The span of the whole definition (including e.g. the function body).
@@ -49,7 +51,7 @@ where
 {
     let tcx = s.base().tcx;
     let rust_def_id = def_id.underlying_rust_def_id();
-    let state_with_id = s.with_owner_id(rust_def_id);
+    let state_with_id = &s.with_owner_id(rust_def_id);
     let source_span;
     let attributes;
     let visibility;
@@ -96,12 +98,12 @@ where
 
             let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
                 .ty
-                .sinto(&state_with_id);
+                .sinto(state_with_id);
             kind = FullDefKind::Const {
                 param_env,
                 ty,
                 kind: ConstKind::PromotedConst,
-                body: Body::from_mir(&state_with_id, body),
+                body: Body::from_mir(state_with_id, body),
             };
 
             // None of these make sense for a promoted constant.
@@ -115,8 +117,18 @@ where
     let source_text = source_span
         .filter(|source_span| source_span.ctxt().is_root())
         .and_then(|source_span| tcx.sess.source_map().span_to_snippet(source_span).ok());
+    let this = if can_have_generics(tcx, rust_def_id) {
+        let args_or_default =
+            args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(tcx, rust_def_id));
+        let item = translate_item_ref(state_with_id, rust_def_id, args_or_default);
+        // Tricky: hax's DefId has more info (could be a promoted const), we must be careful to use
+        // the input DefId instead of the one derived from `rust_def_id`.
+        item.with_def_id(s, def_id)
+    } else {
+        ItemRef::dummy_without_generics(s, def_id.clone())
+    };
     FullDef {
-        def_id: def_id.clone(),
+        this,
         span: def_id.def_span(s),
         source_span: source_span.sinto(s),
         source_text,
@@ -823,7 +835,12 @@ pub struct VirtualTraitImpl {
 
 impl<Body> FullDef<Body> {
     pub fn def_id(&self) -> &DefId {
-        &self.def_id
+        &self.this.def_id
+    }
+
+    /// Reference to the item itself.
+    pub fn this(&self) -> &ItemRef {
+        &self.this
     }
 
     pub fn kind(&self) -> &FullDefKind<Body> {
@@ -896,7 +913,7 @@ impl<Body> FullDef<Body> {
             _ => vec![],
         };
         // Add inherent impl items if any.
-        if let Some(rust_def_id) = self.def_id.as_rust_def_id() {
+        if let Some(rust_def_id) = self.def_id().as_rust_def_id() {
             let tcx = s.base().tcx;
             for impl_def_id in tcx.inherent_impls(rust_def_id) {
                 children.extend(

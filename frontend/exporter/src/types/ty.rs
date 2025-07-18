@@ -514,6 +514,7 @@ impl ItemRefContents {
 }
 
 impl ItemRef {
+    /// The main way to obtain an `ItemRef`: from a `def_id` and generics.
     #[cfg(feature = "rustc")]
     pub fn translate<'tcx, S: UnderOwnerState<'tcx>>(
         s: &S,
@@ -572,6 +573,24 @@ impl ItemRef {
         item
     }
 
+    /// Construct an `ItemRef` for items that can't have generics (e.g. modules).
+    #[cfg(feature = "rustc")]
+    pub fn dummy_without_generics<'tcx, S: BaseState<'tcx>>(s: &S, def_id: DefId) -> ItemRef {
+        let content = ItemRefContents {
+            def_id,
+            generic_args: Default::default(),
+            impl_exprs: Default::default(),
+            in_trait: Default::default(),
+        };
+        let item = content.intern(s);
+        s.with_global_cache(|cache| {
+            cache
+                .reverse_item_refs_map
+                .insert(item.id(), ty::GenericArgsRef::default());
+        });
+        item
+    }
+
     pub fn contents(&self) -> &ItemRefContents {
         &self.contents
     }
@@ -590,16 +609,25 @@ impl ItemRef {
 
     /// Mutate the `DefId`, keeping the same generic args.
     #[cfg(feature = "rustc")]
-    pub fn mutate_def_id<'tcx, S: BaseState<'tcx>>(&mut self, s: &S, f: impl FnOnce(&mut DefId)) {
+    pub fn mutate_def_id<'tcx, S: BaseState<'tcx>>(
+        &self,
+        s: &S,
+        f: impl FnOnce(&mut DefId),
+    ) -> Self {
         let args = self.rustc_args(s);
-        {
-            let mut contents = self.contents().clone();
-            f(&mut contents.def_id);
-            *self = contents.intern(s);
-        };
+        let mut contents = self.contents().clone();
+        f(&mut contents.def_id);
+        let new = contents.intern(s);
         s.with_global_cache(|cache| {
-            cache.reverse_item_refs_map.insert(self.id(), args);
+            cache.reverse_item_refs_map.insert(new.id(), args);
         });
+        new
+    }
+
+    /// Set the `DefId`, keeping the same generic args.
+    #[cfg(feature = "rustc")]
+    pub fn with_def_id<'tcx, S: BaseState<'tcx>>(&self, s: &S, def_id: &DefId) -> Self {
+        self.mutate_def_id(s, |d| *d = def_id.clone())
     }
 }
 

@@ -34,6 +34,16 @@ impl<'tcx, T: ty::TypeFoldable<ty::TyCtxt<'tcx>>> ty::Binder<'tcx, T> {
     }
 }
 
+/// Whether the item can have generic parameters.
+pub(crate) fn can_have_generics<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> bool {
+    use RDefKind::*;
+    match get_def_kind(tcx, def_id) {
+        Mod | ConstParam | TyParam | LifetimeParam | Macro(..) | ExternCrate | Use | ForeignMod
+        | GlobalAsm => false,
+        _ => true,
+    }
+}
+
 #[tracing::instrument(skip(s))]
 pub(crate) fn get_variant_information<'s, S: UnderOwnerState<'s>>(
     adt_def: &ty::AdtDef<'s>,
