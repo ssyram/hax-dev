@@ -64,16 +64,12 @@ pub enum ImplExprAtom<'tcx> {
     /// `dyn Trait` implements `Trait` using a built-in implementation; this refers to that
     /// built-in implementation.
     Dyn,
-    /// A virtual `Drop` implementation.
-    /// `Drop` doesn't work like a real trait but we want to pretend it does. If a type has a
-    /// user-defined `impl Drop for X` we just use the `Concrete` variant, but if it doesn't we use
-    /// this variant to supply the data needed to know what code will run on drop.
-    Drop(DropData<'tcx>),
     /// A built-in trait whose implementation is computed by the compiler, such as `FnMut`. This
     /// morally points to an invisible `impl` block; as such it contains the information we may
     /// need from one.
     Builtin {
-        r#trait: PolyTraitRef<'tcx>,
+        /// Extra data for the given trait.
+        trait_data: BuiltinTraitData<'tcx>,
         /// The `ImplExpr`s required to satisfy the implied predicates on the trait declaration.
         /// E.g. since `FnMut: FnOnce`, a built-in `T: FnMut` impl would have an `ImplExpr` for `T:
         /// FnOnce`.
@@ -83,6 +79,17 @@ pub enum ImplExprAtom<'tcx> {
     },
     /// An error happened while resolving traits.
     Error(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum BuiltinTraitData<'tcx> {
+    /// A virtual `Drop` implementation.
+    /// `Drop` doesn't work like a real trait but we want to pretend it does. If a type has a
+    /// user-defined `impl Drop for X` we just use the `Concrete` variant, but if it doesn't we use
+    /// this variant to supply the data needed to know what code will run on drop.
+    Drop(DropData<'tcx>),
+    /// Some other builtin trait.
+    Other,
 }
 
 #[derive(Debug, Clone)]
@@ -446,6 +453,14 @@ impl<'tcx> PredicateSearcher<'tcx> {
         let erased_tref = normalize_bound_val(self.tcx, self.typing_env, *tref);
         let trait_def_id = erased_tref.skip_binder().def_id;
 
+        let error = |msg: String| {
+            warn(&msg);
+            Ok(ImplExpr {
+                r#impl: ImplExprAtom::Error(msg),
+                r#trait: *tref,
+            })
+        };
+
         let impl_source = shallow_resolve_trait_ref(tcx, self.typing_env.param_env, erased_tref);
         let atom = match impl_source {
             Ok(ImplSource::UserDefined(ImplSourceUserDefinedData {
@@ -463,8 +478,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
                         let msg = format!(
                             "Could not find a clause for `{tref:?}` in the item parameters"
                         );
-                        warn(&msg);
-                        ImplExprAtom::Error(msg)
+                        return error(msg);
                     }
                 }
             }
@@ -511,7 +525,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
                     })
                     .collect();
                 ImplExprAtom::Builtin {
-                    r#trait: *tref,
+                    trait_data: BuiltinTraitData::Other,
                     impl_exprs,
                     types,
                 }
@@ -537,7 +551,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
                 // TODO: how to check if there is a real drop impl?????
                 let ty = erased_tref.skip_binder().args[0].as_type().unwrap();
                 // Source of truth are `ty::needs_drop_components` and `tcx.needs_drop_raw`.
-                match ty.kind() {
+                let drop_data = match ty.kind() {
                     // TODO: Does `UnsafeBinder` drop its contents?
                     ty::Bool
                     | ty::Char
@@ -551,14 +565,14 @@ impl<'tcx> PredicateSearcher<'tcx> {
                     | ty::FnDef(..)
                     | ty::FnPtr(..)
                     | ty::UnsafeBinder(..)
-                    | ty::Never => ImplExprAtom::Drop(DropData::Noop),
+                    | ty::Never => Ok(DropData::Noop),
                     ty::Array(inner_ty, _) | ty::Pat(inner_ty, _) | ty::Slice(inner_ty) => {
-                        ImplExprAtom::Drop(DropData::Glue {
+                        Ok(DropData::Glue {
                             ty,
                             impl_exprs: vec![resolve_drop(*inner_ty)?],
                         })
                     }
-                    ty::Tuple(tys) => ImplExprAtom::Drop(DropData::Glue {
+                    ty::Tuple(tys) => Ok(DropData::Glue {
                         ty,
                         impl_exprs: tys.iter().map(resolve_drop).try_collect()?,
                     }),
@@ -566,14 +580,13 @@ impl<'tcx> PredicateSearcher<'tcx> {
                         // We should have been able to resolve the `T: Drop` clause above, if we
                         // get here we don't know how to reconstruct the arguments to the impl.
                         let msg = format!("Cannot resolve clause `{tref:?}`");
-                        warn(&msg);
-                        ImplExprAtom::Error(msg)
+                        return error(msg);
                     }
                     ty::Adt(_, args)
                     | ty::Closure(_, args)
                     | ty::Coroutine(_, args)
                     | ty::CoroutineClosure(_, args)
-                    | ty::CoroutineWitness(_, args) => ImplExprAtom::Drop(DropData::Glue {
+                    | ty::CoroutineWitness(_, args) => Ok(DropData::Glue {
                         ty,
                         impl_exprs: args
                             .iter()
@@ -583,22 +596,21 @@ impl<'tcx> PredicateSearcher<'tcx> {
                     }),
                     // Every `dyn` has a `Drop` in its vtable, ergo we pretend that every `dyn` has
                     // `Drop` in its list of traits.
-                    ty::Dynamic(..) => ImplExprAtom::Dyn,
+                    ty::Dynamic(..) => Err(ImplExprAtom::Dyn),
                     ty::Param(..) | ty::Alias(..) | ty::Bound(..) => {
                         if self.add_drop {
                             // We've added `Drop` impls on everything, we should be able to resolve
                             // it.
                             match self.resolve_local(erased_tref.upcast(self.tcx), warn)? {
-                                Some(candidate) => candidate.into_impl_expr(tcx),
+                                Some(candidate) => Err(candidate.into_impl_expr(tcx)),
                                 None => {
                                     let msg =
                                         format!("Cannot find virtual `Drop` clause: `{tref:?}`");
-                                    warn(&msg);
-                                    ImplExprAtom::Error(msg)
+                                    return error(msg);
                                 }
                             }
                         } else {
-                            ImplExprAtom::Drop(DropData::Implicit)
+                            Ok(DropData::Implicit)
                         }
                     }
 
@@ -607,9 +619,23 @@ impl<'tcx> PredicateSearcher<'tcx> {
                             "Cannot resolve clause `{tref:?}` \
                                 because of a type error"
                         );
-                        warn(&msg);
-                        ImplExprAtom::Error(msg)
+                        return error(msg);
                     }
+                };
+                match drop_data {
+                    Ok(drop_data) => {
+                        let impl_exprs = self.resolve_item_implied_predicates(
+                            trait_def_id,
+                            erased_tref.skip_binder().args,
+                            warn,
+                        )?;
+                        ImplExprAtom::Builtin {
+                            trait_data: BuiltinTraitData::Drop(drop_data),
+                            impl_exprs,
+                            types: vec![],
+                        }
+                    }
+                    Err(atom) => atom,
                 }
             }
             Err(e) => {
@@ -617,8 +643,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
                     "Could not find a clause for `{tref:?}` \
                     in the current context: `{e:?}`"
                 );
-                warn(&msg);
-                ImplExprAtom::Error(msg)
+                return error(msg);
             }
         };
 
