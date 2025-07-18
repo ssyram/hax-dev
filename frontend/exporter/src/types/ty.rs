@@ -1733,16 +1733,15 @@ impl AssocItem {
     pub fn sfrom_instantiated<'tcx, S: BaseState<'tcx>>(
         s: &S,
         item: &ty::AssocItem,
-        args: Option<ty::GenericArgsRef<'tcx>>,
+        item_args: Option<ty::GenericArgsRef<'tcx>>,
     ) -> AssocItem {
         let tcx = s.base().tcx;
         // We want to solve traits in the context of this item.
         let s = &s.with_owner_id(item.def_id);
+        let item_args =
+            item_args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(tcx, item.def_id));
         let container_id = item.container_id(tcx);
-        let container_args = match args {
-            None => ty::GenericArgs::identity_for_item(tcx, container_id),
-            Some(args) => args.truncate_to(tcx, tcx.generics_of(container_id)),
-        };
+        let container_args = item_args.truncate_to(tcx, tcx.generics_of(container_id));
         let container = match item.container {
             ty::AssocItemContainer::Trait => {
                 let trait_ref =
@@ -1750,17 +1749,22 @@ impl AssocItem {
                 AssocItemContainer::TraitContainer { trait_ref }
             }
             ty::AssocItemContainer::Impl => {
-                if let Some(implemented_trait_item) = item.trait_item_def_id {
+                if let Some(implemented_item_id) = item.trait_item_def_id {
                     let item = translate_item_ref(s, container_id, container_args);
                     let implemented_trait_ref = tcx
                         .impl_trait_ref(container_id)
                         .unwrap()
                         .instantiate(tcx, container_args);
+                    let implemented_trait_item = translate_item_ref(
+                        s,
+                        implemented_item_id,
+                        item_args.rebase_onto(tcx, container_id, implemented_trait_ref.args),
+                    );
                     AssocItemContainer::TraitImplContainer {
                         impl_: item,
                         implemented_trait_ref: implemented_trait_ref.sinto(s),
-                        implemented_trait_item: implemented_trait_item.sinto(s),
-                        overrides_default: tcx.defaultness(implemented_trait_item).has_value(),
+                        implemented_trait_item,
+                        overrides_default: tcx.defaultness(implemented_item_id).has_value(),
                     }
                 } else {
                     AssocItemContainer::InherentImplContainer {
@@ -1811,8 +1815,8 @@ pub enum AssocItemContainer {
         impl_: ItemRef,
         /// The trait ref implemented by the impl block.
         implemented_trait_ref: TraitRef,
-        /// The def_id of the associated item (in the trait declaration) that is being implemented.
-        implemented_trait_item: DefId,
+        /// The the associated item (in the trait declaration) that is being implemented.
+        implemented_trait_item: ItemRef,
         /// Whether the corresponding trait item had a default (and therefore this one overrides
         /// it).
         overrides_default: bool,
