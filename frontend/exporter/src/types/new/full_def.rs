@@ -46,12 +46,11 @@ fn translate_full_def<'tcx, S, Body>(
     args: Option<ty::GenericArgsRef<'tcx>>,
 ) -> FullDef<Body>
 where
-    S: BaseState<'tcx>,
+    S: UnderOwnerState<'tcx>,
     Body: IsBody + TypeMappable,
 {
     let tcx = s.base().tcx;
     let rust_def_id = def_id.underlying_rust_def_id();
-    let state_with_id = &s.with_owner_id(rust_def_id);
     let source_span;
     let attributes;
     let visibility;
@@ -97,14 +96,12 @@ where
             let body = substitute(tcx, s.typing_env(), args, body);
             source_span = Some(body.span);
 
-            let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO]
-                .ty
-                .sinto(state_with_id);
+            let ty: Ty = body.local_decls[rustc_middle::mir::Local::ZERO].ty.sinto(s);
             kind = FullDefKind::Const {
                 param_env,
                 ty,
                 kind: ConstKind::PromotedConst,
-                body: Body::from_mir(state_with_id, body),
+                body: Body::from_mir(s, body),
             };
 
             // None of these make sense for a promoted constant.
@@ -121,7 +118,7 @@ where
     let this = if can_have_generics(tcx, rust_def_id) {
         let args_or_default =
             args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(tcx, rust_def_id));
-        let item = translate_item_ref(state_with_id, rust_def_id, args_or_default);
+        let item = translate_item_ref(s, rust_def_id, args_or_default);
         // Tricky: hax's DefId has more info (could be a promoted const), we must be careful to use
         // the input DefId instead of the one derived from `rust_def_id`.
         item.with_def_id(s, def_id)
@@ -161,45 +158,36 @@ impl DefId {
         Body: IsBody + TypeMappable,
         S: BaseState<'tcx>,
     {
-        let rust_def_id = self.underlying_rust_def_id();
-        if let Some(def) = s.with_item_cache(rust_def_id, |cache| match self.promoted_id() {
-            None => cache.full_def.get().cloned(),
-            Some(promoted_id) => cache.promoteds.or_default().get(&promoted_id).cloned(),
-        }) {
-            return def;
-        }
-        let def = Arc::new(translate_full_def(s, self, None));
-        s.with_item_cache(rust_def_id, |cache| match self.promoted_id() {
-            None => {
-                cache.full_def.insert(def.clone());
-            }
-            Some(promoted_id) => {
-                cache
-                    .promoteds
-                    .or_default()
-                    .insert(promoted_id, def.clone());
-            }
-        });
-        def
+        self.full_def_maybe_instantiated(s, None)
     }
 
     /// Get the full definition of this item, instantiated if `args` is `Some`.
     pub fn full_def_maybe_instantiated<'tcx, S, Body>(
         &self,
         s: &S,
-        instantiate: Option<ty::GenericArgsRef<'tcx>>,
+        args: Option<ty::GenericArgsRef<'tcx>>,
     ) -> Arc<FullDef<Body>>
     where
         Body: IsBody + TypeMappable,
         S: BaseState<'tcx>,
     {
-        match instantiate {
-            None => self.full_def(s),
-            Some(args) => {
-                // TODO: cache
-                Arc::new(translate_full_def(s, self, Some(args)))
-            }
+        let rust_def_id = self.underlying_rust_def_id();
+        let s = &s.with_owner_id(rust_def_id);
+        let cache_key = (self.promoted_id(), args);
+        if let Some(def) =
+            s.with_cache(|cache| cache.full_defs.entry(cache_key).or_default().get().cloned())
+        {
+            return def;
         }
+        let def = Arc::new(translate_full_def(s, self, args));
+        s.with_cache(|cache| {
+            cache
+                .full_defs
+                .entry(cache_key)
+                .or_default()
+                .insert(def.clone());
+        });
+        def
     }
 }
 
@@ -601,6 +589,7 @@ where
                                             ty::GenericArgs::identity_for_item(tcx, decl_def_id);
                                         let args =
                                             item_args.rebase_onto(tcx, def_id, trait_ref.args);
+                                        // TODO: is it the right `def_id`?
                                         let state_with_id = s.with_owner_id(def_id);
                                         solve_item_implied_traits(&state_with_id, decl_def_id, args)
                                     } else {

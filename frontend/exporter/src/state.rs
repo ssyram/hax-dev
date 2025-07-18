@@ -93,15 +93,9 @@ mod types {
     }
 
     /// Defines a mapping from types to types, for use with `TypeMap`.
-    pub struct FullDefMapper {}
+    pub struct FullDefMapper;
     impl TypeMapper for FullDefMapper {
         type Value<Body: TypeMappable> = Arc<FullDef<Body>>;
-    }
-
-    /// Defines a mapping from types to types, for use with `TypeMap`.
-    pub struct PromotedFullDefsMapper {}
-    impl TypeMapper for PromotedFullDefsMapper {
-        type Value<Body: TypeMappable> = HashMap<PromotedId, Arc<FullDef<Body>>>;
     }
 
     /// Per-item cache
@@ -110,9 +104,11 @@ mod types {
         /// The translated `DefId`.
         pub def_id: Option<DefId>,
         /// The translated definitions, generic in the Body kind.
-        pub full_def: TypeMap<FullDefMapper>,
-        /// The Promoted constants of this body, if any.
-        pub promoteds: TypeMap<PromotedFullDefsMapper>,
+        /// Each rustc `DefId` gives several hax `DefId`s: one for each promoted constant (if any),
+        /// and the base one represented by `None`. Moreover we can instantiate definitions with
+        /// generic arguments.
+        pub full_defs:
+            HashMap<(Option<PromotedId>, Option<ty::GenericArgsRef<'tcx>>), TypeMap<FullDefMapper>>,
         /// Cache the `Ty` translations.
         pub tys: HashMap<ty::Ty<'tcx>, Ty>,
         /// Cache the `ItemRef` translations. This is fast because `GenericArgsRef` is interned.
