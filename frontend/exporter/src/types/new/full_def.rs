@@ -430,7 +430,7 @@ where
 {
     let s = &s.with_owner_id(def_id);
     let tcx = s.base().tcx;
-    let type_of_self = || inst_binder(tcx, args, tcx.type_of(def_id));
+    let type_of_self = || inst_binder(tcx, s.typing_env(), args, tcx.type_of(def_id));
     let args_or_default =
         || args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(tcx, def_id));
     match get_def_kind(tcx, def_id) {
@@ -516,7 +516,7 @@ where
         RDefKind::Impl { .. } => {
             use std::collections::HashMap;
             let param_env = get_param_env(s, args);
-            match inst_binder(tcx, args, tcx.impl_subject(def_id)) {
+            match inst_binder(tcx, s.typing_env(), args, tcx.impl_subject(def_id)) {
                 ty::ImplSubject::Inherent(ty) => {
                     let items = tcx
                         .associated_items(def_id)
@@ -638,7 +638,7 @@ where
             param_env: get_param_env(s, args),
             inline: tcx.codegen_fn_attrs(def_id).inline.sinto(s),
             is_const: tcx.constness(def_id) == rustc_hir::Constness::Const,
-            sig: inst_binder(tcx, args, tcx.fn_sig(def_id)).sinto(s),
+            sig: inst_binder(tcx, s.typing_env(), args, tcx.fn_sig(def_id)).sinto(s),
             body: get_body(s, args),
         },
         RDefKind::AssocFn { .. } => FullDefKind::AssocFn {
@@ -958,11 +958,12 @@ fn get_self_predicate<'tcx, S: UnderOwnerState<'tcx>>(
 ) -> TraitPredicate {
     use ty::Upcast;
     let tcx = s.base().tcx;
+    let typing_env = s.typing_env();
     let pred: ty::TraitPredicate = crate::traits::self_predicate(tcx, s.owner_id())
         .no_bound_vars()
         .unwrap()
         .upcast(tcx);
-    let pred = substitute(tcx, args, pred);
+    let pred = substitute(tcx, typing_env, args, pred);
     pred.sinto(s)
 }
 

@@ -4,23 +4,29 @@ use rustc_middle::{mir, ty};
 
 pub fn inst_binder<'tcx, T>(
     tcx: ty::TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
     args: Option<ty::GenericArgsRef<'tcx>>,
     x: ty::EarlyBinder<'tcx, T>,
 ) -> T
 where
-    T: ty::TypeFoldable<ty::TyCtxt<'tcx>>,
+    T: ty::TypeFoldable<ty::TyCtxt<'tcx>> + Clone,
 {
     match args {
         None => x.instantiate_identity(),
-        Some(args) => x.instantiate(tcx, args),
+        Some(args) => tcx.normalize_erasing_regions(typing_env, x.instantiate(tcx, args)),
     }
 }
 
-pub fn substitute<'tcx, T>(tcx: ty::TyCtxt<'tcx>, args: Option<ty::GenericArgsRef<'tcx>>, x: T) -> T
+pub fn substitute<'tcx, T>(
+    tcx: ty::TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    args: Option<ty::GenericArgsRef<'tcx>>,
+    x: T,
+) -> T
 where
     T: ty::TypeFoldable<ty::TyCtxt<'tcx>>,
 {
-    inst_binder(tcx, args, ty::EarlyBinder::bind(x))
+    inst_binder(tcx, typing_env, args, ty::EarlyBinder::bind(x))
 }
 
 #[extension_traits::extension(pub trait SubstBinder)]
@@ -108,7 +114,13 @@ pub trait HasParamEnv<'tcx> {
 
 impl<'tcx, S: UnderOwnerState<'tcx>> HasParamEnv<'tcx> for S {
     fn param_env(&self) -> ty::ParamEnv<'tcx> {
-        self.base().tcx.param_env(self.owner_id())
+        let tcx = self.base().tcx;
+        let def_id = self.owner_id();
+        if can_have_generics(tcx, def_id) {
+            tcx.param_env(def_id)
+        } else {
+            ty::ParamEnv::empty()
+        }
     }
     fn typing_env(&self) -> ty::TypingEnv<'tcx> {
         ty::TypingEnv {

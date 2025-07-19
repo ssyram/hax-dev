@@ -228,8 +228,9 @@ mod module {
                 instantiate: Option<ty::GenericArgsRef<'tcx>>,
             ) -> Option<Self> {
                 let tcx = s.base().tcx;
+                let typing_env = s.typing_env();
                 MirKind::get_mir(tcx, did, |body| {
-                    let body = substitute(tcx, instantiate, body.clone());
+                    let body = substitute(tcx, typing_env, instantiate, body.clone());
                     let body = Rc::new(body);
                     body.sinto(&s.with_mir(body.clone()))
                 })
