@@ -91,6 +91,7 @@ where
                     has_late_bound_regions: None,
                 },
                 predicates: GenericPredicates { predicates: vec![] },
+                parent: Some(parent_def.this().clone()),
             };
             let body = get_promoted_mir(tcx, rust_def_id, promoted_id.as_rust_promoted_id());
             let body = substitute(tcx, s.typing_env(), args, body);
@@ -223,6 +224,8 @@ pub struct ParamEnv {
     pub generics: TyGenerics,
     /// Required predicates for the item (see `traits::utils::required_predicates`).
     pub predicates: GenericPredicates,
+    /// A reference to the parent of this item, with appropriate args.
+    pub parent: Option<ItemRef>,
 }
 
 /// The kind of a constant item.
@@ -850,7 +853,7 @@ impl<Body> FullDef<Body> {
     /// Returns the generics and predicates for definitions that have those.
     pub fn param_env(&self) -> Option<&ParamEnv> {
         use FullDefKind::*;
-        match &self.kind {
+        match self.kind() {
             Adt { param_env, .. }
             | Trait { param_env, .. }
             | TraitAlias { param_env, .. }
@@ -863,6 +866,27 @@ impl<Body> FullDef<Body> {
             | Static { param_env, .. }
             | TraitImpl { param_env, .. }
             | InherentImpl { param_env, .. } => Some(param_env),
+            _ => None,
+        }
+    }
+
+    /// Return the parent of this item if the item inherits the typing context from its parent.
+    #[cfg(feature = "rustc")]
+    pub fn typing_parent<'tcx>(&self, s: &impl BaseState<'tcx>) -> Option<ItemRef> {
+        use FullDefKind::*;
+        match self.kind() {
+            AssocTy { .. }
+            | AssocFn { .. }
+            | AssocConst { .. }
+            | Const {
+                kind: ConstKind::AnonConst | ConstKind::InlineConst | ConstKind::PromotedConst,
+                ..
+            } => self.param_env().unwrap().parent.clone(),
+            Closure { .. } | Ctor { .. } | Variant { .. } => {
+                let parent = self.def_id().parent.as_ref().unwrap();
+                // The parent has the same generics as this item.
+                Some(self.this().with_def_id(s, parent))
+            }
             _ => None,
         }
     }
@@ -1029,11 +1053,19 @@ fn get_param_env<'tcx, S: UnderOwnerState<'tcx>>(
     let tcx = s.base().tcx;
     let def_id = s.owner_id();
     let generics = tcx.generics_of(def_id).sinto(s);
+
+    let parent = generics.parent.as_ref().map(|parent| {
+        let parent = parent.underlying_rust_def_id();
+        let args = args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(tcx, def_id));
+        let parent_args = args.truncate_to(tcx, tcx.generics_of(parent));
+        translate_item_ref(s, parent, parent_args)
+    });
     match args {
         None => ParamEnv {
             generics,
             predicates: required_predicates(tcx, def_id, s.base().options.resolve_drop_bounds)
                 .sinto(s),
+            parent,
         },
         // An instantiated item is monomorphic.
         Some(_) => ParamEnv {
@@ -1043,6 +1075,7 @@ fn get_param_env<'tcx, S: UnderOwnerState<'tcx>>(
                 ..generics
             },
             predicates: GenericPredicates::default(),
+            parent,
         },
     }
 }
