@@ -118,6 +118,10 @@ let c_attr (attr : Thir.attribute) : attr option =
       in
       let kind = DocComment { kind; body = comment } in
       Some { kind; span = Span.of_thir span }
+  | Parsed (AutomaticallyDerived span) ->
+      (* Restore behavior before PR #1534 *)
+      let kind = Tool { path = "automatically_derived"; tokens = "" } in
+      Some { kind; span = Span.of_thir span }
   | Unparsed { args = Eq { expr = { symbol; _ }; _ }; path = "doc"; span; _ } ->
       (* Looks for `#[doc = "something"]` *)
       let kind = DocComment { kind = DCKLine; body = symbol } in
@@ -1105,8 +1109,6 @@ end) : EXPR = struct
         match non_traits with
         | [] -> TDyn { witness = W.dyn; goals }
         | _ -> assertion_failure [ span ] "type Dyn with non trait predicate")
-    | Dynamic (_, _, DynStar) ->
-        unimplemented ~issue_id:931 [ span ] "type DynStar"
     | Coroutine _ ->
         unimplemented ~issue_id:924 [ span ]
           "Got type `Coroutine`: coroutines are not supported by hax"
@@ -1377,7 +1379,7 @@ let is_automatically_derived (attrs : Thir.attribute list) =
     ~f:(function
       (* This will break once these attributes get properly parsed. It will
           then be very easy to parse them correctly *)
-      | Unparsed { path; _ } -> String.equal path "automatically_derived"
+      | Parsed (AutomaticallyDerived _) -> true
       | _ -> false)
     attrs
 
@@ -1516,7 +1518,7 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
   in
   (* TODO: things might be unnamed (e.g. constants) *)
   match (item.kind : Thir.item_kind) with
-  | Const (_, _, generics, body) ->
+  | Const (_, generics, _, body) ->
       mk
       @@ Fn
            {
@@ -1526,14 +1528,14 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
              params = [];
              safety = Safe;
            }
-  | Static (_, _, true, _) ->
+  | Static (true, _, _, _) ->
       unimplemented ~issue_id:1343 [ item.span ]
         "Mutable static items are not supported."
-  | Static (_, _ty, false, body) ->
+  | Static (false, _, _ty, body) ->
       let name = Concrete_ident.of_def_id ~value:true (assert_item_def_id ()) in
       let generics = { params = []; constraints = [] } in
       mk (Fn { name; generics; body = c_body body; params = []; safety = Safe })
-  | TyAlias (_, ty, generics) ->
+  | TyAlias (_, generics, ty) ->
       mk
       @@ TyAlias
            {
@@ -1552,13 +1554,13 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
              params = c_fn_params item.span params;
              safety = c_header_safety safety;
            }
-  | (Enum (_, _, generics, _) | Struct (_, _, generics)) when erased ->
+  | (Enum (_, generics, _, _) | Struct (_, generics, _)) when erased ->
       let generics = c_generics generics in
       let is_struct = match item.kind with Struct _ -> true | _ -> false in
       let def_id = assert_item_def_id () in
       let name = Concrete_ident.of_def_id ~value:false def_id in
       mk @@ Type { name; generics; variants = []; is_struct }
-  | Enum (_, variants, generics, repr) ->
+  | Enum (_, generics, variants, repr) ->
       let def_id = assert_item_def_id () in
       let generics = c_generics generics in
       let is_struct = false in
@@ -1616,7 +1618,7 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
         mk_one (Type { name; generics; variants; is_struct }) :: discs
       in
       if is_primitive then cast_fun :: result else result
-  | Struct (_, v, generics) ->
+  | Struct (_, generics, v) ->
       let generics = c_generics generics in
       let def_id = assert_item_def_id () in
       let is_struct = true in
@@ -1643,7 +1645,7 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let variants = [ v ] in
       let name = Concrete_ident.of_def_id ~value:false def_id in
       mk @@ Type { name; generics; variants; is_struct }
-  | Trait (No, safety, _, generics, _bounds, items) ->
+  | Trait (NotConst, No, safety, _, generics, _bounds, items) ->
       let items =
         List.filter
           ~f:(fun { attributes; _ } -> not (should_skip attributes))
@@ -1666,8 +1668,10 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let items = List.map ~f:c_trait_item items in
       let safety = csafety safety in
       mk @@ Trait { name; generics; items; safety }
-  | Trait (Yes, _, _, _, _, _) ->
+  | Trait (_, Yes, _, _, _, _, _) ->
       unimplemented ~issue_id:930 [ item.span ] "Auto trait"
+  | Trait (Const, _, _, _, _, _, _) ->
+      unimplemented ~issue_id:930 [ item.span ] "Const trait"
   | Impl { of_trait = None; generics; items; _ } ->
       let items =
         List.filter
@@ -1814,7 +1818,9 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
           {
             path = List.map ~f:(fun x -> fst x.ident) segments;
             is_external =
-              List.exists ~f:(function Err -> true | _ -> false) res;
+              List.exists
+                ~f:(function None | Some Err -> true | _ -> false)
+                res;
             (* TODO: this should represent local/external? *)
             rename;
           }

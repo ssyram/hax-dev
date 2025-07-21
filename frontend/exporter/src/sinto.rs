@@ -1,6 +1,10 @@
-use crate::prelude::{derive_group, JsonSchema};
-
+#[cfg(not(feature = "rustc"))]
 pub trait SInto<S, To> {
+    fn sinto(&self, s: &S) -> To;
+}
+
+#[cfg(feature = "rustc")]
+pub trait SInto<S, To>: std::marker::PointeeSized {
     fn sinto(&self, s: &S) -> To;
 }
 
@@ -38,20 +42,6 @@ macro_rules! sinto_as_usize {
         }
     }
 }
-
-#[allow(dead_code)]
-mod test {
-    #[derive(Debug)]
-    pub struct Foo(usize);
-    impl Foo {
-        pub fn as_usize(&self) -> usize {
-            self.0
-        }
-    }
-}
-
-sinto_todo!(test, Foo);
-// sinto_as_usize!(test, Foo);
 
 impl<S, LL, RR, L: SInto<S, LL>, R: SInto<S, RR>> SInto<S, (LL, RR)> for (L, R) {
     fn sinto(&self, s: &S) -> (LL, RR) {
