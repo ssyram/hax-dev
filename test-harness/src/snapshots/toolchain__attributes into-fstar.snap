@@ -20,27 +20,10 @@ info:
     include_flag: ~
     backend_options: ~
 ---
-exit = 1
-[[stdout.diagnostics]]
-message = '''
-(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
-Please upvote or comment this issue if you see this error message.
-Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now.'''
-spans = ['Span { lo: Loc { line: 301, col: 17 }, hi: Loc { line: 301, col: 22 }, filename: Real(LocalPath("/home/nadrieril/wip/work/hax/hax-bounded-integers/src/lib.rs")), rust_span_data: None }']
+exit = 0
 
-[[stdout.diagnostics]]
-message = '''
-(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
-Please upvote or comment this issue if you see this error message.
-Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now.'''
-spans = ['Span { lo: Loc { line: 301, col: 30 }, hi: Loc { line: 301, col: 32 }, filename: Real(LocalPath("/home/nadrieril/wip/work/hax/hax-bounded-integers/src/lib.rs")), rust_span_data: None }']
-
-[[stdout.diagnostics]]
-message = '''
-(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
-Please upvote or comment this issue if you see this error message.
-Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now.'''
-spans = ['Span { lo: Loc { line: 295, col: 19 }, hi: Loc { line: 295, col: 24 }, filename: Real(LocalPath("attributes/src/lib.rs")), rust_span_data: None }']
+[stdout]
+diagnostics = []
 
 [stdout.files]
 "Attributes.Ensures_on_arity_zero_fns.fst" = '''
@@ -74,24 +57,25 @@ open FStar.Mul
 type t_Dummy = | Dummy : t_Dummy
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_1: Core.Marker.t_StructuralPartialEq t_Dummy = { __marker_trait = () }
+assume
+val impl_1': Core.Marker.t_StructuralPartialEq t_Dummy
+
+unfold
+let impl_1 = impl_1'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_2: Core.Cmp.t_PartialEq t_Dummy t_Dummy =
-  {
-    f_eq_pre = (fun (self: t_Dummy) (other: t_Dummy) -> true);
-    f_eq_post = (fun (self: t_Dummy) (other: t_Dummy) (out: bool) -> true);
-    f_eq = fun (self: t_Dummy) (other: t_Dummy) -> true
-  }
+assume
+val impl_2': Core.Cmp.t_PartialEq t_Dummy t_Dummy
+
+unfold
+let impl_2 = impl_2'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl: Core.Cmp.t_Eq t_Dummy =
-  {
-    _super_5579681813951091494 = FStar.Tactics.Typeclasses.solve;
-    f_assert_receiver_is_total_eq_pre = (fun (self: t_Dummy) -> true);
-    f_assert_receiver_is_total_eq_post = (fun (self: t_Dummy) (out: Prims.unit) -> true);
-    f_assert_receiver_is_total_eq = fun (self: t_Dummy) -> ()
-  }
+assume
+val impl': Core.Cmp.t_Eq t_Dummy
+
+unfold
+let impl = impl'
 
 let impl_Dummy__f (self: t_Dummy)
     : Prims.Pure t_Dummy
@@ -145,21 +129,14 @@ open FStar.Mul
 
 unfold type t_Int = int
 
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_1: Core.Clone.t_Clone t_Int =
-  {
-    f_clone_pre = (fun (self: t_Int) -> true);
-    f_clone_post = (fun (self: t_Int) (out: t_Int) -> true);
-    f_clone
-    =
-    fun (self: t_Int) ->
-      Rust_primitives.Hax.failure "(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.\nPlease upvote or comment this issue if you see this error message.\nSorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now."
-        ""
-  }
+let impl_1: Core.Clone.t_Clone t_Int = { f_clone = (fun x -> x) }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl: Core.Marker.t_Copy t_Int =
-  { _super_15837849249852401974 = FStar.Tactics.Typeclasses.solve }
+assume
+val impl': Core.Marker.t_Copy t_Int
+
+unfold
+let impl = impl'
 
 unfold let add x y = x + y
 
@@ -494,117 +471,56 @@ let t_BoundedAbsI16 (v_B: usize) =
       (Rust_primitives.Hax.Int.from_machine x <: Hax_lib.Int.t_Int) <=
       (Rust_primitives.Hax.Int.from_machine v_B <: Hax_lib.Int.t_Int) }
 
-[@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl (v_B: usize) : Core.Clone.t_Clone (t_BoundedAbsI16 v_B) =
-  {
-    f_clone_pre = (fun (self: t_BoundedAbsI16 v_B) -> true);
-    f_clone_post = (fun (self: t_BoundedAbsI16 v_B) (out: t_BoundedAbsI16 v_B) -> true);
-    f_clone
-    =
-    fun (self: t_BoundedAbsI16 v_B) ->
-      Rust_primitives.Hax.failure "(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.\nPlease upvote or comment this issue if you see this error message.\nSorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now."
-        ""
-  }
+let impl (v_B: usize) : Core.Clone.t_Clone (t_BoundedAbsI16 v_B) = { f_clone = (fun x -> x) }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_1 (v_B: usize) : Core.Marker.t_Copy (t_BoundedAbsI16 v_B) =
-  { _super_15837849249852401974 = FStar.Tactics.Typeclasses.solve }
+assume
+val impl_1': v_B: usize -> Core.Marker.t_Copy (t_BoundedAbsI16 v_B)
+
+unfold
+let impl_1 (v_B: usize) = impl_1' v_B
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_3 (v_B: usize) : Core.Marker.t_StructuralPartialEq (t_BoundedAbsI16 v_B) =
-  { __marker_trait = () }
+assume
+val impl_3': v_B: usize -> Core.Marker.t_StructuralPartialEq (t_BoundedAbsI16 v_B)
+
+unfold
+let impl_3 (v_B: usize) = impl_3' v_B
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_4 (v_B: usize) : Core.Cmp.t_PartialEq (t_BoundedAbsI16 v_B) (t_BoundedAbsI16 v_B) =
-  {
-    f_eq_pre = (fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) -> true);
-    f_eq_post = (fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) (out: bool) -> true);
-    f_eq = fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) -> self._0 =. other._0
-  }
+assume
+val impl_4': v_B: usize -> Core.Cmp.t_PartialEq (t_BoundedAbsI16 v_B) (t_BoundedAbsI16 v_B)
+
+unfold
+let impl_4 (v_B: usize) = impl_4' v_B
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_2 (v_B: usize) : Core.Cmp.t_Eq (t_BoundedAbsI16 v_B) =
-  {
-    _super_5579681813951091494 = FStar.Tactics.Typeclasses.solve;
-    f_assert_receiver_is_total_eq_pre = (fun (self: t_BoundedAbsI16 v_B) -> true);
-    f_assert_receiver_is_total_eq_post = (fun (self: t_BoundedAbsI16 v_B) (out: Prims.unit) -> true);
-    f_assert_receiver_is_total_eq
-    =
-    fun (self: t_BoundedAbsI16 v_B) ->
-      Rust_primitives.Hax.failure "(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.\nPlease upvote or comment this issue if you see this error message.\nSorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now."
-        ""
-  }
+assume
+val impl_2': v_B: usize -> Core.Cmp.t_Eq (t_BoundedAbsI16 v_B)
+
+unfold
+let impl_2 (v_B: usize) = impl_2' v_B
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_6 (v_B: usize) : Core.Cmp.t_PartialOrd (t_BoundedAbsI16 v_B) (t_BoundedAbsI16 v_B) =
-  {
-    _super_17767811571638026139 = FStar.Tactics.Typeclasses.solve;
-    f_partial_cmp_pre = (fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) -> true);
-    f_partial_cmp_post
-    =
-    (fun
-        (self: t_BoundedAbsI16 v_B)
-        (other: t_BoundedAbsI16 v_B)
-        (out: Core.Option.t_Option Core.Cmp.t_Ordering)
-        ->
-        true);
-    f_partial_cmp
-    =
-    fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) ->
-      Core.Cmp.f_partial_cmp #i16 #i16 #FStar.Tactics.Typeclasses.solve self._0 other._0
-  }
+assume
+val impl_6': v_B: usize -> Core.Cmp.t_PartialOrd (t_BoundedAbsI16 v_B) (t_BoundedAbsI16 v_B)
+
+unfold
+let impl_6 (v_B: usize) = impl_6' v_B
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_5 (v_B: usize) : Core.Cmp.t_Ord (t_BoundedAbsI16 v_B) =
-  {
-    _super_8562072132021960682 = FStar.Tactics.Typeclasses.solve;
-    _super_17650760217149814164 = FStar.Tactics.Typeclasses.solve;
-    f_cmp_pre = (fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) -> true);
-    f_cmp_post
-    =
-    (fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) (out: Core.Cmp.t_Ordering) -> true
-    );
-    f_cmp
-    =
-    fun (self: t_BoundedAbsI16 v_B) (other: t_BoundedAbsI16 v_B) ->
-      Core.Cmp.f_cmp #i16 #FStar.Tactics.Typeclasses.solve self._0 other._0
-  }
+assume
+val impl_5': v_B: usize -> Core.Cmp.t_Ord (t_BoundedAbsI16 v_B)
+
+unfold
+let impl_5 (v_B: usize) = impl_5' v_B
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_7 (v_B: usize) : Core.Hash.t_Hash (t_BoundedAbsI16 v_B) =
-  {
-    f_hash_pre
-    =
-    (fun
-        (#e_ee_H: Type0)
-        (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: Core.Hash.t_Hasher e_ee_H)
-        (self: t_BoundedAbsI16 v_B)
-        (state: e_ee_H)
-        ->
-        true);
-    f_hash_post
-    =
-    (fun
-        (#e_ee_H: Type0)
-        (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: Core.Hash.t_Hasher e_ee_H)
-        (self: t_BoundedAbsI16 v_B)
-        (state: e_ee_H)
-        (out: e_ee_H)
-        ->
-        true);
-    f_hash
-    =
-    fun
-      (#e_ee_H: Type0)
-      (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: Core.Hash.t_Hasher e_ee_H)
-      (self: t_BoundedAbsI16 v_B)
-      (state: e_ee_H)
-      ->
-      let state:e_ee_H =
-        Core.Hash.f_hash #i16 #FStar.Tactics.Typeclasses.solve #e_ee_H self._0 state
-      in
-      state
-  }
+assume
+val impl_7': v_B: usize -> Core.Hash.t_Hash (t_BoundedAbsI16 v_B)
+
+unfold
+let impl_7 (v_B: usize) = impl_7' v_B
 
 let double_abs_i16 (v_N v_M: usize) (x: t_BoundedAbsI16 v_N)
     : Prims.Pure (t_BoundedAbsI16 v_M)

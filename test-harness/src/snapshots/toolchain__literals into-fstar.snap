@@ -20,23 +20,11 @@ info:
     include_flag: ~
     backend_options: ~
 ---
-exit = 1
-stderr = """
-Finished `dev` profile [unoptimized + debuginfo] target(s) in XXs
-\u001B[1m\u001B[91merror\u001B[0m: \u001B[1m[HAX0001] (AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
-Please upvote or comment this issue if you see this error message.
-Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now.\u001B[0m
-  \u001B[1m\u001B[94m-->\u001B[0m literals/src/lib.rs:43:21
-\u001B[1m\u001B[94m   |\u001B[0m
-\u001B[1m\u001B[94m43 |\u001B[0m #[derive(PartialEq, Eq)]
-\u001B[1m\u001B[94m   |\u001B[0m\u001B[1m\u001B[91m                     ^^\u001B[0m
-\u001B[1m\u001B[94m   |\u001B[0m"""
-[[stdout.diagnostics]]
-message = '''
-(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
-Please upvote or comment this issue if you see this error message.
-Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now.'''
-spans = ['Span { lo: Loc { line: 43, col: 20 }, hi: Loc { line: 43, col: 22 }, filename: Real(LocalPath("literals/src/lib.rs")), rust_span_data: None }']
+exit = 0
+stderr = 'Finished `dev` profile [unoptimized + debuginfo] target(s) in XXs'
+
+[stdout]
+diagnostics = []
 
 [stdout.files]
 "Literals.fst" = '''
@@ -97,28 +85,25 @@ let panic_with_msg (_: Prims.unit) : Prims.unit =
 type t_Foo = { f_field:u8 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl: Core.Marker.t_StructuralPartialEq t_Foo = { __marker_trait = () }
+assume
+val impl': Core.Marker.t_StructuralPartialEq t_Foo
+
+unfold
+let impl = impl'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_1: Core.Cmp.t_PartialEq t_Foo t_Foo =
-  {
-    f_eq_pre = (fun (self: t_Foo) (other: t_Foo) -> true);
-    f_eq_post = (fun (self: t_Foo) (other: t_Foo) (out: bool) -> true);
-    f_eq = fun (self: t_Foo) (other: t_Foo) -> self.f_field =. other.f_field
-  }
+assume
+val impl_1': Core.Cmp.t_PartialEq t_Foo t_Foo
+
+unfold
+let impl_1 = impl_1'
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let impl_2: Core.Cmp.t_Eq t_Foo =
-  {
-    _super_5579681813951091494 = FStar.Tactics.Typeclasses.solve;
-    f_assert_receiver_is_total_eq_pre = (fun (self: t_Foo) -> true);
-    f_assert_receiver_is_total_eq_post = (fun (self: t_Foo) (out: Prims.unit) -> true);
-    f_assert_receiver_is_total_eq
-    =
-    fun (self: t_Foo) ->
-      Rust_primitives.Hax.failure "(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.\nPlease upvote or comment this issue if you see this error message.\nSorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now."
-        ""
-  }
+assume
+val impl_2': Core.Cmp.t_Eq t_Foo
+
+unfold
+let impl_2 = impl_2'
 
 let v_CONSTANT: t_Foo = { f_field = mk_u8 3 } <: t_Foo
 
