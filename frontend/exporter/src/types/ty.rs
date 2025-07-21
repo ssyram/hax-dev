@@ -462,6 +462,8 @@ pub struct ItemRefContents {
     /// If we're referring to a trait associated item, this gives the trait clause/impl we're
     /// referring to.
     pub in_trait: Option<ImplExpr>,
+    /// Whether this contains any reference to a type/lifetime/const parameter.
+    pub has_param: bool,
 }
 
 /// Reference to an item, with generics. Basically any mention of an item (function, type, etc)
@@ -521,6 +523,7 @@ impl ItemRef {
         def_id: RDefId,
         generics: ty::GenericArgsRef<'tcx>,
     ) -> ItemRef {
+        use rustc_infer::infer::canonical::ir::TypeVisitableExt;
         let key = (def_id, generics);
         if let Some(item) = s.with_cache(|cache| cache.item_refs.get(&key).cloned()) {
             return item;
@@ -562,6 +565,9 @@ impl ItemRef {
             generic_args,
             impl_exprs,
             in_trait: trait_info,
+            has_param: generics.has_param()
+                || generics.has_escaping_bound_vars()
+                || generics.has_free_regions(),
         };
         let item = content.intern(s);
         s.with_cache(|cache| {
@@ -581,6 +587,7 @@ impl ItemRef {
             generic_args: Default::default(),
             impl_exprs: Default::default(),
             in_trait: Default::default(),
+            has_param: false,
         };
         let item = content.intern(s);
         s.with_global_cache(|cache| {
@@ -589,6 +596,15 @@ impl ItemRef {
                 .insert(item.id(), ty::GenericArgsRef::default());
         });
         item
+    }
+
+    /// Erase lifetimes from the generic arguments of this item.
+    #[cfg(feature = "rustc")]
+    pub fn erase<'tcx, S: UnderOwnerState<'tcx>>(&self, s: &S) -> Self {
+        let def_id = self.def_id.underlying_rust_def_id();
+        let args = self.rustc_args(s);
+        let args = erase_and_norm(s.base().tcx, s.typing_env(), args);
+        Self::translate(s, def_id, args).with_def_id(s, &self.def_id)
     }
 
     pub fn contents(&self) -> &ItemRefContents {
