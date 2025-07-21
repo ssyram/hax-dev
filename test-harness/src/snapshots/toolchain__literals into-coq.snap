@@ -20,11 +20,23 @@ info:
     include_flag: ~
     backend_options: ~
 ---
-exit = 0
-stderr = 'Finished `dev` profile [unoptimized + debuginfo] target(s) in XXs'
-
-[stdout]
-diagnostics = []
+exit = 1
+stderr = """
+Finished `dev` profile [unoptimized + debuginfo] target(s) in XXs
+\u001B[1m\u001B[91merror\u001B[0m: \u001B[1m[HAX0001] (AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
+Please upvote or comment this issue if you see this error message.
+Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now.\u001B[0m
+  \u001B[1m\u001B[94m-->\u001B[0m literals/src/lib.rs:43:21
+\u001B[1m\u001B[94m   |\u001B[0m
+\u001B[1m\u001B[94m43 |\u001B[0m #[derive(PartialEq, Eq)]
+\u001B[1m\u001B[94m   |\u001B[0m\u001B[1m\u001B[91m                     ^^\u001B[0m
+\u001B[1m\u001B[94m   |\u001B[0m"""
+[[stdout.diagnostics]]
+message = '''
+(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
+Please upvote or comment this issue if you see this error message.
+Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now.'''
+spans = ['Span { lo: Loc { line: 43, col: 20 }, hi: Loc { line: 43, col: 22 }, filename: Real(LocalPath("literals/src/lib.rs")), rust_span_data: None }']
 
 [stdout.files]
 "Literals.v" = '''
@@ -91,11 +103,23 @@ Record Foo_record : Type :=
 #[export] Instance settable_Foo_record : Settable _ :=
   settable! (Build_Foo_record) <Foo_f_field>.
 
+Instance t_StructuralPartialEq_61223753 : t_StructuralPartialEq ((t_Foo)) :=
+  {
+  }.
 
+Instance t_PartialEq_662037409 : t_PartialEq ((t_Foo)) ((t_Foo)) :=
+  {
+    implaabbcc_t_PartialEq_f_eq := fun  (self : t_Foo) (other : t_Foo)=>
+      f_eq (f_field self) (f_field other);
+  }.
 
-
-
-
+Instance t_Eq_795626685 : t_Eq ((t_Foo)) :=
+  {
+    implaabbcc_t_Eq_f_assert_receiver_is_total_eq := fun  (self : t_Foo)=>
+      failure (("(AST import) something is not implemented yet.This is discussed in issue https://github.com/hacspec/hax/issues/156.
+Please upvote or comment this issue if you see this error message.
+Sorry, Hax does not support declare-first let bindings (see https://doc.rust-lang.org/rust-by-example/variable_bindings/declare.html) for now."%string : string)) ((""%string : string));
+  }.
 
 Definition v_CONSTANT : t_Foo :=
   Foo ((3 : t_u8)).
