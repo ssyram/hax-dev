@@ -970,38 +970,6 @@ pub enum Attribute {
     Parsed(AttributeKind),
     Unparsed(AttrItem),
 }
-
-/// Reflects [`rustc_attr_data_structures::AttributeKind`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_attr_data_structures::AttributeKind, state: S as tcx)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum AttributeKind {
-    DocComment {
-        style: AttrStyle,
-        kind: CommentKind,
-        span: Span,
-        comment: Symbol,
-    },
-    #[todo]
-    Other(String),
-}
-
-/// Reflects [`rustc_attr_data_structures::InlineAttr`]
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_attr_data_structures::InlineAttr, state: S as _s)]
-pub enum InlineAttr {
-    None,
-    Hint,
-    Always,
-    Never,
-    Force {
-        attr_span: Span,
-        reason: Option<Symbol>,
-    },
-}
-
 /// Reflects [`rustc_ast::ast::BindingMode`]
 #[derive(AdtInto)]
 #[args(<S>, from: rustc_ast::ast::BindingMode, state: S as s)]
