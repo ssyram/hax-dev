@@ -112,16 +112,12 @@ pub enum ImplExprAtom {
     /// `dyn Trait` implements `Trait` using a built-in implementation; this refers to that
     /// built-in implementation.
     Dyn,
-    /// A virtual `Drop` implementation.
-    /// `Drop` doesn't work like a real trait but we want to pretend it does. If a type has a
-    /// user-defined `impl Drop for X` we just use the `Concrete` variant, but if it doesn't we use
-    /// this variant to supply the data needed to know what code will run on drop.
-    Drop(DropData),
     /// A built-in trait whose implementation is computed by the compiler, such as `FnMut`. This
     /// morally points to an invisible `impl` block; as such it contains the information we may
     /// need from one.
     Builtin {
-        r#trait: Binder<TraitRef>,
+        /// Extra data for the given trait.
+        trait_data: BuiltinTraitData,
         /// The `ImplExpr`s required to satisfy the implied predicates on the trait declaration.
         /// E.g. since `FnMut: FnOnce`, a built-in `T: FnMut` impl would have an `ImplExpr` for `T:
         /// FnOnce`.
@@ -131,6 +127,20 @@ pub enum ImplExprAtom {
     },
     /// An error happened while resolving traits.
     Error(String),
+}
+
+#[derive(AdtInto)]
+#[args(<'tcx, S: UnderOwnerState<'tcx> >, from: resolution::BuiltinTraitData<'tcx>, state: S as s)]
+#[derive_group(Serializers)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, JsonSchema)]
+pub enum BuiltinTraitData {
+    /// A virtual `Drop` implementation.
+    /// `Drop` doesn't work like a real trait but we want to pretend it does. If a type has a
+    /// user-defined `impl Drop for X` we just use the `Concrete` variant, but if it doesn't we use
+    /// this variant to supply the data needed to know what code will run on drop.
+    Drop(DropData),
+    /// Some other builtin trait.
+    Other,
 }
 
 #[derive(AdtInto)]

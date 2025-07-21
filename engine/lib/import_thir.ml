@@ -1122,7 +1122,7 @@ end) : EXPR = struct
 
   and c_impl_expr (span : Thir.span) (ie : Thir.impl_expr) : impl_expr =
     let goal = c_trait_ref span ie.trait.value in
-    let impl = { kind = c_impl_expr_atom span ie.impl; goal } in
+    let impl = { kind = c_impl_expr_atom span ie.impl goal; goal } in
     match ie.impl with
     | Concrete { value = { impl_exprs = []; _ }; _ } -> impl
     | Concrete { value = { impl_exprs; _ }; _ } ->
@@ -1135,7 +1135,7 @@ end) : EXPR = struct
     let args = List.map ~f:(c_generic_value span) tr.value.generic_args in
     { trait; args }
 
-  and c_impl_expr_atom (span : Thir.span) (ie : Thir.impl_expr_atom) :
+  and c_impl_expr_atom (span : Thir.span) (ie : Thir.impl_expr_atom) goal :
       impl_expr_kind =
     let browse_path (item_kind : impl_expr_kind)
         (chunk : Thir.impl_expr_path_chunk) =
@@ -1168,8 +1168,7 @@ end) : EXPR = struct
         List.fold ~init ~f:browse_path path
     | Dyn -> Dyn
     | SelfImpl { path; _ } -> List.fold ~init:Self ~f:browse_path path
-    | Builtin { trait; _ } -> Builtin (c_trait_ref span trait.value)
-    | Drop _ -> failwith @@ "impl_expr_atom: Drop"
+    | Builtin _ -> Builtin goal
     | Error str -> failwith @@ "impl_expr_atom: Error " ^ str
 
   and c_generic_value (span : Thir.span) (ty : Thir.generic_arg) : generic_value
