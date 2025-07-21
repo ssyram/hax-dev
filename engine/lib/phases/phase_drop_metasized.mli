@@ -1,4 +1,5 @@
-(** This phase gets rid of the MetaSized bound. See https://github.com/cryspen/hax/pull/1534. *)
+(** This phase gets rid of the MetaSized bound. See
+    https://github.com/cryspen/hax/pull/1534. *)
 
 open! Prelude
 
