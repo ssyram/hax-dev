@@ -1375,7 +1375,7 @@ let is_automatically_derived (attrs : Thir.attribute list) =
     ~f:(function
       (* This will break once these attributes get properly parsed. It will
           then be very easy to parse them correctly *)
-      | Unparsed { path; _ } -> String.equal path "automatically_derived"
+      | Parsed (AutomaticallyDerived _) -> true
       | _ -> false)
     attrs
 
