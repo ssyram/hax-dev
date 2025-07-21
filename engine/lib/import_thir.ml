@@ -1641,7 +1641,7 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let variants = [ v ] in
       let name = Concrete_ident.of_def_id ~value:false def_id in
       mk @@ Type { name; generics; variants; is_struct }
-  | Trait (No, safety, _, generics, _bounds, items) ->
+  | Trait (NotConst, No, safety, _, generics, _bounds, items) ->
       let items =
         List.filter
           ~f:(fun { attributes; _ } -> not (should_skip attributes))
@@ -1664,8 +1664,10 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let items = List.map ~f:c_trait_item items in
       let safety = csafety safety in
       mk @@ Trait { name; generics; items; safety }
-  | Trait (Yes, _, _, _, _, _) ->
+  | Trait (_, Yes, _, _, _, _, _) ->
       unimplemented ~issue_id:930 [ item.span ] "Auto trait"
+  | Trait (Const, _, _, _, _, _, _) ->
+      unimplemented ~issue_id:930 [ item.span ] "Const trait"
   | Impl { of_trait = None; generics; items; _ } ->
       let items =
         List.filter

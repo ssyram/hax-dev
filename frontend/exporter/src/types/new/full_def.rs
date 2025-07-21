@@ -735,7 +735,7 @@ fn get_foreign_mod_children<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Vec<
             .expect_foreign_mod()
             .1
             .iter()
-            .map(|foreign_item_ref| foreign_item_ref.id.owner_id.to_def_id())
+            .map(|foreign_item_ref| foreign_item_ref.owner_id.to_def_id())
             .collect(),
         None => vec![],
     }
