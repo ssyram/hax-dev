@@ -2,6 +2,33 @@ use crate::prelude::*;
 use rustc_hir::def::DefKind as RDefKind;
 use rustc_middle::{mir, ty};
 
+pub fn inst_binder<'tcx, T>(
+    tcx: ty::TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    args: Option<ty::GenericArgsRef<'tcx>>,
+    x: ty::EarlyBinder<'tcx, T>,
+) -> T
+where
+    T: ty::TypeFoldable<ty::TyCtxt<'tcx>> + Clone,
+{
+    match args {
+        None => x.instantiate_identity(),
+        Some(args) => tcx.normalize_erasing_regions(typing_env, x.instantiate(tcx, args)),
+    }
+}
+
+pub fn substitute<'tcx, T>(
+    tcx: ty::TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    args: Option<ty::GenericArgsRef<'tcx>>,
+    x: T,
+) -> T
+where
+    T: ty::TypeFoldable<ty::TyCtxt<'tcx>>,
+{
+    inst_binder(tcx, typing_env, args, ty::EarlyBinder::bind(x))
+}
+
 #[extension_traits::extension(pub trait SubstBinder)]
 impl<'tcx, T: ty::TypeFoldable<ty::TyCtxt<'tcx>>> ty::Binder<'tcx, T> {
     fn subst(
@@ -10,6 +37,16 @@ impl<'tcx, T: ty::TypeFoldable<ty::TyCtxt<'tcx>>> ty::Binder<'tcx, T> {
         generics: &[ty::GenericArg<'tcx>],
     ) -> ty::Binder<'tcx, T> {
         ty::EarlyBinder::bind(self).instantiate(tcx, generics)
+    }
+}
+
+/// Whether the item can have generic parameters.
+pub(crate) fn can_have_generics<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> bool {
+    use RDefKind::*;
+    match get_def_kind(tcx, def_id) {
+        Mod | ConstParam | TyParam | LifetimeParam | Macro(..) | ExternCrate | Use | ForeignMod
+        | GlobalAsm => false,
+        _ => true,
     }
 }
 
@@ -77,7 +114,13 @@ pub trait HasParamEnv<'tcx> {
 
 impl<'tcx, S: UnderOwnerState<'tcx>> HasParamEnv<'tcx> for S {
     fn param_env(&self) -> ty::ParamEnv<'tcx> {
-        self.base().tcx.param_env(self.owner_id())
+        let tcx = self.base().tcx;
+        let def_id = self.owner_id();
+        if can_have_generics(tcx, def_id) {
+            tcx.param_env(def_id)
+        } else {
+            ty::ParamEnv::empty()
+        }
     }
     fn typing_env(&self) -> ty::TypingEnv<'tcx> {
         ty::TypingEnv {
@@ -240,8 +283,13 @@ pub fn get_foreign_mod_children<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> 
 ///     }
 /// }
 /// ```
-pub fn get_method_sig<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> ty::PolyFnSig<'tcx> {
-    let real_sig = tcx.fn_sig(def_id).instantiate_identity();
+pub fn get_method_sig<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    def_id: RDefId,
+    method_args: Option<ty::GenericArgsRef<'tcx>>,
+) -> ty::PolyFnSig<'tcx> {
+    let real_sig = inst_binder(tcx, typing_env, method_args, tcx.fn_sig(def_id));
     let item = tcx.associated_item(def_id);
     if !matches!(item.container, ty::AssocItemContainer::Impl) {
         return real_sig;
@@ -261,20 +309,21 @@ pub fn get_method_sig<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> ty::PolyFn
     }
 
     let impl_def_id = item.container_id(tcx);
+    let method_args =
+        method_args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(tcx, def_id));
     // The trait predicate that is implemented by the surrounding impl block.
     let implemented_trait_ref = tcx
         .impl_trait_ref(impl_def_id)
         .unwrap()
-        .instantiate_identity();
+        .instantiate(tcx, method_args);
     // Construct arguments for the declared method generics in the context of the implemented
     // method generics.
-    let impl_args = ty::GenericArgs::identity_for_item(tcx, def_id);
-    let decl_args = impl_args.rebase_onto(tcx, impl_def_id, implemented_trait_ref.args);
+    let decl_args = method_args.rebase_onto(tcx, impl_def_id, implemented_trait_ref.args);
     let sig = declared_sig.instantiate(tcx, decl_args);
     // Avoids accidentally using the same lifetime name twice in the same scope
     // (once in impl parameters, second in the method declaration late-bound vars).
     let sig = tcx.anonymize_bound_vars(sig);
-    sig
+    normalize(tcx, typing_env, sig)
 }
 
 pub fn closure_once_shim<'tcx>(
@@ -295,15 +344,25 @@ pub fn closure_once_shim<'tcx>(
     Some(mir)
 }
 
-pub fn drop_glue_shim<'tcx>(tcx: ty::TyCtxt<'tcx>, def_id: RDefId) -> Option<mir::Body<'tcx>> {
+pub fn drop_glue_shim<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    def_id: RDefId,
+    instantiate: Option<ty::GenericArgsRef<'tcx>>,
+) -> Option<mir::Body<'tcx>> {
     let drop_in_place =
         tcx.require_lang_item(rustc_hir::LangItem::DropInPlace, rustc_span::DUMMY_SP);
-    if !tcx.generics_of(def_id).is_empty() {
-        // Hack: layout code panics if it can't fully normalize types, which can happen e.g. with a
-        // trait associated type. For now we only translate the glue for monomorphic types.
-        return None;
-    }
-    let ty = tcx.type_of(def_id).instantiate_identity();
+    let ty = tcx.type_of(def_id);
+    let ty = match instantiate {
+        None => {
+            if !tcx.generics_of(def_id).is_empty() {
+                // Hack: layout code panics if it can't fully normalize types, which can happen e.g. with a
+                // trait associated type. For now we only translate the glue for monomorphic types.
+                return None;
+            }
+            ty.instantiate_identity()
+        }
+        Some(args) => ty.instantiate(tcx, args),
+    };
     let instance_kind = ty::InstanceKind::DropGlue(drop_in_place, Some(ty));
     let mir = tcx.instance_mir(instance_kind).clone();
     Some(mir)

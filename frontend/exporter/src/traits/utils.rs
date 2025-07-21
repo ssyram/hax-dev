@@ -196,7 +196,7 @@ pub fn implied_predicates<'tcx>(
 /// Normalize a value.
 pub fn normalize<'tcx, T>(tcx: TyCtxt<'tcx>, typing_env: TypingEnv<'tcx>, value: T) -> T
 where
-    T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+    T: TypeFoldable<TyCtxt<'tcx>> + Clone,
 {
     use rustc_infer::infer::TyCtxtInferExt;
     use rustc_middle::traits::ObligationCause;
@@ -204,7 +204,7 @@ where
     let (infcx, param_env) = tcx.infer_ctxt().build_with_typing_env(typing_env);
     infcx
         .at(&ObligationCause::dummy(), param_env)
-        .query_normalize(value)
+        .query_normalize(value.clone())
         // We ignore the generated outlives relations. Unsure what we should do with them.
         .map(|x| x.value)
         .unwrap_or(value)
