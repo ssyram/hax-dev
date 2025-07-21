@@ -118,6 +118,10 @@ let c_attr (attr : Thir.attribute) : attr option =
       in
       let kind = DocComment { kind; body = comment } in
       Some { kind; span = Span.of_thir span }
+  | Parsed (AutomaticallyDerived span) ->
+      (* Restore behavior before PR #1534 *)
+      let kind = Tool { path = "automatically_derived"; tokens = "" } in
+      Some { kind; span = Span.of_thir span }
   | Unparsed { args = Eq { expr = { symbol; _ }; _ }; path = "doc"; span; _ } ->
       (* Looks for `#[doc = "something"]` *)
       let kind = DocComment { kind = DCKLine; body = symbol } in
