@@ -28,8 +28,8 @@
 //! implied are subtle. We may change this if this proves to be a problem.
 use rustc_hir::def::DefKind;
 use rustc_middle::ty::*;
-use rustc_span::def_id::DefId;
 use rustc_span::DUMMY_SP;
+use rustc_span::def_id::DefId;
 
 /// Returns a list of type predicates for the definition with ID `def_id`, including inferred
 /// lifetime constraints. This is the basic list of predicates we use for essentially all items.
