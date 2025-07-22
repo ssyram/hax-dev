@@ -1,6 +1,4 @@
-// There's a conflict between `mir::ScalarInt`and `todo::ScalarInt` but it doesn't matter.
-#![allow(ambiguous_glob_reexports)]
-
+mod attributes;
 mod def_id;
 mod hir;
 mod mir;
@@ -10,6 +8,7 @@ mod span;
 mod thir;
 mod ty;
 
+pub use attributes::*;
 pub use def_id::*;
 pub use hir::*;
 pub use mir::*;

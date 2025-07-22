@@ -18,6 +18,8 @@ jobs:
       with:
         name: hax
         skipPush: true
+        extraPullNames: fstar-nix-versions, z3-nix-versions
+
     - name: Build
       run: nix build -L
 

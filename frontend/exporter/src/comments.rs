@@ -21,7 +21,7 @@ pub fn comments_of_file(path: PathBuf) -> std::io::Result<Vec<(Span, String)>> {
 
     let mut comments = vec![];
     let (mut pos, mut line, mut col) = (0, 0, 0);
-    for token in rustc_lexer::tokenize(source) {
+    for token in rustc_lexer::tokenize(source, rustc_lexer::FrontmatterAllowed::Yes) {
         let len = token.len as usize;
         let sub = &source[pos..(pos + len)];
         let lo = Loc { line, col };

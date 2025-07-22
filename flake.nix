@@ -2,21 +2,12 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs = { nixpkgs.follows = "nixpkgs"; };
-    };
+    crane = { url = "github:ipetkov/crane"; };
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    fstar = {
-      url = "github:FStarLang/FStar/v2025.02.17";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
-      };
-    };
+    fstar.url = "github:FStarLang/FStar/v2025.03.25";
     hacl-star = {
       url = "github:hacl-star/hacl-star";
       flake = false;
@@ -50,7 +41,6 @@
             });
         in rustc);
         craneLib = (crane.mkLib pkgs).overrideToolchain rustc;
-        ocamlformat = pkgs.ocamlformat_0_26_2;
         rustfmt = pkgs.rustfmt;
         fstar = inputs.fstar.packages.${system}.default;
         hax-env-file = pkgs.writeText "hax-env-file" ''
@@ -65,17 +55,8 @@
             cat "${hax-env-file}" | xargs -I{} echo "export {}"
           fi
         '';
-        ocamlPackages = pkgs.ocamlPackages.overrideScope (final: prev: {
-          ocamlgraph = prev.ocamlgraph.overrideAttrs (_: rec {
-            name = "ocamlgraph-${version}";
-            version = "2.2.0";
-            src = pkgs.fetchurl {
-              url =
-                "https://github.com/backtracking/ocamlgraph/releases/download/${version}/ocamlgraph-${version}.tbz";
-              hash = "sha256-sJViEIY8wk9IAgO6PC7wbfrlV5U2oFdENk595YgisjA=";
-            };
-          });
-        });
+        ocamlPackages = pkgs.ocamlPackages;
+        ocamlformat = ocamlPackages.ocamlformat_0_27_0;
       in rec {
         packages = {
           inherit rustc ocamlformat rustfmt fstar hax-env rustc-docs;
@@ -140,8 +121,8 @@
           };
           coverage = pkgs.callPackage ./examples/coverage {
             inherit (packages) hax;
-            inherit (pkgs) coqPackages;
             inherit craneLib;
+            coqPackages = pkgs.coqPackages_8_19;
           };
           readme-coherency =
             let src = pkgs.lib.sourceFilesBySuffices ./. [ ".md" ];
@@ -159,6 +140,7 @@
           replace-fstar-versions-md = {
             type = "app";
             program = "${pkgs.writeScript "replace-fstar-versions-md" ''
+              #!${pkgs.bash}/bin/bash
               FSTAR_VERSION=$(cat ${
                 ./flake.lock
               } | ${pkgs.jq}/bin/jq '.nodes.fstar.original.ref' -r)

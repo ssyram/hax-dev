@@ -9,4 +9,9 @@
 )]
 
 pub mod ast;
+pub mod hax_io;
+pub mod lean;
+pub mod names;
+pub mod ocaml_engine;
+pub mod printer;
 pub mod symbol;

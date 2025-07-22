@@ -225,10 +225,10 @@ pub struct Generics<Body: IsBody> {
 }
 
 #[cfg(feature = "rustc")]
-impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, ImplItem<Body>> for hir::ImplItemRef {
+impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, ImplItem<Body>> for hir::ImplItemId {
     fn sinto(&self, s: &S) -> ImplItem<Body> {
         let tcx: rustc_middle::ty::TyCtxt = s.base().tcx;
-        let impl_item = tcx.hir_impl_item(self.id);
+        let impl_item = tcx.hir_impl_item(*self);
         let s = s.with_owner_id(impl_item.owner_id.to_def_id());
         impl_item.sinto(&s)
     }
@@ -391,17 +391,6 @@ pub enum ImplItemKind<Body: IsBody> {
         ty: Ty,
         parent_bounds: Vec<(Clause, ImplExpr, Span)>,
     },
-}
-
-/// Reflects [`hir::AssocItemKind`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: hir::AssocItemKind, state: S as tcx)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub enum AssocItemKind {
-    Const,
-    Fn { has_self: bool },
-    Type,
 }
 
 /// Reflects [`hir::Impl`].
@@ -668,6 +657,7 @@ pub enum ItemKind<Body: IsBody> {
     Struct(Ident, Generics<Body>, VariantData),
     Union(Ident, Generics<Body>, VariantData),
     Trait(
+        Constness,
         IsAuto,
         Safety,
         Ident,
@@ -735,11 +725,11 @@ impl<'tcx, S: UnderOwnerState<'tcx>, Body: IsBody> SInto<S, EnumDef<Body>> for h
 }
 
 #[cfg(feature = "rustc")]
-impl<'a, S: BaseState<'a>, Body: IsBody> SInto<S, TraitItem<Body>> for hir::TraitItemRef {
+impl<'a, S: BaseState<'a>, Body: IsBody> SInto<S, TraitItem<Body>> for hir::TraitItemId {
     fn sinto(&self, s: &S) -> TraitItem<Body> {
-        let s = s.with_owner_id(self.id.owner_id.to_def_id());
+        let s = s.with_owner_id(self.owner_id.to_def_id());
         let tcx: rustc_middle::ty::TyCtxt = s.base().tcx;
-        tcx.hir_trait_item(self.id).sinto(&s)
+        tcx.hir_trait_item(*self).sinto(&s)
     }
 }
 
@@ -779,10 +769,10 @@ pub struct ForeignItem<Body: IsBody> {
 }
 
 #[cfg(feature = "rustc")]
-impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, ForeignItem<Body>> for hir::ForeignItemRef {
+impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, ForeignItem<Body>> for hir::ForeignItemId {
     fn sinto(&self, s: &S) -> ForeignItem<Body> {
         let tcx: rustc_middle::ty::TyCtxt = s.base().tcx;
-        tcx.hir_foreign_item(self.id).sinto(s)
+        tcx.hir_foreign_item(*self).sinto(s)
     }
 }
 
@@ -918,7 +908,7 @@ impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, Item<Body>> for hir::Item<
             | Enum(i, ..)
             | Struct(i, ..)
             | Union(i, ..)
-            | Trait(_, _, i, ..)
+            | Trait(_, _, _, i, ..)
             | TraitAlias(i, ..) => i.name.to_ident_string(),
             Use(..) | ForeignMod { .. } | GlobalAsm { .. } | Impl { .. } => String::new(),
         };
@@ -973,38 +963,6 @@ pub enum Attribute {
     Parsed(AttributeKind),
     Unparsed(AttrItem),
 }
-
-/// Reflects [`rustc_attr_data_structures::AttributeKind`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_attr_data_structures::AttributeKind, state: S as tcx)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum AttributeKind {
-    DocComment {
-        style: AttrStyle,
-        kind: CommentKind,
-        span: Span,
-        comment: Symbol,
-    },
-    #[todo]
-    Other(String),
-}
-
-/// Reflects [`rustc_attr_data_structures::InlineAttr`]
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_attr_data_structures::InlineAttr, state: S as _s)]
-pub enum InlineAttr {
-    None,
-    Hint,
-    Always,
-    Never,
-    Force {
-        attr_span: Span,
-        reason: Option<Symbol>,
-    },
-}
-
 /// Reflects [`rustc_ast::ast::BindingMode`]
 #[derive(AdtInto)]
 #[args(<S>, from: rustc_ast::ast::BindingMode, state: S as s)]

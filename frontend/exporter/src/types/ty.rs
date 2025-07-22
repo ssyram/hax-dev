@@ -1339,8 +1339,6 @@ impl PointerCoercion {
     }
 }
 
-sinto_todo!(rustc_middle::ty, ScalarInt);
-
 /// Reflects [`ty::FnSig`]
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -1486,6 +1484,7 @@ pub enum ClauseKind {
     WellFormed(Term),
     ConstEvaluatable(ConstantExpr),
     HostEffect(HostEffectPredicate),
+    UnstableFeature(Symbol),
 }
 
 sinto_todo!(rustc_middle::ty, HostEffectPredicate<'tcx>);

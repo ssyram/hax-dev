@@ -8,7 +8,8 @@ use crate::symbol::Symbol;
 use hax_rust_engine_macros::*;
 use std::fmt;
 
-mod global_id {
+/// The global identifiers of hax.
+pub mod global_id {
     use hax_frontend_exporter::{DefKind, DisambiguatedDefPathItem};
     use hax_rust_engine_macros::*;
 
@@ -90,8 +91,55 @@ mod global_id {
         /// A projector.
         Projector(ConcreteId),
     }
-}
 
+    impl GlobalId {
+        /// Extracts the Crate info
+        pub fn krate(&self) -> String {
+            match self {
+                GlobalId::Concrete(concrete_id) | GlobalId::Projector(concrete_id) => {
+                    concrete_id.def_id.def_id.krate.clone()
+                }
+            }
+        }
+
+        /// Raw printing of identifier separated by underscore. Used for testing
+        pub fn to_debug_string(&self) -> String {
+            match self {
+                GlobalId::Concrete(concrete_id) => concrete_id
+                    .def_id
+                    .def_id
+                    .clone()
+                    .path
+                    .into_iter()
+                    .map(|def| match def.clone().data {
+                        hax_frontend_exporter::DefPathItem::ValueNs(s)
+                        | hax_frontend_exporter::DefPathItem::MacroNs(s)
+                        | hax_frontend_exporter::DefPathItem::TypeNs(s) => s.clone(),
+                        hax_frontend_exporter::DefPathItem::Impl => "impl".to_string(),
+                        other => unimplemented!("{other:?}"),
+                    })
+                    .collect::<Vec<String>>()
+                    .join("_"),
+                GlobalId::Projector(_concrete_id) => todo!(),
+            }
+        }
+    }
+
+    impl PartialEq<DefId> for GlobalId {
+        fn eq(&self, other: &DefId) -> bool {
+            if let Self::Concrete(concrete) = self {
+                &concrete.def_id.def_id == other
+            } else {
+                false
+            }
+        }
+    }
+    impl PartialEq<GlobalId> for DefId {
+        fn eq(&self, other: &GlobalId) -> bool {
+            other == self
+        }
+    }
+}
 /// Local identifier
 #[derive_group_for_ast]
 pub struct LocalId(pub Symbol);
