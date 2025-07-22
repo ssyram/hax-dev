@@ -3,7 +3,7 @@
 //! state-tracking machinery.
 
 use itertools::Itertools;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
@@ -13,7 +13,7 @@ use rustc_trait_selection::traits::ImplSource;
 
 use crate::{self_predicate, traits::utils::erase_and_norm};
 
-use super::utils::{implied_predicates, normalize_bound_val, required_predicates, ToPolyTraitRef};
+use super::utils::{ToPolyTraitRef, implied_predicates, normalize_bound_val, required_predicates};
 
 #[derive(Debug, Clone)]
 pub enum PathChunk<'tcx> {
