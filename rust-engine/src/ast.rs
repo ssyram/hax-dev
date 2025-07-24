@@ -1451,11 +1451,15 @@ pub mod traits {
     pub trait HasMetadata {
         /// Get metadata
         fn metadata(&self) -> &Metadata;
+        /// Get mutable borrow on metadata
+        fn metadata_mut(&mut self) -> &mut Metadata;
     }
     /// Marks AST data types that carry a span
     pub trait HasSpan {
         /// Get span
         fn span(&self) -> Span;
+        /// Mutable borrow on the span
+        fn span_mut(&mut self) -> &mut Span;
     }
     /// Marks AST data types that carry a Type
     pub trait Typed {
@@ -1465,6 +1469,9 @@ pub mod traits {
     impl<T: HasMetadata> HasSpan for T {
         fn span(&self) -> Span {
             self.metadata().span.clone()
+        }
+        fn span_mut(&mut self) -> &mut Span {
+            &mut self.metadata_mut().span
         }
     }
 
@@ -1481,6 +1488,9 @@ pub mod traits {
             $(impl HasMetadata for $ty {
                 fn metadata(&self) -> &Metadata {
                     &self.meta
+                }
+                fn metadata_mut(&mut self) -> &mut Metadata {
+                    &mut self.meta
                 }
             })*
         };
@@ -1515,6 +1525,9 @@ pub mod traits {
         fn span(&self) -> Span {
             self.span.clone()
         }
+        fn span_mut(&mut self) -> &mut Span {
+            &mut self.span
+        }
     }
 
     impl Typed for Expr {
@@ -1536,6 +1549,9 @@ pub mod traits {
     impl HasSpan for SpannedTy {
         fn span(&self) -> Span {
             self.span.clone()
+        }
+        fn span_mut(&mut self) -> &mut Span {
+            &mut self.span
         }
     }
 
