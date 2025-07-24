@@ -22,11 +22,39 @@ jobs:
         with:
           result-encoding: string
           script: |
-            const body = context.payload.pull_request?.body || '';
-            const match = body.match(/libcrux-ref:\s*([a-zA-Z0-9._/-]+)/);
-            const ref = match ? match[1] : 'main';
-            core.notice(`Using libcrux ref: ${ref}`);
-            return ref;
+            let extractLibcruxRef = body => body.match(/libcrux-ref:\s*([a-zA-Z0-9._\/-]+)/)?.[1];
+            const refMap = new Map();
+            if (context.eventName === 'pull_request') {
+              const ref = extractLibcruxRef(context.payload.pull_request?.body || '') ?? 'main';
+              core.notice(`Using libcrux ref: ${resolved}`);
+              return resolved;
+            } else if (context.eventName === 'merge_group') {
+              const mergeGroupPRs = context.payload.merge_group?.pull_requests || [];
+              for (const prInfo of mergeGroupPRs) {
+                const pull_number = prInfo.number;
+                const pr = await github.rest.pulls.get({...context.repo, pull_number}).data;
+                const ref = extractLibcruxRef(pr.body);
+                ref && refMap.set(pull_number, ref);
+              }
+              if (refMap.size === 0) {
+                core.notice('No libcrux-ref specified, defaulting to "main"');
+                return 'main';
+              }
+              const uniqueRefs = new Set(refMap.values());
+              if (uniqueRefs.size > 1) {
+                let errorMessage = 'Error: Multiple different libcrux refs detected:\n';
+                for (const [prNum, ref] of refMap.entries())
+                  errorMessage += `- PR #${prNum}: ${ref}\n`;
+                core.setFailed(errorMessage);
+                return;
+              }
+
+              const [ref] = uniqueRefs;
+              core.notice(`Using libcrux ref: ${ref}`);
+              return ref;
+            }
+            core.setWarning(`Unsupported event type: ${context.eventName}, default to main`);
+            return 'main';
 
       - name: ⤵ Clone Libcrux repository
         uses: actions/checkout@v4
