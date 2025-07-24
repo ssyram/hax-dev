@@ -34,11 +34,6 @@ jobs:
           repository: cryspen/libcrux
           path: libcrux
           ref: ${{ steps.extract_version.outputs.result }}
-      - name: ⤵ Clone Libcrux repository
-        uses: actions/checkout@v4
-        with:
-          repository: cryspen/libcrux
-          path: libcrux
 
       - uses: actions/checkout@v4
         with:
