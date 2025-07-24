@@ -53,7 +53,7 @@ jobs:
               core.notice(`Using libcrux ref: ${ref}`);
               return ref;
             }
-            core.setWarning(`Unsupported event type: ${context.eventName}, default to main`);
+            core.warning(`Unsupported event type: ${context.eventName}, default to main`);
             return 'main';
 
       - name: ⤵ Clone Libcrux repository
