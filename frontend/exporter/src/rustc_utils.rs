@@ -326,6 +326,67 @@ pub fn get_method_sig<'tcx>(
     normalize(tcx, typing_env, sig)
 }
 
+/// Generates a `dyn Trait<Args.., Ty = <Self as Trait>::Ty..>` type for the given trait ref.
+pub fn dyn_self_ty<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    tref: ty::TraitRef<'tcx>,
+) -> Option<ty::Ty<'tcx>> {
+    let re_erased = tcx.lifetimes.re_erased;
+    if !tcx.is_dyn_compatible(tref.def_id) {
+        return None;
+    }
+
+    // The main `Trait<Args>` predicate.
+    let main_pred = ty::Binder::dummy(ty::ExistentialPredicate::Trait(
+        ty::ExistentialTraitRef::erase_self_ty(tcx, tref),
+    ));
+
+    // Generate a bunch of `Ty = <Self as Trait>::Ty` constraints for the associated types of this
+    // trait and its parents.
+    fn gather_ty_constraints<'tcx>(
+        tcx: ty::TyCtxt<'tcx>,
+        typing_env: ty::TypingEnv<'tcx>,
+        cstrs: &mut Vec<ty::ProjectionPredicate<'tcx>>,
+        tref: ty::TraitRef<'tcx>,
+    ) {
+        cstrs.extend(
+            tcx.associated_items(tref.def_id)
+                .in_definition_order()
+                .filter(|assoc| matches!(assoc.kind, ty::AssocKind::Type { .. }))
+                .map(|assoc| {
+                    // This assumes non-GAT because the trait is dyn-compatible.
+                    ty::ProjectionPredicate {
+                        projection_term: ty::AliasTerm::new(tcx, assoc.def_id, tref.args),
+                        term: ty::Ty::new_projection(tcx, assoc.def_id, tref.args).into(),
+                    }
+                }),
+        );
+        for clause in tcx
+            .explicit_super_predicates_of(tref.def_id)
+            .map_bound(|clauses| clauses.iter().map(|(clause, _span)| *clause))
+            .iter_instantiated(tcx, tref.args)
+        {
+            if let Some(pred) = clause.as_trait_clause() {
+                let tref = erase_and_norm(tcx, typing_env, pred.skip_binder().trait_ref);
+                gather_ty_constraints(tcx, typing_env, cstrs, tref);
+            }
+        }
+    }
+    let mut ty_constraints = vec![];
+    gather_ty_constraints(tcx, typing_env, &mut ty_constraints, tref);
+    let ty_constraints = ty_constraints.into_iter().map(|proj| {
+        let proj = ty::ExistentialProjection::erase_self_ty(tcx, proj);
+        ty::Binder::dummy(ty::ExistentialPredicate::Projection(proj))
+    });
+
+    let preds =
+        tcx.mk_poly_existential_predicates_from_iter([main_pred].into_iter().chain(ty_constraints));
+    let ty = tcx.mk_ty_from_kind(ty::Dynamic(preds, re_erased, ty::DynKind::Dyn));
+    let ty = normalize(tcx, typing_env, ty);
+    Some(ty)
+}
+
 pub fn closure_once_shim<'tcx>(
     tcx: ty::TyCtxt<'tcx>,
     closure_ty: ty::Ty<'tcx>,
