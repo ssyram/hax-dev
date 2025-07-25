@@ -272,6 +272,9 @@ pub enum FullDefKind<Body> {
         self_predicate: TraitPredicate,
         /// Associated items, in definition order.
         items: Vec<AssocItem>,
+        /// `dyn Trait<Args.., Ty = <Self as Trait>::Ty..>` for this trait. This is `Some` iff this
+        /// trait is dyn-compatible.
+        dyn_self: Option<Ty>,
     },
     /// Trait alias: `trait IntIterator = Iterator<Item = i32>;`
     TraitAlias {
@@ -279,11 +282,17 @@ pub enum FullDefKind<Body> {
         implied_predicates: GenericPredicates,
         /// The special `Self: Trait` clause.
         self_predicate: TraitPredicate,
+        /// `dyn Trait<Args.., Ty = <Self as Trait>::Ty..>` for this trait. This is `Some` iff this
+        /// trait is dyn-compatible.
+        dyn_self: Option<Ty>,
     },
     TraitImpl {
         param_env: ParamEnv,
         /// The trait that is implemented by this impl block.
         trait_pred: TraitPredicate,
+        /// `dyn Trait<Args.., Ty = <Self as Trait>::Ty..>` for the implemented trait. This is
+        /// `Some` iff the trait is dyn-compatible.
+        dyn_self: Option<Ty>,
         /// The `ImplExpr`s required to satisfy the predicates on the trait declaration. E.g.:
         /// ```ignore
         /// trait Foo: Bar {}
@@ -316,6 +325,9 @@ pub enum FullDefKind<Body> {
         associated_item: AssocItem,
         inline: InlineAttr,
         is_const: bool,
+        /// Whether this method will be included in the trait vtable. `false` if this is not a
+        /// trait method.
+        vtable_safe: bool,
         sig: PolyFnSig,
         body: Option<Body>,
     },
@@ -494,6 +506,7 @@ where
             param_env: get_param_env(s, args),
             implied_predicates: get_implied_predicates(s, args),
             self_predicate: get_self_predicate(s, args),
+            dyn_self: get_dyn_self_ty(s, args),
             items: tcx
                 .associated_items(def_id)
                 .in_definition_order()
@@ -512,6 +525,7 @@ where
             param_env: get_param_env(s, args),
             implied_predicates: get_implied_predicates(s, args),
             self_predicate: get_self_predicate(s, args),
+            dyn_self: get_dyn_self_ty(s, args),
         },
         RDefKind::Impl { .. } => {
             use std::collections::HashMap;
@@ -538,12 +552,12 @@ where
                     }
                 }
                 ty::ImplSubject::Trait(trait_ref) => {
-                    // Also record the polarity.
                     let polarity = tcx.impl_polarity(def_id);
                     let trait_pred = TraitPredicate {
                         trait_ref: trait_ref.sinto(s),
                         is_positive: matches!(polarity, ty::ImplPolarity::Positive),
                     };
+                    let dyn_self = dyn_self_ty(tcx, s.typing_env(), trait_ref).sinto(s);
                     // Impl exprs required by the trait.
                     let required_impl_exprs =
                         solve_item_implied_traits(s, trait_ref.def_id, trait_ref.args);
@@ -607,7 +621,20 @@ where
                                             ImplAssocItemValue::DefaultedTy { ty }
                                         }
                                         ty::AssocKind::Fn { .. } => {
-                                            ImplAssocItemValue::DefaultedFn {}
+                                            let sig = if tcx.generics_of(decl_def_id).is_own_empty()
+                                            {
+                                                // The method doesn't have generics of its own, so
+                                                // we can instantiate it with just the trait
+                                                // generics.
+                                                let sig = tcx
+                                                    .fn_sig(decl_def_id)
+                                                    .instantiate(tcx, trait_ref.args)
+                                                    .sinto(s);
+                                                Some(sig)
+                                            } else {
+                                                None
+                                            };
+                                            ImplAssocItemValue::DefaultedFn { sig }
                                         }
                                         ty::AssocKind::Const { .. } => {
                                             ImplAssocItemValue::DefaultedConst {}
@@ -628,6 +655,7 @@ where
                     FullDefKind::TraitImpl {
                         param_env,
                         trait_pred,
+                        dyn_self,
                         implied_impl_exprs: required_impl_exprs,
                         items,
                     }
@@ -641,14 +669,28 @@ where
             sig: inst_binder(tcx, s.typing_env(), args, tcx.fn_sig(def_id)).sinto(s),
             body: get_body(s, args),
         },
-        RDefKind::AssocFn { .. } => FullDefKind::AssocFn {
-            param_env: get_param_env(s, args),
-            associated_item: AssocItem::sfrom_instantiated(s, &tcx.associated_item(def_id), args),
-            inline: tcx.codegen_fn_attrs(def_id).inline.sinto(s),
-            is_const: tcx.constness(def_id) == rustc_hir::Constness::Const,
-            sig: get_method_sig(tcx, s.typing_env(), def_id, args).sinto(s),
-            body: get_body(s, args),
-        },
+        RDefKind::AssocFn { .. } => {
+            let item = tcx.associated_item(def_id);
+            let vtable_safe = match item.container {
+                ty::AssocItemContainer::Trait => {
+                    rustc_trait_selection::traits::is_vtable_safe_method(
+                        tcx,
+                        item.container_id(tcx),
+                        item,
+                    )
+                }
+                _ => false,
+            };
+            FullDefKind::AssocFn {
+                param_env: get_param_env(s, args),
+                associated_item: AssocItem::sfrom_instantiated(s, &item, args),
+                inline: tcx.codegen_fn_attrs(def_id).inline.sinto(s),
+                is_const: tcx.constness(def_id) == rustc_hir::Constness::Const,
+                vtable_safe,
+                sig: get_method_sig(tcx, s.typing_env(), def_id, args).sinto(s),
+                body: get_body(s, args),
+            }
+        }
         RDefKind::Closure { .. } => {
             use ty::ClosureKind::{Fn, FnMut};
             let closure_ty = type_of_self();
@@ -806,7 +848,12 @@ pub enum ImplAssocItemValue {
     },
     /// This is a non-overriden default method.
     /// FIXME: provide properly instantiated generics.
-    DefaultedFn {},
+    DefaultedFn {
+        /// The signature of the method, if we could translate it. `None` if the method as generics
+        /// of its own, because then we'd need to resolve traits but the method doesn't have it's
+        /// own `DefId`.
+        sig: Option<PolyFnSig>,
+    },
     /// This is an associated const that reuses the trait declaration default. The default const
     /// value can be found in `decl_def`.
     DefaultedConst,
@@ -965,6 +1012,31 @@ fn get_self_predicate<'tcx, S: UnderOwnerState<'tcx>>(
         .upcast(tcx);
     let pred = substitute(tcx, typing_env, args, pred);
     pred.sinto(s)
+}
+
+/// Generates a `dyn Trait<Args.., Ty = <Self as Trait>::Ty..>` type for this trait.
+#[cfg(feature = "rustc")]
+fn get_dyn_self_ty<'tcx, S: UnderOwnerState<'tcx>>(
+    s: &S,
+    args: Option<ty::GenericArgsRef<'tcx>>,
+) -> Option<Ty> {
+    let tcx = s.base().tcx;
+    let typing_env = s.typing_env();
+    let def_id = s.owner_id();
+
+    let self_tref = ty::TraitRef::new_from_args(
+        tcx,
+        def_id,
+        args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(tcx, def_id)),
+    );
+    rustc_utils::dyn_self_ty(tcx, typing_env, self_tref).map(|ty| {
+        let ty = if args.is_some() {
+            erase_free_regions(tcx, ty)
+        } else {
+            ty
+        };
+        ty.sinto(s)
+    })
 }
 
 /// Do the trait resolution necessary to create a new impl for the given trait_ref. Used when we
