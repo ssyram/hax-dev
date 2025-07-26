@@ -369,15 +369,24 @@ fn op_to_const<'tcx, S: UnderOwnerState<'tcx>>(
             ConstantExprKind::FnPtr(item)
         }
         ty::RawPtr(..) | ty::Ref(..) => {
-            let op = ecx.deref_pointer(&op)?;
-            let val = op_to_const(s, span, ecx, op.into())?;
-            match ty.kind() {
-                ty::Ref(..) => ConstantExprKind::Borrow(val),
-                ty::RawPtr(.., mutability) => ConstantExprKind::RawBorrow {
-                    arg: val,
-                    mutability: mutability.sinto(s),
-                },
-                _ => unreachable!(),
+            if let Some(op) = ecx.deref_pointer(&op).discard_err() {
+                // Valid pointer case
+                let val = op_to_const(s, span, ecx, op.into())?;
+                match ty.kind() {
+                    ty::Ref(..) => ConstantExprKind::Borrow(val),
+                    ty::RawPtr(.., mutability) => ConstantExprKind::RawBorrow {
+                        arg: val,
+                        mutability: mutability.sinto(s),
+                    },
+                    _ => unreachable!(),
+                }
+            } else {
+                // Invalid pointer; try reading it as a raw address
+                let scalar = ecx.read_scalar(&op)?;
+                let scalar_int = scalar.try_to_scalar_int().unwrap();
+                let v = scalar_int.to_uint(scalar_int.size());
+                let lit = ConstantLiteral::PtrNoProvenance(v);
+                ConstantExprKind::Literal(lit)
             }
         }
         ty::FnPtr(..)
