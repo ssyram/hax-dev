@@ -1053,8 +1053,7 @@ fn get_param_env<'tcx, S: UnderOwnerState<'tcx>>(
     match args {
         None => ParamEnv {
             generics,
-            predicates: required_predicates(tcx, def_id, s.base().options.resolve_drop_bounds)
-                .sinto(s),
+            predicates: required_predicates(tcx, def_id, s.base().options.bounds_options).sinto(s),
             parent,
         },
         // An instantiated item is monomorphic.
@@ -1079,8 +1078,7 @@ fn get_implied_predicates<'tcx, S: UnderOwnerState<'tcx>>(
     let tcx = s.base().tcx;
     let def_id = s.owner_id();
     let typing_env = s.typing_env();
-    let mut implied_predicates =
-        implied_predicates(tcx, def_id, s.base().options.resolve_drop_bounds);
+    let mut implied_predicates = implied_predicates(tcx, def_id, s.base().options.bounds_options);
     if args.is_some() {
         implied_predicates = Cow::Owned(
             implied_predicates

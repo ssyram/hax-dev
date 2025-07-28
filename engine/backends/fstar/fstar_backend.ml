@@ -155,7 +155,12 @@ struct
   let pnegative = function true -> "-" | false -> ""
 
   let dummy_clone_impl =
-    StringToFStar.term Span.default "{f_clone = (fun x -> x);}"
+    StringToFStar.term Span.default
+      {fstar|{
+        f_clone = (fun x -> x);
+        f_clone_pre = (fun _ -> True);
+        f_clone_post = (fun _ _ -> True);
+      }|fstar}
 
   (* Print a literal as an F* constant *)
   let rec pliteral_as_const span (e : literal) =
@@ -1911,7 +1916,6 @@ module DepGraphR = Dependencies.Make (Features.Rust)
 module TransformToInputLanguage =
   [%functor_application
     Phases.Reject.RawOrMutPointer(Features.Rust)
-  |> Phases.Drop_metasized
   |> Phases.Transform_hax_lib_inline
   |> Phases.Specialize
   |> Phases.Drop_sized_trait

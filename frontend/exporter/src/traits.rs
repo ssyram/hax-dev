@@ -6,8 +6,8 @@ pub mod resolution;
 mod utils;
 #[cfg(feature = "rustc")]
 pub use utils::{
-    erase_and_norm, erase_free_regions, implied_predicates, normalize, predicates_defined_on,
-    required_predicates, self_predicate, Predicates, ToPolyTraitRef,
+    Predicates, ToPolyTraitRef, erase_and_norm, erase_free_regions, implied_predicates, normalize,
+    predicates_defined_on, required_predicates, self_predicate,
 };
 
 #[cfg(feature = "rustc")]
@@ -16,6 +16,9 @@ pub use resolution::PredicateSearcher;
 use rustc_middle::ty;
 #[cfg(feature = "rustc")]
 use rustc_span::def_id::DefId as RDefId;
+
+#[cfg(feature = "rustc")]
+pub use utils::is_sized_related_trait;
 
 #[derive_group(Serializers)]
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, JsonSchema)]
@@ -274,7 +277,7 @@ pub fn solve_item_required_traits<'tcx, S: UnderOwnerState<'tcx>>(
             }
             _ => {}
         }
-        let predicates = required_predicates(tcx, def_id, s.base().options.resolve_drop_bounds);
+        let predicates = required_predicates(tcx, def_id, s.base().options.bounds_options);
         impl_exprs.extend(solve_item_traits_inner(s, generics, predicates));
     }
     let mut impl_exprs = vec![];
@@ -291,7 +294,7 @@ pub fn solve_item_implied_traits<'tcx, S: UnderOwnerState<'tcx>>(
     def_id: RDefId,
     generics: ty::GenericArgsRef<'tcx>,
 ) -> Vec<ImplExpr> {
-    let predicates = implied_predicates(s.base().tcx, def_id, s.base().options.resolve_drop_bounds);
+    let predicates = implied_predicates(s.base().tcx, def_id, s.base().options.bounds_options);
     solve_item_traits_inner(s, generics, predicates)
 }
 
