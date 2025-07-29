@@ -821,7 +821,7 @@ pub struct VirtualTraitImpl {
     pub trait_pred: TraitPredicate,
     /// The `ImplExpr`s required to satisfy the predicates on the trait declaration.
     pub implied_impl_exprs: Vec<ImplExpr>,
-    /// Tye associated types and their predicates, in definition order.
+    /// The associated types and their predicates, in definition order.
     pub types: Vec<(Ty, Vec<ImplExpr>)>,
 }
 
