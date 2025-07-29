@@ -1558,19 +1558,39 @@ struct
             [ (F.id marker_field, None, [], pty e.span U.unit_typ) ]
           else fields
         in
-        let tcdef =
-          (* Binders are explicit on class definitions *)
-          let bds =
-            List.map
-              ~f:
-                FStarBinder.(
-                  of_generic_param e.span >> implicit_to_explicit >> to_binder)
-              generics.params
-          in
-          F.AST.TyconRecord (name_id, bds, None, [], fields)
+        (* Binders are explicit on class definitions *)
+        let bds =
+          List.map
+            ~f:
+              FStarBinder.(
+                of_generic_param e.span >> implicit_to_explicit >> to_binder)
+            generics.params
         in
+        let tcdef = F.AST.TyconRecord (name_id, bds, None, [], fields) in
         let d = F.AST.Tycon (false, true, [ tcdef ]) in
-        [ `Intf { d; drange = F.dummyRange; quals = []; attrs = [] } ]
+        (* This helps f* in type class resolution *)
+        let constraints_export =
+          constraints_fields
+          |> List.map ~f:(fun (super_name, _, _, typ) ->
+                 let super_name = FStar_Ident.string_of_id super_name in
+                 let tc_name = FStar_Ident.string_of_id name_id in
+                 let typ = FStar_Parser_AST.term_to_string typ in
+                 let binders = FStar_Parser_AST.binders_to_string ") (" bds in
+                 let tc_instance =
+                   name_id
+                   :: FStar_Parser_AST.idents_of_binders bds
+                        FStar_Compiler_Range.dummyRange
+                   |> List.map ~f:FStar_Ident.string_of_id
+                   |> String.concat ~sep:" "
+                 in
+                 `VerbatimIntf
+                   ( "[@@ FStar.Tactics.Typeclasses.tcinstance]\nlet _ = fun ("
+                     ^ binders ^ ") {|i: " ^ tc_instance ^ "|} -> i."
+                     ^ super_name,
+                     `Newline ))
+        in
+        `Intf { d; drange = F.dummyRange; quals = []; attrs = [] }
+        :: constraints_export
     | Impl
         {
           generics;
