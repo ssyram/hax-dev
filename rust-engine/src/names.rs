@@ -117,41 +117,62 @@ pub use root::*;
 pub mod codegen {
     use itertools::*;
     use std::iter;
+    use std::ops::DerefMut;
 
     use crate::ast::Item;
-    use crate::{ast::identifiers::global_id::DefId, names::serialization_helpers};
+    use crate::{
+        ast::identifiers::{global_id::DefId, GlobalId},
+        names::serialization_helpers,
+    };
     use hax_frontend_exporter::DefKind;
 
-    use serde::de::DeserializeOwned;
-    use serde_json::Value;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     /// Visit items and collect all the `DefId`s
     fn collect_def_ids(items: Vec<Item>) -> Vec<DefId> {
-        /// Recursively traverses a JSON tree and tries to parse any subnodes as type `T`.
-        fn find<T: DeserializeOwned>(value: &Value) -> Vec<T> {
-            let subvalues: Vec<_> = match &value {
-                Value::Array(arr) => arr.iter().collect(),
-                Value::Object(map) => map.iter().map(|(_, value)| value).collect(),
-                _ => vec![],
-            };
-
-            subvalues
-                .into_iter()
-                .flat_map(find)
-                .chain(serde_json::from_value(value.clone()).into_iter())
-                .collect()
+        #[derive(Default)]
+        struct DefIdCollector(HashSet<DefId>);
+        use crate::ast::visitors::*;
+        impl AstVisitor for DefIdCollector {
+            fn visit_global_id(&mut self, x: &GlobalId) {
+                let mut current = Some(x.def_id());
+                while let Some(def_id) = current {
+                    self.0.insert(def_id.clone());
+                    current = def_id.parent.map(|boxed| *boxed.clone());
+                }
+            }
         }
 
-        // TODO: we don't have visitor yet. For now, we use a hack: we just browse
-        // the JSON, trying to parse every possible node as a DefId.
-        // See https://github.com/cryspen/hax/issues/1539.
-        let mut def_ids = find(&serde_json::to_value(items).unwrap());
+        // Collect names
+        let mut vec: Vec<_> = DefIdCollector::default()
+            .visit_by_val(&items)
+            .0
+            .into_iter()
+            .collect();
 
-        def_ids.sort();
-        def_ids.dedup();
+        // In the OCaml engine, `hax_engine_names` is renamed to `rust_primitives`.
+        for id in &mut vec {
+            let mut current = Some(id);
+            while let Some(def_id) = current {
+                if def_id.krate == "hax_engine_names" {
+                    def_id.krate = "rust_primitives".into();
+                }
+                current = def_id.parent.as_mut().map(|boxed| boxed.deref_mut());
+            }
+        }
 
-        def_ids
+        // We consume names after import by the OCaml engine. Thus, the OCaml
+        // engine may have introduced already some hax-specific Rust names,
+        // directly in `rust_primitives`. After renaming from `hax_engine_names`
+        // to `rust_primitives`, such names may be duplicated. For instance,
+        // that's the case of `unsize`: the crate `hax_engine_names` contains
+        // expression with implicit unsize operations, thus the OCaml engine
+        // inserts `rust_primitives::unsize`. In the same time,
+        // `hax_engine_names::unsize` exists and was renamed to
+        // `rust_primitives::unsize`. Whence the need to dedup here.
+        vec.sort();
+        vec.dedup();
+        vec
     }
 
     /// Crafts a docstring for a `DefId`, hopefully (rustdoc) linking it back to
