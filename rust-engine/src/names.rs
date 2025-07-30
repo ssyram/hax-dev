@@ -91,7 +91,7 @@ pub(self) mod serialization_helpers {
 ///    dependency closure of the engine: in such cases, `rustdoc` cannot link
 ///    properly.
 #[allow(unused, non_snake_case, rustdoc::broken_intra_doc_links, missing_docs)]
-pub mod root {
+mod root {
     macro_rules! mk {
         ($name: ident, $doc: literal, $data: literal, $parent: expr) => {
             #[doc = $doc]
@@ -108,6 +108,7 @@ pub mod root {
     pub(self) use mk;
     include!("names/generated.rs");
 }
+#[allow(unused)]
 pub use root::*;
 
 /// Global identifiers are built around `DefId` that comes out of the hax
@@ -352,7 +353,7 @@ pub mod codegen {
                     .map(docstring)
                     .map(|s| format!(r###"#![doc=r##"{s}"##]"###));
                 docstring
-                    .chain(iter::once("pub use super::root;".to_string()))
+                    .chain(iter::once("use super::root;".to_string()))
                     .chain(submodules)
                     .chain(definitions)
                     .collect::<Vec<_>>()
