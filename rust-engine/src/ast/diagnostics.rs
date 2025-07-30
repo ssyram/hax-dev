@@ -43,7 +43,8 @@ impl Diagnostic {
         &self.node
     }
     /// Report an error
-    pub fn new(node: Fragment, info: DiagnosticInfo) -> Self {
+    pub fn new(node: impl Into<Fragment>, info: DiagnosticInfo) -> Self {
+        let node = node.into();
         eprintln!("Todo, error reporting");
         eprintln!("node={node:#?}");
         eprintln!("info={info:#?}");
