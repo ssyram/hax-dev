@@ -572,11 +572,11 @@ module Make (FA : Features.T) = struct
     | A.Quote { quote; origin } ->
         B.Quote { quote = dquote quote; origin = ditem_quote_origin origin }
     | A.HaxError s ->
-        let node : Types.fragment = Unknown "HaxError" in
+        let fragment : Types.fragment = Unknown "HaxError" in
         let info : B.diagnostic_info =
           { context = Import; kind = Custom s; span }
         in
-        Error { node; info }
+        Error { fragment; diagnostics = [ { node = fragment; info } ] }
     | A.NotImplementedYet -> B.NotImplementedYet
 
   let ditem (i : A.item) : B.item list =
