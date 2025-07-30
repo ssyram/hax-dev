@@ -33,14 +33,14 @@
 /// Concretely, this module defines `Repr` a (JSON-compact) representation of `DefId`s without parents.
 /// It provides a bijection from the fields `krate`, `path`, and `kind` of `DefId` and `Repr`.
 /// The choice of `Repr` itself is irrelevant. Anything that produces compact JSON is good.
-pub(self) mod serialization_helpers {
+mod serialization_helpers {
     use hax_frontend_exporter::{DefKind, DefPathItem, DisambiguatedDefPathItem};
 
     use crate::ast::identifiers::global_id::DefId;
     /// The compact reperesentation: a tuple (krate name, path, defkind)
     /// The path is a vector of tuples (DefPathItem, disambiguator).
     type Repr = (String, Vec<(DefPathItem, u32)>, DefKind);
-    //// `BorrowedRepr` is the borrowed variant of `Repr`. Useful for serialization.
+    /// `BorrowedRepr` is the borrowed variant of `Repr`. Useful for serialization.
     type BorrowedRepr<'a> = (&'a String, Vec<(&'a DefPathItem, &'a u32)>, &'a DefKind);
 
     pub fn serialize(did: &DefId) -> String {
@@ -90,7 +90,13 @@ pub(self) mod serialization_helpers {
 ///    to private items, to re-exported items or to items that are not in the
 ///    dependency closure of the engine: in such cases, `rustdoc` cannot link
 ///    properly.
-#[allow(unused, non_snake_case, rustdoc::broken_intra_doc_links, missing_docs)]
+#[allow(
+    unused,
+    non_snake_case,
+    rustdoc::broken_intra_doc_links,
+    missing_docs,
+    clippy::module_inception
+)]
 mod root {
     macro_rules! mk {
         ($name: ident, $doc: literal, $data: literal, $parent: expr) => {
@@ -104,8 +110,8 @@ mod root {
             }
         };
     }
-    pub(self) use super::serialization_helpers;
-    pub(self) use mk;
+    use super::serialization_helpers;
+    use mk;
     include!("names/generated.rs");
 }
 #[allow(unused)]
@@ -158,7 +164,7 @@ pub mod codegen {
                 if def_id.krate == "hax_engine_names" {
                     def_id.krate = "rust_primitives".into();
                 }
-                current = def_id.parent.as_mut().map(|boxed| boxed.deref_mut());
+                current = def_id.parent.as_deref_mut();
             }
         }
 
@@ -187,41 +193,41 @@ pub mod codegen {
         let parent_path_str = format!("::{}", parent_path.join("::"));
         let path_str = format!("::{}", path_of_def_id(id).join("::"));
         let subject = match &id.kind {
-            DefKind::Mod => format!("module [`{}`]", path_str),
-            DefKind::Struct => format!("struct [`{}`]", path_str),
-            DefKind::Union => format!("union [`{}`]", path_str),
-            DefKind::Enum => format!("enum [`{}`]", path_str),
-            DefKind::Variant => format!("variant [`{}`]", path_str),
-            DefKind::Trait => format!("trait [`{}`]", path_str),
-            DefKind::TyAlias => format!("type alias [`{}`]", path_str),
-            DefKind::ForeignTy => format!("foreign type [`{}`]", path_str),
-            DefKind::TraitAlias => format!("trait alias [`{}`]", path_str),
-            DefKind::AssocTy => format!("associated type [`{}`]", path_str),
-            DefKind::TyParam => format!("type parameter from [`{}`]", parent_path_str),
-            DefKind::Fn => format!("function [`{}`]", path_str),
-            DefKind::Const => format!("const [`{}`]", path_str),
-            DefKind::ConstParam => format!("const parameter from [`{}`]", parent_path_str),
-            DefKind::Static { .. } => format!("static [`{}`]", path_str),
-            DefKind::Ctor { .. } => format!("constructor for [`{}`]", parent_path_str),
-            DefKind::AssocFn => format!("associated function [`{}`]", path_str),
-            DefKind::AssocConst => format!("associated constant [`{}`]", path_str),
-            DefKind::Macro { .. } => format!("macro [`{}`]", path_str),
-            DefKind::ExternCrate => format!("extern crate [`{}`]", path_str),
-            DefKind::Use => format!("use item [`{}`]", path_str),
-            DefKind::ForeignMod => format!("foreign module [`{}`]", path_str),
-            DefKind::AnonConst => return format!("This is an anonymous constant."),
+            DefKind::Mod => format!("module [`{path_str}`]"),
+            DefKind::Struct => format!("struct [`{path_str}`]"),
+            DefKind::Union => format!("union [`{path_str}`]"),
+            DefKind::Enum => format!("enum [`{path_str}`]"),
+            DefKind::Variant => format!("variant [`{path_str}`]"),
+            DefKind::Trait => format!("trait [`{path_str}`]"),
+            DefKind::TyAlias => format!("type alias [`{path_str}`]"),
+            DefKind::ForeignTy => format!("foreign type [`{path_str}`]"),
+            DefKind::TraitAlias => format!("trait alias [`{path_str}`]"),
+            DefKind::AssocTy => format!("associated type [`{path_str}`]"),
+            DefKind::TyParam => format!("type parameter from [`{parent_path_str}`]"),
+            DefKind::Fn => format!("function [`{path_str}`]"),
+            DefKind::Const => format!("const [`{path_str}`]"),
+            DefKind::ConstParam => format!("const parameter from [`{parent_path_str}`]"),
+            DefKind::Static { .. } => format!("static [`{path_str}`]"),
+            DefKind::Ctor { .. } => format!("constructor for [`{parent_path_str}`]"),
+            DefKind::AssocFn => format!("associated function [`{path_str}`]"),
+            DefKind::AssocConst => format!("associated constant [`{path_str}`]"),
+            DefKind::Macro { .. } => format!("macro [`{path_str}`]"),
+            DefKind::ExternCrate => format!("extern crate [`{path_str}`]"),
+            DefKind::Use => format!("use item [`{path_str}`]"),
+            DefKind::ForeignMod => format!("foreign module [`{path_str}`]"),
+            DefKind::AnonConst => return "This is an anonymous constant.".to_string(),
             DefKind::PromotedConst | DefKind::InlineConst => {
-                format!("This is an inline const from [`{}`]", parent_path_str)
+                format!("This is an inline const from [`{parent_path_str}`]")
             }
             DefKind::OpaqueTy => {
-                return format!("This is an opaque type for [`{}`]", parent_path_str)
+                return format!("This is an opaque type for [`{parent_path_str}`]")
             }
-            DefKind::Field => format!("field [`{}`] from {}", def, parent_path_str),
-            DefKind::LifetimeParam => return format!("This is a lifetime parameter."),
-            DefKind::GlobalAsm => return format!("This is a global ASM block."),
-            DefKind::Impl { .. } => return format!("This is an impl block."),
-            DefKind::Closure => return format!("This is a closure."),
-            DefKind::SyntheticCoroutineBody => return format!("This is a coroutine body."),
+            DefKind::Field => format!("field [`{def}`] from {parent_path_str}"),
+            DefKind::LifetimeParam => return "This is a lifetime parameter.".to_string(),
+            DefKind::GlobalAsm => return "This is a global ASM block.".to_string(),
+            DefKind::Impl { .. } => return "This is an impl block.".to_string(),
+            DefKind::Closure => return "This is a closure.".to_string(),
+            DefKind::SyntheticCoroutineBody => return "This is a coroutine body.".to_string(),
         };
         format!("This is the {subject}.")
     }
@@ -245,7 +251,7 @@ pub mod codegen {
                     | hax_frontend_exporter::DefPathItem::ValueNs(s)
                     | hax_frontend_exporter::DefPathItem::MacroNs(s)
                     | hax_frontend_exporter::DefPathItem::LifetimeNs(s) => s,
-                    data => format!("{:?}", data),
+                    data => format!("{data:?}"),
                 };
                 if item.disambiguator == 0 {
                     data
@@ -258,7 +264,7 @@ pub mod codegen {
             } else {
                 None
             })
-            .map(|s| name_to_string(s))
+            .map(name_to_string)
             .collect()
     }
 

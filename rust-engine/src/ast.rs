@@ -1573,7 +1573,7 @@ pub mod traits {
         type Kind = TyKind;
 
         fn kind(&self) -> &Self::Kind {
-            &(*self.0)
+            &self.0
         }
     }
 
