@@ -1575,5 +1575,32 @@ pub mod traits {
             &(*self.0)
         }
     }
+
+    /// Fragments of the AST on which we can store an `ErrorNode`.
+    pub trait HasErrorNode {
+        /// Replace the current node with an error.
+        fn set_error(&mut self, error_node: ErrorNode);
+    }
+
+    impl HasErrorNode for Item {
+        fn set_error(&mut self, error_node: ErrorNode) {
+            self.kind = ItemKind::Error(error_node)
+        }
+    }
+    impl HasErrorNode for Pat {
+        fn set_error(&mut self, error_node: ErrorNode) {
+            self.kind = Box::new(PatKind::Error(error_node))
+        }
+    }
+    impl HasErrorNode for Expr {
+        fn set_error(&mut self, error_node: ErrorNode) {
+            self.kind = Box::new(ExprKind::Error(error_node))
+        }
+    }
+    impl HasErrorNode for Ty {
+        fn set_error(&mut self, error_node: ErrorNode) {
+            self.0 = Box::new(TyKind::Error(error_node))
+        }
+    }
 }
 pub use traits::*;
