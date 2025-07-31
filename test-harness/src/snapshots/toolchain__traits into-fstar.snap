@@ -80,7 +80,7 @@ class t_Trait (v_Self: Type0) = { __marker_trait_t_Trait:Prims.unit }
 let impl
       (#v_P: Type0)
       (#[FStar.Tactics.Typeclasses.tcresolve ()] i0: Core.Ops.Function.t_FnMut v_P u8)
-    : t_Trait v_P = { __marker_trait = () }
+    : t_Trait v_P = { __marker_trait_t_Trait = () }
 '''
 "Traits.For_clauses.Issue_495_.fst" = '''
 module Traits.For_clauses.Issue_495_
@@ -182,7 +182,7 @@ let impl
       (#v_U: Type0)
       (#[FStar.Tactics.Typeclasses.tcresolve ()] i0: t_T1 v_U)
       (#[FStar.Tactics.Typeclasses.tcresolve ()] i1: t_T2 i0.f_Assoc)
-    : t_T2 v_U = { __marker_trait = () }
+    : t_T2 v_U = { __marker_trait_t_T2 = () }
 '''
 "Traits.Implement_arithmetic_trait.fst" = '''
 module Traits.Implement_arithmetic_trait
