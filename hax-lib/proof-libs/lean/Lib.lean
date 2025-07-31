@@ -150,6 +150,10 @@ instance : Coe Nat usize where
   coe x := USize.ofNat x
 
 @[simp]
+instance : Coe Nat i32 where
+  coe x := Int32.ofNat x
+
+@[simp]
 instance : Coe USize UInt32 where
   coe x := x.toUInt32
 
@@ -536,16 +540,16 @@ end Arithmetic
 
 -- Tuples
 
-def hax_Tuple0 : Type := Unit
+abbrev hax_Tuple0 : Type := Unit
 def constr_hax_Tuple0 : hax_Tuple0 := ()
 instance : Coe hax_Tuple0 Unit where
   coe _ := ()
 
 
-def hax_Tuple1 (α: Type) : Type := α × Unit
+abbrev hax_Tuple1 (α: Type) : Type := α × Unit
 def constr_hax_Tuple1 {hax_Tuple1_Tuple0: α} : hax_Tuple1 α := (hax_Tuple1_Tuple0, ())
 
-def hax_Tuple2 (α β: Type) : Type := α × β
+abbrev hax_Tuple2 (α β: Type) : Type := α × β
 def constr_hax_Tuple2 {α β} {hax_Tuple2_Tuple0: α} {hax_Tuple2_Tuple1 : β} : hax_Tuple2 α β
   := (hax_Tuple2_Tuple0, hax_Tuple2_Tuple1)
 
@@ -854,7 +858,16 @@ def num_8_impl_to_le_bytes (_:u32) : Result (Vector u8 4) := pure (#v[0, 0, 0, 0
 
 
 -- Closures
-def ops_function_Fn_call {α β} (f: α -> β) (x: α) := f x
+class Fn α (β : outParam Type) γ where
+  call : α → β → γ
+
+instance {α β} : Fn (α → β) (hax_Tuple1 α) β where
+  call f x := f x.fst
+
+instance {α β γ} : Fn (α → β → γ) (hax_Tuple2 α β) γ where
+  call f x := f x.fst x.snd
+
+def ops_function_Fn_call {α β γ} [Fn α β γ] (f: α) (x: β) : γ := Fn.call f x
 
 
 -- Miscellaneous

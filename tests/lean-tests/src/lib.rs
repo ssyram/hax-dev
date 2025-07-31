@@ -19,8 +19,9 @@ fn letBinding(x: usize, y: usize) -> usize {
 
 fn closure() -> i32 {
     let x = 41;
-    let f = |y| y + x;
-    f(1)
+    let f1 = |y| y + x ;
+    let f2 = |y, z| y + x + z;
+    f1(1) + f2(2,3)
 }
 
 type UsizeAlias = usize;
