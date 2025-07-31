@@ -326,6 +326,42 @@ pub fn get_method_sig<'tcx>(
     normalize(tcx, typing_env, sig)
 }
 
+/// Generates a list of `<trait_ref>::Ty` type aliases for each non-gat associated type of the
+/// given trait and its parents, in a specific order.
+pub fn assoc_tys_for_trait<'tcx>(
+    tcx: ty::TyCtxt<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
+    tref: ty::TraitRef<'tcx>,
+) -> Vec<ty::AliasTy<'tcx>> {
+    fn gather_assoc_tys<'tcx>(
+        tcx: ty::TyCtxt<'tcx>,
+        typing_env: ty::TypingEnv<'tcx>,
+        assoc_tys: &mut Vec<ty::AliasTy<'tcx>>,
+        tref: ty::TraitRef<'tcx>,
+    ) {
+        assoc_tys.extend(
+            tcx.associated_items(tref.def_id)
+                .in_definition_order()
+                .filter(|assoc| matches!(assoc.kind, ty::AssocKind::Type { .. }))
+                .filter(|assoc| tcx.generics_of(assoc.def_id).own_params.is_empty())
+                .map(|assoc| ty::AliasTy::new(tcx, assoc.def_id, tref.args)),
+        );
+        for clause in tcx
+            .explicit_super_predicates_of(tref.def_id)
+            .map_bound(|clauses| clauses.iter().map(|(clause, _span)| *clause))
+            .iter_instantiated(tcx, tref.args)
+        {
+            if let Some(pred) = clause.as_trait_clause() {
+                let tref = erase_and_norm(tcx, typing_env, pred.skip_binder().trait_ref);
+                gather_assoc_tys(tcx, typing_env, assoc_tys, tref);
+            }
+        }
+    }
+    let mut ret = vec![];
+    gather_assoc_tys(tcx, typing_env, &mut ret, tref);
+    ret
+}
+
 /// Generates a `dyn Trait<Args.., Ty = <Self as Trait>::Ty..>` type for the given trait ref.
 pub fn dyn_self_ty<'tcx>(
     tcx: ty::TyCtxt<'tcx>,
@@ -342,43 +378,16 @@ pub fn dyn_self_ty<'tcx>(
         ty::ExistentialTraitRef::erase_self_ty(tcx, tref),
     ));
 
-    // Generate a bunch of `Ty = <Self as Trait>::Ty` constraints for the associated types of this
-    // trait and its parents.
-    fn gather_ty_constraints<'tcx>(
-        tcx: ty::TyCtxt<'tcx>,
-        typing_env: ty::TypingEnv<'tcx>,
-        cstrs: &mut Vec<ty::ProjectionPredicate<'tcx>>,
-        tref: ty::TraitRef<'tcx>,
-    ) {
-        cstrs.extend(
-            tcx.associated_items(tref.def_id)
-                .in_definition_order()
-                .filter(|assoc| matches!(assoc.kind, ty::AssocKind::Type { .. }))
-                .map(|assoc| {
-                    // This assumes non-GAT because the trait is dyn-compatible.
-                    ty::ProjectionPredicate {
-                        projection_term: ty::AliasTerm::new(tcx, assoc.def_id, tref.args),
-                        term: ty::Ty::new_projection(tcx, assoc.def_id, tref.args).into(),
-                    }
-                }),
-        );
-        for clause in tcx
-            .explicit_super_predicates_of(tref.def_id)
-            .map_bound(|clauses| clauses.iter().map(|(clause, _span)| *clause))
-            .iter_instantiated(tcx, tref.args)
-        {
-            if let Some(pred) = clause.as_trait_clause() {
-                let tref = erase_and_norm(tcx, typing_env, pred.skip_binder().trait_ref);
-                gather_ty_constraints(tcx, typing_env, cstrs, tref);
-            }
-        }
-    }
-    let mut ty_constraints = vec![];
-    gather_ty_constraints(tcx, typing_env, &mut ty_constraints, tref);
-    let ty_constraints = ty_constraints.into_iter().map(|proj| {
-        let proj = ty::ExistentialProjection::erase_self_ty(tcx, proj);
-        ty::Binder::dummy(ty::ExistentialPredicate::Projection(proj))
-    });
+    let ty_constraints = assoc_tys_for_trait(tcx, typing_env, tref)
+        .into_iter()
+        .map(|alias_ty| {
+            let proj = ty::ProjectionPredicate {
+                projection_term: alias_ty.into(),
+                term: ty::Ty::new_alias(tcx, ty::Projection, alias_ty).into(),
+            };
+            let proj = ty::ExistentialProjection::erase_self_ty(tcx, proj);
+            ty::Binder::dummy(ty::ExistentialPredicate::Projection(proj))
+        });
 
     let preds =
         tcx.mk_poly_existential_predicates_from_iter([main_pred].into_iter().chain(ty_constraints));
