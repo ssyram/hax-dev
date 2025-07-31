@@ -1647,7 +1647,14 @@ struct
         let fields = parent_bounds_fields @ fields in
         let fields =
           if List.is_empty fields then
-            [ (F.lid [ "__marker_trait" ], pexpr (U.unit_expr e.span)) ]
+            [
+              ( F.lid
+                  [
+                    "__marker_trait_"
+                    ^ FStar_Ident.string_of_lid (pconcrete_ident trait);
+                  ],
+                pexpr (U.unit_expr e.span) );
+            ]
           else fields
         in
         let body = F.term @@ F.AST.Record (None, fields) in
