@@ -21,11 +21,18 @@ fn lean_backend(items: Vec<Item>) {
 
     let header = allocator
         .intersperse(
-            vec![
-            "-- Experimental lean backend for Hax",
-            "-- Comment the following line to not import the prelude (requires the Lib.lean file) : ",
-            "import Lib",
-        ],
+            "
+-- Experimental lean backend for Hax
+-- Comment the following line to not import the prelude (requires the Lib.lean file) :
+import Lib
+import Std.Tactic.Do
+import Std.Do.Triple
+import Std.Tactic.Do.Syntax
+open Std.Do
+open Std.Tactic
+
+set_option linter.unusedVariables false"
+                .lines(),
             allocator.hardline(),
         )
         .append(allocator.hardline())
