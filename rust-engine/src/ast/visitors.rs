@@ -1,14 +1,31 @@
-//! This module provides various visitors for the AST of hax.
+//! Syntax tree traversals to walk a shared or mutable borrow of the syntax tree
+//! of Hax. The visitors are generated using the [`derive_generic_visitor`]
+//! library.
 //!
-//! - VisitEarlyExit
-//! - VisitMapDiag
-//! - VisitMap
+//! This module provides visitors of different flavors of visitors, and visitor
+//! wrappers that can enhance the default behavior of a visitor.
+//!
+//! We provide four main visitors.
+//!  - [`AstVisitor`] and [`AstVisitorMut`]: visitor that never early exit.
+//!  - [`AstEarlyExitVisitor`] and [`AstEarlyExitVisitorMut`]: visitor that can
+//!        early exit.
+//!
+//! Each trait provides methods `visit_expr`, `visit_ty`, etc. enabling easy AST
+//! traversal.
+//!
+//! Importantly, we also provide visitor wrappers that enhance visitors with
+//! common useful behavior. See the module [`wrappers`] for more information.
 
 use super::*;
 use derive_generic_visitor::*;
 
 pub mod wrappers {
-    //! Visitors wrapper.
+    //! This module provides a visitor wrappers, or transformer of visitors.
+    //! Such wrappers transform the behavior of a visitor.
+    //!
+    //! For example, [`SpanWrapper`] takes care of keeping track of [`Span`]s
+    //! while travesing an AST.
+
     use std::ops::Deref;
 
     use super::{infaillible::AstVisitable as AstVisitableInfaillible, *};
@@ -77,6 +94,9 @@ pub mod wrappers {
     /// method on a visitor that can be used to throw errors, which will be
     /// automatically inlined in the AST on the closest error-capable node.
     pub struct ErrorWrapper<'a, V>(pub &'a mut V);
+
+    /// An opaque error vault. This is the state manipulated by the visitor wrapper [`ErrorWrapper`].
+    /// It is purposefully not-inspectable.
     #[derive(Default)]
     pub struct ErrorVault(Vec<Diagnostic>);
     impl ErrorVault {
@@ -127,9 +147,15 @@ pub mod wrappers {
         }
     }
 
-    /// A visitor that can throw errors.
+    /// A visitor that can throw errors. It should be used in combination with
+    /// `ErrorWrapper`, which will take care of bubbling error up to the nearest
+    /// parent capable of representing errors. For instance, if you error out in
+    /// a literal, the error will be represented in the parent expression or the
+    /// parent type, as nodes [`ExprKind::Error`] or [`TyKind ::Error`].
     pub trait VisitorWithErrors: HasSpan + VisitorWithContext {
+        /// Projects the error vault.
         fn error_vault(&mut self) -> &mut ErrorVault;
+        /// Send an error.
         fn error(&mut self, node: impl Into<Fragment>, kind: DiagnosticInfoKind) {
             let context = self.context();
             let span = self.span();
@@ -267,7 +293,11 @@ mod faillible {
     #[visitable_group(
         visitor(drive(
             /// An immutable visitor that can exit early.
-            &VisitEarlyExit
+            &AstEarlyExitVisitor
+        )),
+        visitor(drive_mut(
+            /// An immutable visitor that can exit early and mutate the AST fragments.
+            &mut AstEarlyExitVisitorMut
         )),
         skip(
             String, bool, char, hax_frontend_exporter::Span,
@@ -301,7 +331,10 @@ mod faillible {
     pub trait AstVisitable {}
 }
 
-pub use faillible::{AstVisitable as AstVisitableFaillible, AstVisitableWrapper, VisitEarlyExit};
+pub use faillible::{
+    AstEarlyExitVisitor, AstEarlyExitVisitorMut, AstVisitable as AstVisitableFaillible,
+    AstVisitableWrapper,
+};
 pub use hax_rust_engine_macros::setup_error_handling_struct;
 pub use infaillible::{
     AstVisitable as AstVisitableInfaillible, AstVisitableInfaillibleWrapper, AstVisitor,
