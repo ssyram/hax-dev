@@ -528,8 +528,9 @@ impl ItemRef {
         if let Some(item) = s.with_cache(|cache| cache.item_refs.get(&key).cloned()) {
             return item;
         }
+
         let mut impl_exprs = solve_item_required_traits(s, def_id, generics);
-        let mut generic_args = generics.sinto(s);
+        let mut hax_generics = generics.sinto(s);
 
         // If this is an associated item, resolve the trait reference.
         let trait_info = self_clause_for_item(s, def_id, generics);
@@ -553,7 +554,7 @@ impl ItemRef {
             // split into `<T, u32>` and `<U>`.
             let trait_ref = tinfo.r#trait.hax_skip_binder_ref();
             let num_trait_generics = trait_ref.generic_args.len();
-            generic_args.drain(0..num_trait_generics);
+            hax_generics.drain(0..num_trait_generics);
             let num_trait_trait_clauses = trait_ref.impl_exprs.len();
             // Associated items take a `Self` clause as first clause, we skip that one too. Note: that
             // clause is the same as `tinfo`.
@@ -562,7 +563,7 @@ impl ItemRef {
 
         let content = ItemRefContents {
             def_id: def_id.sinto(s),
-            generic_args,
+            generic_args: hax_generics,
             impl_exprs,
             in_trait: trait_info,
             has_param: generics.has_param()
@@ -596,6 +597,26 @@ impl ItemRef {
                 .insert(item.id(), ty::GenericArgsRef::default());
         });
         item
+    }
+
+    /// For an `ItemRef` that refers to a trait, this returns values for each of the non-gat
+    /// associated types of this trait and its parents, in a fixed order.
+    #[cfg(feature = "rustc")]
+    pub fn trait_associated_types<'tcx, S: UnderOwnerState<'tcx>>(&self, s: &S) -> Vec<Ty> {
+        if !matches!(self.def_id.kind, DefKind::Trait | DefKind::TraitAlias) {
+            panic!("`ItemRef::trait_associated_types` expected a trait")
+        }
+        let tcx = s.base().tcx;
+        let typing_env = s.typing_env();
+        let def_id = self.def_id.as_rust_def_id().unwrap();
+        let generics = self.rustc_args(s);
+        let tref = ty::TraitRef::new(tcx, def_id, generics);
+        rustc_utils::assoc_tys_for_trait(tcx, typing_env, tref)
+            .into_iter()
+            .map(|alias_ty| ty::Ty::new_alias(tcx, ty::Projection, alias_ty))
+            .map(|ty| normalize(tcx, typing_env, ty))
+            .map(|ty| ty.sinto(s))
+            .collect()
     }
 
     /// Erase lifetimes from the generic arguments of this item.
