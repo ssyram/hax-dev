@@ -6,7 +6,7 @@ use hax_rust_engine::{
 };
 use hax_types::{cli_options::Backend, engine_api::File};
 
-use pretty::{DocAllocator, DocBuilder};
+use pretty::{docs, DocAllocator, DocBuilder};
 
 fn krate_name(items: &Vec<Item>) -> String {
     let head_item = items.get(0).unwrap();
@@ -17,10 +17,11 @@ fn lean_backend(items: Vec<Item>) {
     let krate = krate_name(&items);
 
     // For now, the main function always calls the Lean backend
-    let allocator = Allocator::new(Lean);
+    let allocator = &Allocator::new(Lean);
 
-    let header = allocator
-        .intersperse(
+    let header = docs![
+        allocator,
+        allocator.intersperse(
             "
 -- Experimental lean backend for Hax
 -- Comment the following line to not import the prelude (requires the Lib.lean file) :
@@ -34,11 +35,14 @@ open Std.Tactic
 set_option linter.unusedVariables false"
                 .lines(),
             allocator.hardline(),
-        )
-        .append(allocator.hardline())
-        .append(allocator.hardline());
+        ),
+        allocator.hardline(),
+        allocator.hardline()
+    ];
 
-    let item_docs: DocBuilder<_, Span> = header.append(allocator.concat(items.iter()));
+    let items = items.iter().filter(|item: &&hax_rust_engine::ast::Item| Lean::printable_item(*item));
+    let item_docs: DocBuilder<_, Span> =
+        header.append(allocator.intersperse(items, allocator.hardline()));
 
     hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(File {
         path: krate + ".lean",

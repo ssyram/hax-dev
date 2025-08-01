@@ -24,29 +24,44 @@ const INDENT: isize = 2;
 /// Placeholder structure for lean printer
 pub struct Lean;
 
+impl Lean {
+    /// A filter for items blacklisted by the Lean backend : returns false if
+    /// the item is definitely not printable, but might return true on
+    /// unsupported items
+    pub fn printable_item(item: &Item) -> bool {
+        match &item.kind {
+            // Anonymous consts
+            ItemKind::Fn {
+                name,
+                generics: _,
+                body: _,
+                params: _,
+                safety: _,
+            } if name.is_empty() => false,
+            // Other unprintable items
+            ItemKind::Error(_) | ItemKind::NotImplementedYet | ItemKind::Use { .. } => false,
+            // Printable items
+            ItemKind::Fn { .. }
+            | ItemKind::TyAlias { .. }
+            | ItemKind::Type { .. }
+            | ItemKind::Trait { .. }
+            | ItemKind::Impl { .. }
+            | ItemKind::Alias { .. }
+            | ItemKind::Resugared(_)
+            | ItemKind::Quote { .. } => true,
+        }
+    }
+}
+
 impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Item {
     fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        self.kind
-            .pretty(allocator)
-            .append(allocator.hardline())
-            .append(allocator.hardline())
+        self.kind.pretty(allocator)
     }
 }
 
 impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
     fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
         match self {
-            ItemKind::Fn {
-                name,
-                generics: _,
-                body: _,
-                params,
-                safety: _,
-            } if name.is_empty() && params.is_empty() => {
-                // Anonymous const, ignored
-                // Todo: turn it into a proper refactor (see Hax issue #1542)
-                allocator.nil()
-            }
             ItemKind::Fn {
                 name,
                 generics,
@@ -117,6 +132,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                         ]
                         .nest(INDENT)
                         .group()
+                        .append(allocator.hardline())
                     }
                 }
             }
@@ -150,10 +166,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                 is_external: _,
                 rename: _,
             } => allocator.nil(),
-            ItemKind::Quote {
-                quote,
-                origin: _,
-            } => quote.pretty(allocator),
+            ItemKind::Quote { quote, origin: _ } => quote.pretty(allocator),
             ItemKind::Error(_diagnostic) => print_todo!(allocator),
             ItemKind::Resugared(_resugared_ty_kind) => print_todo!(allocator),
             ItemKind::NotImplementedYet => allocator.nil(),
@@ -185,7 +198,11 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b TyKind {
             }
             TyKind::Arrow { inputs, output } => docs![
                 allocator,
-                allocator.concat(inputs.into_iter().map(|input| docs![allocator, input, allocator.reflow(" -> ")] )),
+                allocator.concat(inputs.into_iter().map(|input| docs![
+                    allocator,
+                    input,
+                    allocator.reflow(" -> ")
+                ])),
                 "Result ",
                 output
             ]
@@ -598,7 +615,9 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Quote {
 impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b QuoteContent {
     fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
         match self {
-            QuoteContent::Verbatim(s) => allocator.intersperse(s.lines().map(|x| x.to_string()), allocator.hardline()),
+            QuoteContent::Verbatim(s) => {
+                allocator.intersperse(s.lines().map(|x| x.to_string()), allocator.hardline())
+            }
             QuoteContent::Expr(expr) => expr.pretty(allocator),
             QuoteContent::Pattern(pat) => pat.pretty(allocator),
             QuoteContent::Ty(ty) => ty.pretty(allocator),

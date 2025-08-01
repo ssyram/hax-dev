@@ -124,8 +124,9 @@ pub mod global_id {
                             hax_frontend_exporter::DefPathItem::Impl => "impl".to_string(),
                             other => unimplemented!("{other:?}"),
                         };
-                        if def.disambiguator != 0 {
-                            format!("{}_{}", def.disambiguator, data)
+                        if def.disambiguator != 0 && !data.is_empty() && data != "_" {
+                            // Don't print disambiguator of empty data
+                            format!("_{}_{}", def.disambiguator, data)
                         } else {
                             data
                         }
