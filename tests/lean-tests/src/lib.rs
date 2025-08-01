@@ -24,15 +24,11 @@ fn closure() -> i32 {
     f1(1) + f2(2,3)
 }
 
-type UsizeAlias = usize;
+#[hax_lib::lean::before("@[spec]")]
+fn test_before_verbatime_single_line(x: u8) -> u8 { 42 }
 
-// Hello world example from https://hacspec.zulipchat.com/#narrow/channel/269544-general/topic/hax.20.2B.20coq/with/528801096
-fn main() {
-    let x = square(10u8);
-    println!("{}", x);
-}
+#[hax_lib::lean::before("
+def multiline : Unit := ()
 
-#[hax_lib::requires(n < 16u8)]
-fn square(n: u8) -> u8 {
-    n * n
-}
+")]
+fn test_before_verbatim_multi_line(x: u8) -> u8 { 32 }

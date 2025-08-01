@@ -151,9 +151,9 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
                 rename: _,
             } => allocator.nil(),
             ItemKind::Quote {
-                quote: _,
+                quote,
                 origin: _,
-            } => print_todo!(allocator),
+            } => quote.pretty(allocator),
             ItemKind::Error(_diagnostic) => print_todo!(allocator),
             ItemKind::Resugared(_resugared_ty_kind) => print_todo!(allocator),
             ItemKind::NotImplementedYet => allocator.nil(),
@@ -185,8 +185,8 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b TyKind {
             }
             TyKind::Arrow { inputs, output } => docs![
                 allocator,
-                allocator.intersperse(inputs.into_iter(), allocator.reflow(" -> ")),
-                "Result",
+                allocator.concat(inputs.into_iter().map(|input| docs![allocator, input, allocator.reflow(" -> ")] )),
+                "Result ",
                 output
             ]
             .parens(),
@@ -492,7 +492,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 body: _,
                 safety_mode: _,
             } => print_todo!(allocator),
-            ExprKind::Quote { contents: _ } => print_todo!(allocator),
+            ExprKind::Quote { contents } => allocator.concat(&contents.0),
             ExprKind::Resugared(_resugared_expr_kind) => print_todo!(allocator),
             ExprKind::Error(_diagnostic) => print_todo!(allocator),
         }
@@ -586,5 +586,22 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Param {
 impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b GenericParam {
     fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
         self.ident.pretty(allocator)
+    }
+}
+
+impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Quote {
+    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
+        allocator.concat(&self.0)
+    }
+}
+
+impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b QuoteContent {
+    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
+        match self {
+            QuoteContent::Verbatim(s) => allocator.intersperse(s.lines().map(|x| x.to_string()), allocator.hardline()),
+            QuoteContent::Expr(expr) => expr.pretty(allocator),
+            QuoteContent::Pattern(pat) => pat.pretty(allocator),
+            QuoteContent::Ty(ty) => ty.pretty(allocator),
+        }
     }
 }
