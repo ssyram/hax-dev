@@ -30,7 +30,7 @@ diagnostics = []
 "lean_tests.lean" = '''
 
 -- Experimental lean backend for Hax
--- Comment the following line to not import the prelude (requires the Lib.lean file) :
+-- Lib.lean can be found in hax/proof-libs/lean :
 import Lib
 import Std.Tactic.Do
 import Std.Do.Triple
@@ -40,12 +40,7 @@ open Std.Tactic
 
 set_option linter.unusedVariables false
 
-
-
-
-
 def FORTYTWO : usize := 42
-
 def returns42 (_ : hax_Tuple0) : Result usize := do FORTYTWO
 
 def add_two_numbers (x : usize) (y : usize) : Result usize := do (← x +? y)
@@ -65,18 +60,9 @@ def closure (_ : hax_Tuple0) : Result i32 := do
   f2
     (constr_hax_Tuple2  (hax_Tuple2_Tuple0 := 2) (hax_Tuple2_Tuple1 := 3))))
 
-
-
 @[spec]
-
 def test_before_verbatime_single_line : u8 := 42
-
-def 1__ : Result hax_Tuple0 := do hax_Tuple0
-
 
 def multiline : Unit := ()
 
-
-def test_before_verbatim_multi_line : u8 := 32
-
-'''
+def test_before_verbatim_multi_line : u8 := 32'''
