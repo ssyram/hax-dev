@@ -24,7 +24,7 @@ fn lean_backend(items: Vec<Item>) {
         allocator.intersperse(
             "
 -- Experimental lean backend for Hax
--- Comment the following line to not import the prelude (requires the Lib.lean file) :
+-- Lib.lean can be found in hax/proof-libs/lean :
 import Lib
 import Std.Tactic.Do
 import Std.Do.Triple
@@ -40,7 +40,9 @@ set_option linter.unusedVariables false"
         allocator.hardline()
     ];
 
-    let items = items.iter().filter(|item: &&hax_rust_engine::ast::Item| Lean::printable_item(*item));
+    let items = items
+        .iter()
+        .filter(|item: &&hax_rust_engine::ast::Item| Lean::printable_item(*item));
     let item_docs: DocBuilder<_, Span> =
         header.append(allocator.intersperse(items, allocator.hardline()));
 
