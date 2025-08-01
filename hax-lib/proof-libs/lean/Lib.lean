@@ -1,4 +1,13 @@
--- This library provides a monadic encoding over Hax primitives
+/-
+Hax Lean Backend - Cryspen
+
+This library provides the Lean prelude for hax extracted rust-code. It contains
+the lean definition of rust (and hax) primitives and intrinsics.
+
+It borrows some definitions from the Aeneas project
+(https://github.com/AeneasVerif/aeneas/)
+-/
+
 import Std
 import Std.Do.Triple
 import Std.Tactic.Do
@@ -7,8 +16,18 @@ import Std.Tactic.Do.Syntax
 open Std.Do
 open Std.Tactic
 
--- Aeneas errors
--- see https://github.com/AeneasVerif/aeneas/
+
+/-
+# Monadic encoding
+
+The encoding is based on the `Result` monad: all rust computations are wrapped
+in the monad, representing the fact that they are not total.
+
+-/
+
+/--
+  (Aeneas) Error cases
+-/
 inductive Error where
    | assertionFailure: Error
    | integerOverflow: Error
@@ -18,94 +37,111 @@ inductive Error where
    | panic: Error
    | undef: Error
 deriving Repr, BEq
-
 open Error
 
+/-- (Aeneas) Result monad, representing possible results of rust computations -/
 inductive Result.{u} (α : Type u) where
   | ok (v: α): Result α
   | fail (e: Error): Result α
   | div
 deriving Repr, BEq
 
+namespace Result
+
 @[simp]
-instance Result.instPure: Pure Result where
+instance instPure: Pure Result where
   pure x := .ok x
 
-@[simp, spec]
-def Result.pure (x: α) : Result α := (Result.instPure.pure x)
-
 @[simp]
-def Result.bind (x: Result α) (f: α -> Result β) := match x with
+def bind (x: Result α) (f: α -> Result β) := match x with
   | .ok v => f v
   | .fail e => .fail e
   | .div => .div
 
 @[simp]
-def Result.ofOption {α} (x:Option α) (e: Error) : Result α := match x with
+def ofOption {α} (x:Option α) (e: Error) : Result α := match x with
   | .some v => pure v
   | .none => .fail e
 
 @[simp]
-instance Result.instMonad : Monad Result where
+instance instMonad : Monad Result where
   pure := pure
   bind := Result.bind
 
 @[simp]
-instance Result.instLawfulMonad : LawfulMonad Result where
+instance instLawfulMonad : LawfulMonad Result where
   id_map x := by
-    dsimp [id, Functor.map, Result.pure]
+    dsimp [id, Functor.map]
     cases x;
     all_goals grind
   map_const := by
     intros α β
     dsimp [Functor.map, Functor.mapConst]
   seqLeft_eq x y := by
-    dsimp [Functor.map, SeqLeft.seqLeft, Seq.seq, Result.pure]
+    dsimp [Functor.map, SeqLeft.seqLeft, Seq.seq]
     cases x ; all_goals cases y
     all_goals try simp
   seqRight_eq x y := by
-    dsimp [Functor.map, SeqRight.seqRight, Seq.seq, Result.pure]
+    dsimp [Functor.map, SeqRight.seqRight, Seq.seq]
     cases x ; all_goals cases y
     all_goals try simp
   pure_seq g x := by
-    dsimp [Functor.map, Seq.seq, pure, Result.pure]
+    dsimp [Functor.map, Seq.seq, pure]
   bind_pure_comp f x := by
     dsimp [Functor.map]
   bind_map f x := by
-    dsimp [Functor.map, bind, pure, Seq.seq, Result.pure]
+    dsimp [Functor.map, bind, pure, Seq.seq]
   pure_bind x f := by
-    dsimp [pure, bind, Result.pure]
+    dsimp [pure, bind, pure]
   bind_assoc x f g := by
     dsimp [pure, bind]
     cases x; all_goals simp
 
--- set_option pp.coercions false
 @[simp]
-instance Result.instWP : WP Result (.except Error .pure) where
+instance instWP : WP Result (.except Error .pure) where
   wp x := match x with
   | .ok v => wp (Pure.pure v : Except Error _)
   | .fail e => wp (throw e : Except Error _)
   | .div => PredTrans.const ⌜False⌝
 
--- set_option pp.raw true
 @[simp]
-instance Result.instWPMonad : WPMonad Result (.except Error .pure) where
-  wp_pure := by intros; ext Q; simp [wp, PredTrans.pure, Pure.pure, Except.pure, Id.run, Result.pure]
+instance instWPMonad : WPMonad Result (.except Error .pure) where
+  wp_pure := by intros; ext Q; simp [wp, PredTrans.pure, Pure.pure, Except.pure, Id.run]
   wp_bind x f := by
     simp only [instWP]
     ext Q
     cases x <;> simp [PredTrans.bind, PredTrans.const, Bind.bind]
 
 @[default_instance]
-instance Result.instCoe {α} : Coe α (Result α) where
+instance instCoe {α} : Coe α (Result α) where
   coe x := pure x
 
--- Logic
+end Result
+
+
+/-
+  Logic predicates introduced by Hax (in pre/post conditions)
+-/
+section Logic
+
+@[simp, spec]
 abbrev hax_logical_op_and := (fun a b => a && b)
+@[simp, spec]
 abbrev hax_logical_op_or := (fun a b => a || b)
 
--- Integer types
+abbrev assert (b:Bool) : Result Unit :=
+  if b then pure ()
+  else .fail (Error.assertionFailure)
 
+abbrev assume : Prop -> Result Unit := fun _ => pure ()
+
+abbrev prop_constructors_from_bool (b :Bool) : Prop := (b = true)
+
+end Logic
+
+/-
+  Integer types are represented as the corresponding type in Lean
+-/
 abbrev u8 := UInt8
 abbrev u16 := UInt16
 abbrev u32 := UInt32
@@ -117,10 +153,10 @@ abbrev i32 := Int32
 abbrev i64 := Int64
 abbrev isize := ISize
 
+/-- Class of objects that can be transformed into Nat -/
 class ToNat (α: Type) where
   toNat : α -> Nat
 
--- should use a macro here
 @[simp]
 instance : ToNat USize where
   toNat x := x.toNat
@@ -137,9 +173,17 @@ instance : ToNat u16 where
 instance : ToNat Nat where
   toNat x := x
 
+/-
+  Coercions between integer types
+-/
+-- TODO : make sure all are necessary, document their use-cases
 @[simp, spec]
 instance : Coe i32 (Result i64) where
   coe x := pure (x.toInt64)
+
+@[simp]
+instance : Coe USize Nat where
+  coe x := x.toNat
 
 @[simp]
 instance : Coe u32 Nat where
@@ -159,7 +203,7 @@ instance : Coe USize UInt32 where
 
 @[simp]
 instance : Coe USize (Result u32) where
-  coe x := if h: x.toNat < UInt32.size then pure (x.toUInt32)
+  coe x := if x.toNat < UInt32.size then pure (x.toUInt32)
            else Result.fail .integerOverflow
 
 @[simp]
@@ -175,7 +219,14 @@ instance : OfNat (Result Nat) n where
   ofNat := pure (n)
 
 
--- Arithmetic
+/-
+
+# Arithmetic operations
+
+The Rust arithmetic operations have their own notations, using a `?`. They
+return a `Result`, that is `.fail` when arithmetic overflows occur.
+
+-/
 section Arithmetic
 
 /-- The notation typeclass for homogeneous addition that returns a Result.  This
@@ -231,7 +282,8 @@ class HaxRem α where
 @[inherit_doc] infixl:70 " %? "   => HaxRem.rem
 @[inherit_doc] infixl:70 " /? "   => HaxDiv.div
 
--- Overflowing operations
+/- Until notations are not introduced by the Lean backend, explicit hax-names
+  are also provided -/
 @[simp, spec]
 def hax_machine_int_add {α} [HaxAdd α] (x y: α) : Result α := x +? y
 @[simp, spec]
@@ -245,7 +297,7 @@ def hax_machine_int_rem {α} [HaxRem α] (x y: α) : Result α := x %? y
 @[simp, spec]
 def hax_machine_int_shr {α} [HaxShiftRight α] (a b: α) : Result α := a >>>? b
 @[simp]
-def hax_machine_int_bitxor {α} [Xor α] (a b: α) : Result α := Result.pure (a ^^^ b)
+def hax_machine_int_bitxor {α} [Xor α] (a b: α) : Result α := pure (a ^^^ b)
 @[simp]
 def ops_arith_Neg_neg {α} [Neg α] (x:α) : Result α := pure (-x)
 
@@ -254,68 +306,94 @@ def hax_machine_int_eq {α} (x y: α) [BEq α] : Result Bool := pure (x == y)
 @[simp]
 def hax_machine_int_ne {α} (x y: α) [BEq α] : Result Bool := pure (x != y)
 @[simp]
-def hax_machine_int_lt {α} (x y: α) [(LT α)] [Decidable (x < y)] : Result Bool := pure (x < y)
+def hax_machine_int_lt {α} (x y: α) [(LT α)] [Decidable (x < y)] : Result Bool :=
+  pure (x < y)
 @[simp]
-def hax_machine_int_le {α} (x y: α) [(LE α)] [Decidable (x ≤ y)] : Result Bool := pure (x ≤ y)
+def hax_machine_int_le {α} (x y: α) [(LE α)] [Decidable (x ≤ y)] : Result Bool :=
+  pure (x ≤ y)
 @[simp]
-def hax_machine_int_gt {α} (x y: α) [(LE α)] [Decidable (x ≥ y)] : Result Bool := pure (x ≥ y)
+def hax_machine_int_gt {α} (x y: α) [(LE α)] [Decidable (x ≥ y)] : Result Bool :=
+  pure (x ≥ y)
 @[simp]
-def hax_machine_int_ge {α} (x y: α) [(LT α)] [Decidable (x > y)] : Result Bool := pure (x > y)
+def hax_machine_int_ge {α} (x y: α) [(LT α)] [Decidable (x > y)] : Result Bool :=
+  pure (x > y)
 
 
+/-
+
+# Properties
+
+For each integer types, instances of typeclasses for arithmetic operations are
+given, along with hoare-triple specifications (to be used by mvcgen)
+
+-/
 
 namespace USize
 
+/-- Partial addition on usize -/
 instance instHaxAdd : HaxAdd USize where
   add x y :=
     if (BitVec.saddOverflow x.toBitVec y.toBitVec) then .fail .integerOverflow
     else pure (x + y)
 
+/-- Bitvec-based specification for rust addition on usize -/
 @[spec]
 theorem HaxAdd_spec_bv (x y: usize) :
   ⦃ ¬ (BitVec.saddOverflow x.toBitVec y.toBitVec) ⦄
   (x +? y)
   ⦃ ⇓ r => r = x + y ⦄ := by mvcgen [instHaxAdd ]
 
+
+/-- Partial substraction on usize -/
 instance instHaxSub : HaxSub USize where
   sub x y :=
     if (BitVec.ssubOverflow x.toBitVec y.toBitVec) then .fail .integerOverflow
     else pure (x - y)
 
+/-- Bitvec-based specification for rust substraction on usize -/
 @[spec]
 theorem HaxSub_spec_bv (x y: usize) :
   ⦃ ¬ (BitVec.ssubOverflow x.toBitVec y.toBitVec) ⦄
   (x -? y)
   ⦃ ⇓ r => r = x - y ⦄ := by mvcgen [instHaxSub]
 
+
+/-- Partial multiplication on usize -/
 instance instHaxMul : HaxMul USize where
   mul x y :=
     if (BitVec.smulOverflow x.toBitVec y.toBitVec) then .fail .integerOverflow
     else pure (x * y)
 
+/-- Bitvec-based specification for rust multiplication on usize -/
 @[spec]
 theorem HaxMul_spec_bv (x y: usize) :
   ⦃ ¬ (BitVec.smulOverflow x.toBitVec y.toBitVec) ⦄
   (x *? y)
   ⦃ ⇓ r => r = x * y ⦄ := by mvcgen [instHaxMul]
 
+
+/-- Partial right shift on usize -/
 instance instHaxShiftRight : HaxShiftRight USize where
   shiftRight x y :=
     if (y ≤ USize.size) then pure (x >>> y)
     else .fail .integerOverflow
 
+/-- Bitvec-based specification for rust right-shift on usize -/
 @[spec]
 theorem HaxShiftRight_spec_bv (x y: usize) :
   ⦃ y ≤ USize.size ⦄
   ( x >>>? y)
   ⦃ ⇓ r => r = x >>> y ⦄ := by mvcgen [instHaxShiftRight]
 
+
+/-- Partial division on usize -/
 instance instHaxDiv : HaxDiv usize where
   div x y :=
     if y = 0 then .fail .divisionByZero
     else if (BitVec.sdivOverflow x.toBitVec y.toBitVec) then .fail .integerOverflow
     else pure (x / y)
 
+/-- Bitvec-based specification for rust division on usize -/
 @[spec]
 theorem HaxDiv_spec_bv (x y : usize) :
   ⦃ y != 0 ∧ ¬ BitVec.sdivOverflow x.toBitVec y.toBitVec⦄
@@ -325,12 +403,14 @@ theorem HaxDiv_spec_bv (x y : usize) :
   have ⟨ _ , h ⟩ := h
   apply h; assumption
 
+/-- Partial remainder on usize -/
 instance instHaxRem : HaxRem usize where
   rem x y :=
     if y = 0 then .fail .divisionByZero
     else if (BitVec.sdivOverflow x.toBitVec y.toBitVec) then .fail .integerOverflow
     else pure (x % y)
 
+/-- Bitvec-based specification for rust remainder on usize  -/
 @[spec]
 theorem HaxRem_spec_bv (x y : usize) :
   ⦃ y != 0 ∧ ¬ BitVec.sdivOverflow x.toBitVec y.toBitVec⦄
@@ -340,8 +420,8 @@ theorem HaxRem_spec_bv (x y : usize) :
   have ⟨ _ , h ⟩ := h
   apply h; assumption
 
-
 end USize
+
 
 namespace ISize
 
@@ -391,6 +471,7 @@ theorem HaxShiftRight_spec_bv (x y: isize) :
 
 end ISize
 
+
 namespace Int64
 
 instance instHaxAdd : HaxAdd Int64 where
@@ -439,6 +520,7 @@ theorem HaxShiftRight_spec_bv (x y: i64) :
 
 end Int64
 
+
 namespace Int32
 
 instance instHaxAdd : HaxAdd Int32 where
@@ -451,17 +533,6 @@ theorem HaxAdd_spec_bv (x y: i32) :
   ⦃ ¬ (BitVec.saddOverflow x.toBitVec y.toBitVec) ⦄
   (x +? y)
   ⦃ ⇓ r => r = x + y ⦄ := by mvcgen [instHaxAdd ]
-
--- @[spec]
--- theorem HaxAdd_spec_Int (x y: i32) :
---   ⦃ x.toInt + y.toInt < Int32.maxValue.toInt ⦄
---   (x +? y : Result i32)
---   ⦃ ⇓ r => r = x + y ⦄
--- := by
---   mvcgen [Int32.instHaxAdd ]
---   cases h__overflow : ((toBitVec x).saddOverflow (toBitVec y)) <;> try simp
---   have := @BitVec.toInt_add_of_not_saddOverflow _ (x.toBitVec) (y.toBitVec)
---   simp []
 
 instance instHaxSub : HaxSub Int32 where
   sub x y :=
@@ -502,33 +573,15 @@ theorem HaxRem_spec_bv (x y : i32) :
 
 end Int32
 
+/-
 
-abbrev hax__autogenerated_refinement__BoundedUsize_BoundedUsize
-  (lo: USize) (hi: USize) := USize
---  {u : usize // lo ≤ u ∧ u ≤ hi}
+# Wrapping operations
 
--- #check hax__autogenerated_refinement__BoundedUsize_BoundedUsize 0 19
--- #check fun (x: {usize // True}) => x.val
+Rust also has total arithmetic operations, renamed by hax (with disambiguator)
+for each implementation of typeclasses
 
-set_option pp.coercions false
+-/
 
--- instance {n lo hi : Nat} {hlo: lo ≤ x} {hhi: x ≤ hi}:
---   OfNat (hax__autogenerated_refinement__BoundedUsize_BoundedUsize lo hi) x where
---   ofNat := {
---     val := x ,
---     property := by
---       constructor
---       . unfold Nat.cast
-
---         apply USize.le_iff_toNat_le.mp
-
---       . apply USize.le_iff_toNat_le.mp
---         grind
-
---   }
--- #check (10: hax__autogenerated_refinement__BoundedUsize_BoundedUsize 0 10)
-
--- Wrapping operations
 @[simp, spec]
 def num_8_impl_wrapping_add (x y: u32) : Result u32 := pure (x + y)
 
@@ -536,14 +589,37 @@ def num_8_impl_wrapping_add (x y: u32) : Result u32 := pure (x + y)
 def num_8_impl_rotate_left (x: u32) (n: Nat) : Result u32 :=
   pure (UInt32.ofBitVec (BitVec.rotateLeft x.toBitVec n))
 
+
+/-- Hax-generated bounded integers -/
+abbrev hax__autogenerated_refinement__BoundedUsize_BoundedUsize
+  (lo: USize) (hi: USize) := USize
+--  {u : usize // lo ≤ u ∧ u ≤ hi}
+-- Todo : make it into a proper subtype
+
+/-- [Warning] unimplemented yet -/
+noncomputable
+def num_8_impl_from_le_bytes (x: Vector u8 n) : u32 := sorry
+
+/-- [Warning] unimplemented yet -/
+noncomputable
+def num_8_impl_to_le_bytes (_:u32) : Result (Vector u8 4) := sorry
+
+
 end Arithmetic
 
--- Tuples
+
+
+/-
+
+# Tuples
+
+-/
+section Tuples
 
 abbrev hax_Tuple0 : Type := Unit
 def constr_hax_Tuple0 : hax_Tuple0 := ()
-instance : Coe hax_Tuple0 Unit where
-  coe _ := ()
+instance : CoeDep Type hax_Tuple0 (Result hax_Tuple0) where
+  coe := pure ()
 
 
 abbrev hax_Tuple1 (α: Type) : Type := α × Unit
@@ -553,23 +629,32 @@ abbrev hax_Tuple2 (α β: Type) : Type := α × β
 def constr_hax_Tuple2 {α β} {hax_Tuple2_Tuple0: α} {hax_Tuple2_Tuple1 : β} : hax_Tuple2 α β
   := (hax_Tuple2_Tuple0, hax_Tuple2_Tuple1)
 
+end Tuples
 
 
--- Nums
--- TO remove once name display is fixed
+/-
 
-def num_8_impl_from_le_bytes (x: Vector u8 n) : u32 := (0: u32) -- TOFIX
+# Casts
 
--- Casts
+-/
+section Cast
+
+/-- Hax-introduced explicit cast. It is partial (returns a `Result`) -/
 @[simp, spec]
 def convert_From_from {α β} [Coe α (Result β)] (x:α) : (Result β) := x
 
+/-- Rust-supported casts on base types -/
 class Cast (α β: Type) where
   cast : α → Result β
 
+/-- Wrapping cast, does not fail on overflow -/
 @[spec]
 instance : Cast i64 i32 where
   cast x := pure (Int64.toInt32 x)
+
+@[spec]
+instance : Cast i64 (Result i32) where
+  cast x := pure (x.toInt32)
 
 @[spec]
 instance : Cast usize u32 where
@@ -578,7 +663,19 @@ instance : Cast usize u32 where
 @[simp, spec]
 def hax_cast_op {α β} [c: Cast α β] (x:α) : (Result β) := c.cast x
 
--- Results
+end Cast
+
+
+/-
+
+# Results
+
+Not to be confused with the underlying `Result` monad of the Lean encoding, the
+`result_Result` type models the rust `Result`.
+
+-/
+section RustResult
+
 inductive result_Result α β
 | ok : α -> result_Result α β
 | err : β -> result_Result α β
@@ -589,27 +686,41 @@ instance {β : Type} : Monad (fun α => result_Result α β) where
   | .ok v => f v
   | .err e => .err e
 
-inductive array_TryFromSliceError where
-  | array_TryFromSliceError
+/-- Rust unwrapping, panics if `x` is not `result_Result.ok _` -/
+def result_impl_unwrap (α: Type) (β:Type) (x: result_Result α β) : (Result α) :=
+  match x with
+  | .ok v => pure v
+  | .err _ => .fail .panic
 
--- Assert
-def assert (b:Bool) : Result Unit :=
-  if b then pure ()
-  else .fail (Error.assertionFailure)
+end RustResult
 
-def assume : Prop -> Result Unit := fun _ => pure ()
-def prop_constructors_from_bool (b :Bool) : Prop := (b = true)
 
--- Hax
+/-
 
+# Folds
+
+Hax represents for-loops as folds over a range
+
+-/
+section Fold
+
+/--
+
+Hax-introduced function for for-loops, represented as a fold of the body of the
+loop `body` from index `e` to `s`. If the invariant is not checked at runtime,
+only passed around
+
+-/
 def hax_folds_fold_range {α}
   (s e : Nat)
   (inv : α -> Nat -> Result Bool)
   (init: α)
-  (f : α -> Nat -> Result α) : Result α := do
+  (body : α -> Nat -> Result α) : Result α := do
   if e ≤ s then pure init
-  else hax_folds_fold_range (s+1) e inv (← f init s) f
+  else hax_folds_fold_range (s+1) e inv (← body init s) body
 
+-- Lemma for proof of hax_folds_fold_range property
+private
 theorem induction_decreasing {e} {P: Nat  → Prop}
   (init: P e)
   (rec: ∀ n, n < e → P (n+1) → P n) :
@@ -630,6 +741,8 @@ theorem induction_decreasing {e} {P: Nat  → Prop}
     suffices e - (d + 1) + 1 = e - d by grind
     omega
 
+-- Lemma for proof of hax_folds_fold_range property
+private
 def induction_decreasing_range {s e} {P: Nat → Nat → Prop} :
   s ≤ e →
   (init: P e e) →
@@ -637,42 +750,60 @@ def induction_decreasing_range {s e} {P: Nat → Nat → Prop} :
   P s e
 := by intros; apply induction_decreasing (P := fun n => (s ≤ n → P n e)) (e := e) <;> try grind
 
+/--
+
+Nat-based specification for hax_folds_fold_range. It requires that the invariant
+holds on the initial value, and that for any index `i` between the start and end
+values, executing body of the loop on a value that satisfies the invariant
+produces a result that also satisfies the invariant.
+
+-/
 @[spec]
 theorem hax_folds_fold_range_spec {α}
   (s e : Nat)
   (inv : α -> Nat -> Result Bool)
   (init: α)
-  (f : α -> Nat -> Result α) :
+  (body : α -> Nat -> Result α) :
   ⦃ inv init s = pure true ∧
     s ≤ e ∧
     ∀ (acc:α) (i:Nat), s ≤ i → i < e →
              ⦃ inv acc i = pure true ⦄
-             (f acc i)
+             (body acc i)
              ⦃ ⇓ res => inv res (i+1) = pure true ⦄
   ⦄
-  (hax_folds_fold_range s e inv init f)
+  (hax_folds_fold_range s e inv init body)
   ⦃ ⇓ r => inv r e = pure true ⦄
 := by
-  intro ⟨ h_inv_s, h_s_le_e , h_f ⟩
+  intro ⟨ h_inv_s, h_s_le_e , h_body ⟩
   revert h_inv_s init
   have :=  induction_decreasing_range (s := s) (e := e)
     (P := fun s e =>
       ∀ acc, inv acc s = pure true →
-      wp⟦hax_folds_fold_range s e inv acc f⟧ ⇓ r => inv r e = pure true)
+      wp⟦hax_folds_fold_range s e inv acc body⟧ ⇓ r => inv r e = pure true)
   apply this <;> clear this <;> try omega
   . simp [hax_folds_fold_range]
   . intros n _ _ ih acc h_acc
     unfold hax_folds_fold_range
     mvcgen <;> try grind
-    specialize h_f acc n (by omega) (by omega)
-    mspec h_f
+    specialize h_body acc n (by omega) (by omega)
+    mspec h_body
     intro h_r
     apply (ih _ h_r)
 
-instance : Coe USize Nat where
-  coe x := x.toNat
 
--- Arrays
+end Fold
+
+/-
+
+# Arrays
+
+Rust arrays, are represented as Lean `Vector` (Lean Arrays of known size)
+
+-/
+section Array
+
+inductive array_TryFromSliceError where
+  | array_TryFromSliceError
 
 def hax_monomorphized_update_at_update_at_usize {α n}
   (a: Vector α n) (i:Nat) (v:α) : Result (Vector α n) :=
@@ -688,25 +819,52 @@ def hax_update_at {α n} (m : Vector α n) (i : Nat) (v : α) : Result (Vector �
   else
     .fail (.arrayOutOfBounds)
 
-
-def result_impl_unwrap (α: Type) (β:Type) (x: result_Result α β) : (Result α) :=
-  match x with
-  | .ok v => pure v
-  | .err _ => .fail .panic
-
--- Vectors
 @[spec]
 def hax_repeat {α} (v:α) (n:Nat) : Result (Vector α n) :=
   pure (Vector.replicate n v)
 
--- Ranges
+def convert_TryInto_try_into {α n} (a: Array α) :
+   Result (result_Result (Vector α n) array_TryFromSliceError) :=
+   pure (
+     if h: a.size = n then
+       result_Result.ok (Eq.mp (congrArg _ h) a.toVector)
+     else
+       .err .array_TryFromSliceError
+     )
 
+end Array
+
+/-
+
+# Ranges
+
+-/
+
+/-- Type of ranges -/
 inductive ops_range_Range (α: Type)  where
 | range (r_start r_end : α) : ops_range_Range α
 
 @[simp, spec]
-def constr_ops_range_Range {α} {ops_range_Range_start : α} {ops_range_Range_end : α} :=
+def constr_ops_range_Range {α} (ops_range_Range_start : α) (ops_range_Range_end : α) :=
   ops_range_Range.range ops_range_Range_start ops_range_Range_end
+
+
+/-
+
+# Polymorphic index access
+
+Hax introduces polymorphic index accesses, for any integer type (returning a
+single value) and for ranges (returning an array of values)
+
+-/
+section PolymorphicIndexing
+
+/--
+
+Until the backend introduces notations, a definition for the explicit name
+`ops_index_index_index` is provided as a proxy
+
+-/
 
 @[simp, spec]
 def ops_index_Index_index {α β γ} (a: α) (i:β)
@@ -759,25 +917,25 @@ instance {α β : Type} {n : Nat} [tn: ToNat β]: GetElem (Vector α n) β (Resu
 instance {α : Type} {n : Nat}: GetElem (Vector α n) Nat (Result α) (fun _ _ => True) where
   getElem xs i _ := Result.ofOption xs[i]? .arrayOutOfBounds
 
-@[spec]
-theorem ops_index_Index_index_usize_range_vector_spec
-  (α : Type) (v: Vector α n ) (s e: usize) :
-  ⦃ s ≤ e ∧ e < n ⦄
-  ( v[ ops_range_Range.range s e] : Result (Array α))
-  ⦃ ⇓ r => r = (Vector.extract v s e).toArray ⦄
-:= by
-  mvcgen
-  simp
-  split <;> try split at * <;> try grind
-  all_goals simp [Vector.size] at *  <;> try grind
-  intros
-  expose_names
-  cases h
-  . expose_names
-    cases h <;> try omega
-    . rw [← USize.lt_iff_toNat_lt] at * ; bv_decide
-    . sorry
-  . sorry
+-- @[spec]
+-- theorem ops_index_Index_index_usize_range_vector_spec
+--   (α : Type) (v: Vector α n ) (s e: usize) :
+--   ⦃ s ≤ e ∧ e < n ⦄
+--   ( v[ ops_range_Range.range s e] : Result (Array α))
+--   ⦃ ⇓ r => r = (Vector.extract v s e).toArray ⦄
+-- := by
+--   mvcgen
+--   simp
+--   split <;> try split at * <;> try grind
+--   all_goals simp [Vector.size] at *  <;> try grind
+--   intros
+--   expose_names
+--   cases h
+--   . expose_names
+--     cases h <;> try omega
+--     . rw [← USize.lt_iff_toNat_lt] at * ; bv_decide
+--     . sorry
+--   . sorry
 
 @[spec]
 theorem ops_index_Index_index_usize_range_array_spec
@@ -805,29 +963,35 @@ theorem ops_index_Index_index_usize_range_array_spec
     omega
   . split at * <;> try grind
 
+end PolymorphicIndexing
 
--- Arrays
-section Arrays
 
-def convert_TryInto_try_into {α n} (a: Array α) :
-   Result (result_Result (Vector α n) array_TryFromSliceError) :=
-   pure (
-     if h: a.size = n then
-       result_Result.ok (Eq.mp (congrArg _ h) a.toVector)
-     else
-       .err .array_TryFromSliceError
-     )
 
-end Arrays
+/-
 
--- Slices
-def alloc_Global : Type := Unit
+# Slices
+
+Rust slices are represented as Lean Arrays (variable size)
+
+-/
+
 
 @[spec]
 def unsize {α n} (a: Vector α n) : Result (Array α) :=
   pure (a.toArray)
 
 def slice_impl_len α (a: Array α) : Result usize := pure a.size
+
+/-
+
+# Vectors
+
+Rust vectors are represented as Lean Arrays (variable size)
+
+-/
+section RustVectors
+
+def alloc_Global : Type := Unit
 def vec_Vec (α: Type) (_Allocator:Type) : Type := Array α
 
 def vec_impl_new (α: Type) (Allocator:Type) : Result (vec_Vec α Allocator) :=
@@ -848,16 +1012,24 @@ instance {α n} : Coe (Array α) (Result (Vector α n)) where
   coe x :=
     if h: x.size = n then by
       rw [←h]
-      apply Result.pure
+      apply pure
       apply (Array.toVector x)
     else .fail (.arrayOutOfBounds)
 
-
--- Bytes
-def num_8_impl_to_le_bytes (_:u32) : Result (Vector u8 4) := pure (#v[0, 0, 0, 0]) -- TOFIX
+end RustVectors
 
 
--- Closures
+
+/-
+
+# Closures
+
+Rust closures are represented as regular Lean functions. Yet, Rust uses a
+typeclass `Fn` when calling a closure, which uncurrifies the arguments. This is
+taken care of by the `Fn` class
+
+-/
+
 class Fn α (β : outParam Type) γ where
   call : α → β → γ
 
@@ -874,3 +1046,18 @@ def ops_function_Fn_call {α β γ} [Fn α β γ] (f: α) (x: β) : γ := Fn.cal
 def ops_deref_Deref_deref {α Allocator} (v: vec_Vec α Allocator)
   : Result (Array α)
   := pure v
+
+
+-- Tactics
+macro "hax_bv_decide" : tactic => `(tactic| (
+  any_goals (injections <;> subst_vars)
+  all_goals try (
+    simp [Int32.eq_iff_toBitVec_eq,
+          Int32.lt_iff_toBitVec_slt,
+          Int32.le_iff_toBitVec_sle,
+          Int64.eq_iff_toBitVec_eq,
+          Int64.lt_iff_toBitVec_slt,
+          Int64.le_iff_toBitVec_sle] at * <;>
+    bv_decide;
+    done
+ )))
