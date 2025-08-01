@@ -243,10 +243,16 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
             let evaluated = const_value_to_constant_expr(s, ty, const_value, span);
             match evaluated.report_err() {
                 Ok(val) => Value(val),
-                Err(err) => fatal!(
-                    s[span], "Cannot convert constant back to an expression";
-                    {const_value, ty, err}
-                ),
+                Err(err) => {
+                    warning!(
+                        s[span], "Couldn't convert constant back to an expression";
+                        {const_value, ty, err}
+                    );
+                    Value(
+                        ConstantExprKind::Todo("ConstEvalVal".into())
+                            .decorate(ty.sinto(s), span.sinto(s)),
+                    )
+                }
             }
         }
         Const::Ty(_ty, c) => Value(c.sinto(s)),
@@ -286,10 +292,15 @@ impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, ConstantExpr> for rustc_middle::mi
     fn sinto(&self, s: &S) -> ConstantExpr {
         match translate_mir_const(s, rustc_span::DUMMY_SP, *self) {
             ConstOperandKind::Value(val) => val,
-            ConstOperandKind::Promoted { .. } => fatal!(
-                s, "Cannot convert constant back to an expression";
-                {self}
-            ),
+            ConstOperandKind::Promoted(p) => {
+                warning!(
+                    s, "Couldn't convert constant back to an expression, expected value, got promoted";
+                    {self, p}
+                );
+
+                ConstantExprKind::Todo("ConstEvalPromoted".into())
+                    .decorate(self.ty().sinto(s), rustc_span::DUMMY_SP.sinto(s))
+            }
         }
     }
 }
