@@ -1004,10 +1004,10 @@ def vec_Vec (α: Type) (_Allocator:Type) : Type := Array α
 def vec_impl_new (α: Type) (Allocator:Type) : Result (vec_Vec α Allocator) :=
   pure ((List.nil).toArray)
 
-def vec_1_impl_len (α: Type) (Allocator:Type) (x: vec_Vec α Allocator) : Result Nat :=
+def vec__1_impl_len (α: Type) (Allocator:Type) (x: vec_Vec α Allocator) : Result Nat :=
   pure x.size
 
-def vec_2_impl_extend_from_slice (α Allocator) (x: vec_Vec α Allocator) (y: Array α)
+def vec__2_impl_extend_from_slice (α Allocator) (x: vec_Vec α Allocator) (y: Array α)
   : Result (vec_Vec α Allocator):=
   pure (x.append y)
 
