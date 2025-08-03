@@ -431,7 +431,6 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                     allocator,
                     "constr_",
                     constructor,
-                    allocator.softline(),
                     record_args
                 ]
                 .parens()
