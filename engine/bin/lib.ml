@@ -259,7 +259,6 @@ let engine () =
 module ExportRustAst = Export_ast.Make (Features.Rust)
 module ExportLeanAst = Export_ast.Make (Lean_backend.InputLanguage)
 
-
 (** Entry point for interacting with the Rust hax engine *)
 let driver_for_rust_engine () : unit =
   let query : Rust_engine_types.query =
@@ -273,14 +272,9 @@ let driver_for_rust_engine () : unit =
   match query.kind with
   | Types.ImportThir { input } ->
       let imported_items = import_thir_items [] input in
-      let imported_items =
-        (* TODO: this let binding is applying the phases from the F* backend *)
-        Lean_backend.apply_phases imported_items
-      in
+      let imported_items = Lean_backend.apply_phases imported_items in
       let rust_ast_items =
-        List.concat_map
-          ~f:(fun item -> ExportLeanAst.ditem item)
-          imported_items
+        List.concat_map ~f:(fun item -> ExportLeanAst.ditem item) imported_items
       in
       let response = Rust_engine_types.ImportThir { output = rust_ast_items } in
       Hax_io.write_json ([%yojson_of: Rust_engine_types.response] response);
