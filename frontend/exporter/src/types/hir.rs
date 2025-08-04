@@ -225,10 +225,10 @@ pub struct Generics<Body: IsBody> {
 }
 
 #[cfg(feature = "rustc")]
-impl<'tcx, S: UnderOwnerState<'tcx>, Body: IsBody> SInto<S, ImplItem<Body>> for hir::ImplItemRef {
+impl<'tcx, S: UnderOwnerState<'tcx>, Body: IsBody> SInto<S, ImplItem<Body>> for hir::ImplItemId {
     fn sinto(&self, s: &S) -> ImplItem<Body> {
         let tcx: rustc_middle::ty::TyCtxt = s.base().tcx;
-        let impl_item = tcx.hir_impl_item(self.id);
+        let impl_item = tcx.hir_impl_item(*self);
         let s = with_owner_id(s.base(), (), (), impl_item.owner_id.to_def_id());
         impl_item.sinto(&s)
     }
@@ -378,6 +378,9 @@ pub enum ImplItemKind<Body: IsBody> {
                 .skip_binder() // Skips an `EarlyBinder`, likely for GATs
                 .iter()
                 .copied()
+                .filter(|(clause, _)| clause.as_trait_clause().is_some_and(|trait_predicate| {
+                    !is_sized_related_trait(tcx, trait_predicate.skip_binder().def_id())
+                }))
                 .filter_map(|(clause, span)| super_clause_to_clause_and_impl_expr(s, impl_did, clause, span))
                 .collect::<Vec<_>>()
         };
@@ -391,17 +394,6 @@ pub enum ImplItemKind<Body: IsBody> {
         ty: Ty,
         parent_bounds: Vec<(Clause, ImplExpr, Span)>,
     },
-}
-
-/// Reflects [`hir::AssocItemKind`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: hir::AssocItemKind, state: S as tcx)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema)]
-pub enum AssocItemKind {
-    Const,
-    Fn { has_self: bool },
-    Type,
 }
 
 /// Reflects [`hir::Impl`].
@@ -430,6 +422,9 @@ pub struct Impl<Body: IsBody> {
         if let Some(trait_did) = trait_did {
             tcx.explicit_super_predicates_of(trait_did)
                 .iter_identity_copied()
+                .filter(|(clause, _)| clause.as_trait_clause().is_some_and(|trait_predicate| {
+                    !is_sized_related_trait(tcx, trait_predicate.skip_binder().def_id())
+                }))
                 .filter_map(|(clause, span)| super_clause_to_clause_and_impl_expr(s, owner_id, clause, span))
                 .collect::<Vec<_>>()
         } else {
@@ -535,7 +530,7 @@ pub struct Variant<Body: IsBody> {
 pub struct UsePath {
     pub span: Span,
     #[map(x.iter().map(|res| res.sinto(s)).collect())]
-    pub res: Vec<Res>,
+    pub res: Vec<Option<Res>>,
     pub segments: Vec<PathSegment>,
     #[value(self.segments.iter().last().and_then(|segment| {
             match s.base().tcx.hir_node_by_def_id(segment.hir_id.owner.def_id) {
@@ -620,8 +615,8 @@ pub struct PathSegment {
 pub enum ItemKind<Body: IsBody> {
     ExternCrate(Option<Symbol>, Ident),
     Use(UsePath, UseKind),
-    Static(Ident, Ty, Mutability, Body),
-    Const(Ident, Ty, Generics<Body>, Body),
+    Static(Mutability, Ident, Ty, Body),
+    Const(Ident, Generics<Body>, Ty, Body),
     #[custom_arm(
         hir::ItemKind::Fn{ ident, sig, generics, body, .. } => {
             ItemKind::Fn {
@@ -648,6 +643,7 @@ pub enum ItemKind<Body: IsBody> {
     },
     TyAlias(
         Ident,
+        Generics<Body>,
         #[map({
             let s = &State {
                 base: Base {ty_alias_mode: true, ..s.base()},
@@ -659,21 +655,21 @@ pub enum ItemKind<Body: IsBody> {
             x.sinto(s)
         })]
         Ty,
-        Generics<Body>,
     ),
     Enum(
         Ident,
-        EnumDef<Body>,
         Generics<Body>,
+        EnumDef<Body>,
         #[value({
             let tcx = s.base().tcx;
             tcx.repr_options_of_def(s.owner_id().expect_local()).sinto(s)
         })]
         ReprOptions,
     ),
-    Struct(Ident, VariantData, Generics<Body>),
-    Union(Ident, VariantData, Generics<Body>),
+    Struct(Ident, Generics<Body>, VariantData),
+    Union(Ident, Generics<Body>, VariantData),
     Trait(
+        Constness,
         IsAuto,
         Safety,
         Ident,
@@ -741,11 +737,11 @@ impl<'tcx, S: UnderOwnerState<'tcx>, Body: IsBody> SInto<S, EnumDef<Body>> for h
 }
 
 #[cfg(feature = "rustc")]
-impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, TraitItem<Body>> for hir::TraitItemRef {
+impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, TraitItem<Body>> for hir::TraitItemId {
     fn sinto(&self, s: &S) -> TraitItem<Body> {
-        let s = with_owner_id(s.base(), (), (), self.id.owner_id.to_def_id());
+        let s = with_owner_id(s.base(), (), (), self.owner_id.to_def_id());
         let tcx: rustc_middle::ty::TyCtxt = s.base().tcx;
-        tcx.hir_trait_item(self.id).sinto(&s)
+        tcx.hir_trait_item(*self).sinto(&s)
     }
 }
 
@@ -785,10 +781,10 @@ pub struct ForeignItem<Body: IsBody> {
 }
 
 #[cfg(feature = "rustc")]
-impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, ForeignItem<Body>> for hir::ForeignItemRef {
+impl<'a, S: UnderOwnerState<'a>, Body: IsBody> SInto<S, ForeignItem<Body>> for hir::ForeignItemId {
     fn sinto(&self, s: &S) -> ForeignItem<Body> {
         let tcx: rustc_middle::ty::TyCtxt = s.base().tcx;
-        tcx.hir_foreign_item(self.id).sinto(s)
+        tcx.hir_foreign_item(*self).sinto(s)
     }
 }
 
@@ -836,7 +832,15 @@ fn region_bounds_at_current_owner<'tcx, S: UnderOwnerState<'tcx>>(s: &S) -> Gene
             .copied()
             .collect()
     };
-    clauses.sinto(s)
+    clauses
+        .into_iter()
+        .filter(|clause| {
+            clause.as_trait_clause().is_some_and(|trait_predicate| {
+                !is_sized_related_trait(tcx, trait_predicate.skip_binder().def_id())
+            })
+        })
+        .collect::<Vec<_>>()
+        .sinto(s)
 }
 
 #[cfg(feature = "rustc")]
@@ -916,7 +920,7 @@ impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, Item<Body>> for hir::Item<
         let name = match self.kind {
             ExternCrate(_, i)
             | Use(_, hir::UseKind::Single(i))
-            | Static(i, ..)
+            | Static(_, i, ..)
             | Const(i, ..)
             | Fn { ident: i, .. }
             | Macro(i, ..)
@@ -925,7 +929,7 @@ impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, Item<Body>> for hir::Item<
             | Enum(i, ..)
             | Struct(i, ..)
             | Union(i, ..)
-            | Trait(_, _, i, ..)
+            | Trait(_, _, _, i, ..)
             | TraitAlias(i, ..) => i.name.to_ident_string(),
             Use(..) | ForeignMod { .. } | GlobalAsm { .. } | Impl { .. } => String::new(),
         };
@@ -980,38 +984,6 @@ pub enum Attribute {
     Parsed(AttributeKind),
     Unparsed(AttrItem),
 }
-
-/// Reflects [`rustc_attr_data_structures::AttributeKind`]
-#[derive(AdtInto)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_attr_data_structures::AttributeKind, state: S as tcx)]
-#[derive_group(Serializers)]
-#[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum AttributeKind {
-    DocComment {
-        style: AttrStyle,
-        kind: CommentKind,
-        span: Span,
-        comment: Symbol,
-    },
-    #[todo]
-    Other(String),
-}
-
-/// Reflects [`rustc_attr_data_structures::InlineAttr`]
-#[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_attr_data_structures::InlineAttr, state: S as _s)]
-pub enum InlineAttr {
-    None,
-    Hint,
-    Always,
-    Never,
-    Force {
-        attr_span: Span,
-        reason: Option<Symbol>,
-    },
-}
-
 /// Reflects [`rustc_ast::ast::BindingMode`]
 #[derive(AdtInto)]
 #[args(<S>, from: rustc_ast::ast::BindingMode, state: S as s)]
@@ -1051,8 +1023,8 @@ pub enum StrStyle {
 #[derive(Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LitKind {
     Str(Symbol, StrStyle),
-    ByteStr(Vec<u8>, StrStyle),
-    CStr(Vec<u8>, StrStyle),
+    ByteStr(ByteSymbol, StrStyle),
+    CStr(ByteSymbol, StrStyle),
     Byte(u8),
     Char(char),
     Int(

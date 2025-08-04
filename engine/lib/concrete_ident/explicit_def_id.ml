@@ -27,7 +27,8 @@ module H = struct
     Option.map ~f:contents did.parent
 end
 
-(** A pure, def_id_contents version of [of_def_id]. This is not exposed publicly. *)
+(** A pure, def_id_contents version of [of_def_id]. This is not exposed
+    publicly. *)
 let pure_of_def_id ?constructor (def_id : Types.def_id_contents) : t option =
   let* _not_crate_root = def_id.path |> List.last in
   let path_without_ctor =
@@ -90,8 +91,8 @@ let rec parents (did : t) =
 let to_def_id { def_id; _ } = def_id
 let is_constructor { is_constructor; _ } = is_constructor
 
-(** Stateful store that maps [def_id]s to implementation information
-(which trait is implemented? for which type? under which constraints?) *)
+(** Stateful store that maps [def_id]s to implementation information (which
+    trait is implemented? for which type? under which constraints?) *)
 module ImplInfoStore = struct
   let state : (Types.def_id_contents, Types.impl_infos) Hashtbl.t option ref =
     ref None
@@ -113,15 +114,58 @@ module ImplInfoStore = struct
     | None -> failwith "ImplInfoStore was not initialized"
     | Some state -> state
 
-  (** Given a [id] of type [def_id], [find id] will return [Some
-            impl_info] when [id] is an (non-inherent[1]) impl. [impl_info]
-            contains information about the trait being implemented and for
-            which type.
-      
-            [1]: https://doc.rust-lang.org/reference/items/implementations.html#inherent-implementations
-        *)
+  (** Given a [id] of type [def_id], [find id] will return [Some impl_info] when
+      [id] is an (non-inherent[1]) impl. [impl_info] contains information about
+      the trait being implemented and for which type.
+
+      [1]:
+      https://doc.rust-lang.org/reference/items/implementations.html#inherent-implementations
+  *)
   let find k = Hashtbl.find (get_state ()) k
 
   let lookup_raw (impl_def_id : t) : Types.impl_infos option =
     find (to_def_id impl_def_id)
 end
+
+module ToRustAST = struct
+  module A = Types
+  module B = Rust_engine_types
+
+  let rec def_id_contents_to_rust_ast
+      ({ krate; path; parent; kind; _ } : A.def_id_contents) : B.def_id =
+    let f (o : A.def_id) = def_id_contents_to_rust_ast o.contents.value in
+    let parent = Option.map ~f parent in
+    { krate; path; parent; kind }
+
+  let to_rust_ast ({ is_constructor; def_id } : t) : B.explicit_def_id =
+    { is_constructor; def_id = def_id_contents_to_rust_ast def_id }
+end
+
+module FromRustAST = struct
+  module A = Rust_engine_types
+  module B = Types
+
+  let rec def_id_contents_to_rust_ast
+      ({ krate; path; parent; kind; _ } : A.def_id) : B.def_id_contents =
+    let f (o : A.def_id) : B.def_id =
+      let contents : B.node_for__def_id_contents =
+        { value = def_id_contents_to_rust_ast o; id = Int64.of_int (-1) }
+      in
+      { contents }
+    in
+    let parent = Option.map ~f parent in
+    {
+      krate;
+      path;
+      parent;
+      kind;
+      index = (Int64.of_int (-1), Int64.of_int (-1), None);
+      is_local = false;
+    }
+
+  let to_rust_ast ({ is_constructor; def_id } : A.explicit_def_id) : t =
+    { is_constructor; def_id = def_id_contents_to_rust_ast def_id }
+end
+
+let to_rust_ast = ToRustAST.to_rust_ast
+let from_rust_ast = FromRustAST.to_rust_ast

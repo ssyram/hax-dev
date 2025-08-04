@@ -1,7 +1,8 @@
 open! Prelude
 include Concrete_ident_view_types
 
-(** Rust paths come with invariants (e.g. a function is always a `ValueNs _`), this function raises an error if a path doesn't respect those. *)
+(** Rust paths come with invariants (e.g. a function is always a `ValueNs _`),
+    this function raises an error if a path doesn't respect those. *)
 let broken_invariant (type t) msg (did : Explicit_def_id.t) : t =
   let msg =
     "Explicit_def_id: an invariant has been broken. Expected " ^ msg
@@ -21,7 +22,7 @@ module Assert = struct
   let type_ns (did : Explicit_def_id.t) =
     match List.last (Explicit_def_id.to_def_id did).path with
     (* This can be `None` for the anonymous types generated for `-> impl Trait` in traits. *)
-    | Some { data = TypeNs (Some data); disambiguator } ->
+    | Some { data = TypeNs data; disambiguator } ->
         DisambiguatedString.{ data; disambiguator }
     | _ -> broken_invariant "last path chunk to exist and be of type TypeNs" did
 
@@ -41,11 +42,11 @@ module Assert = struct
 end
 
 let rec poly :
-      'n 'd.
-      into_n:(Explicit_def_id.t -> DisambiguatedString.t -> 'n) ->
-      into_d:(Explicit_def_id.t -> Int64.t -> 'd) ->
-      Explicit_def_id.t ->
-      ('n, 'd) RelPath.Chunk.poly =
+    'n 'd.
+    into_n:(Explicit_def_id.t -> DisambiguatedString.t -> 'n) ->
+    into_d:(Explicit_def_id.t -> Int64.t -> 'd) ->
+    Explicit_def_id.t ->
+    ('n, 'd) RelPath.Chunk.poly =
  fun ~into_n ~into_d did ->
   let poly = poly ~into_n ~into_d in
   let mk_associated_item kind : ('n, 'd) RelPath.Chunk.poly =
@@ -191,7 +192,7 @@ let of_def_id (did : Explicit_def_id.t) : t =
     :: List.map
          ~f:(fun (m : Explicit_def_id.t) ->
            match (Explicit_def_id.to_def_id m).path |> List.last_exn with
-           | Types.{ disambiguator; data = TypeNs (Some data) } ->
+           | Types.{ disambiguator; data = TypeNs data } ->
                DisambiguatedString.{ data; disambiguator }
            | _ ->
                broken_invariant

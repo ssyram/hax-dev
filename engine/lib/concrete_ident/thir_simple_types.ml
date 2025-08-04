@@ -1,19 +1,20 @@
 open! Prelude
 module View = Concrete_ident_view
 
-(** Interprets a type as a "simple type". 
-    A simple type is a type for which, in a given scope, we can give a non-ambiguous string identifier.
-  
+(** Interprets a type as a "simple type". A simple type is a type for which, in
+    a given scope, we can give a non-ambiguous string identifier.
+
     This is useful for naming local impls.
 
     Examples of "simple" types:
-     - primitive types (e.g. u8, u16)
-     - enums/structs/unions defined in [namespace], when:
-       + all their generic arguments are instantiated to a simple type
-     - a reference to a simple type
-     - a slice to a simple type
-     - a tuple of simple types of arity zero (e.g. no ADTs of non-zero arity)
-*)
+    - primitive types (e.g. u8, u16)
+    - enums/structs/unions defined in [namespace], when:
+
+    + all their generic arguments are instantiated to a simple type
+
+    - a reference to a simple type
+    - a slice to a simple type
+    - a tuple of simple types of arity zero (e.g. no ADTs of non-zero arity) *)
 let to_string ~(namespace : View.ModPath.t) :
     Types.node_for__ty_kind -> string option =
   let escape =
@@ -58,7 +59,8 @@ let to_string ~(namespace : View.ModPath.t) :
     | Float F32 -> Some "f32"
     | Float F64 -> Some "f64"
     | Tuple [] -> Some "unit"
-    | Adt { def_id; generic_args = []; _ } -> Option.map ~f:escape (adt def_id)
+    | Adt { value = { def_id; generic_args = []; _ }; _ } ->
+        Option.map ~f:escape (adt def_id)
     | _ -> None
   in
   let apply left right = left ^ "_of_" ^ right in
@@ -66,7 +68,7 @@ let to_string ~(namespace : View.ModPath.t) :
     match ty.value with
     | Slice sub -> arity1 sub |> Option.map ~f:(apply "slice")
     | Ref (_, sub, _) -> arity1 sub |> Option.map ~f:(apply "ref")
-    | Adt { def_id; generic_args = [ Type arg ]; _ } ->
+    | Adt { value = { def_id; generic_args = [ Type arg ]; _ }; _ } ->
         let* adt = adt def_id in
         let* arg = arity1 arg in
         Some (apply adt arg)

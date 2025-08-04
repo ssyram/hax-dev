@@ -19,7 +19,7 @@ class t_Debug t_Self = {
   f_dbg_fmt: t_Self -> Core.Fmt.t_Formatter -> (Core.Fmt.t_Formatter & Core.Result.t_Result Prims.unit Core.Fmt.t_Error)
 }
 
-val t_Arguments: Type0
+let t_Arguments = Rt.t_Argument
 val impl_4__new_v1 (sz1: usize) (sz2: usize) (pieces: t_Slice string) (args: t_Slice Core.Fmt.Rt.t_Argument): t_Arguments
 val impl_7__write_fmt (fmt: t_Formatter) (args: t_Arguments): t_Formatter & t_Result
 val impl_4__new_const (u:usize) (args: t_Slice string): t_Arguments
@@ -31,6 +31,12 @@ val impl_4__new_v1_formatted :
 	 t_Arguments
 
 val impl_11__write_fmt : Core.Fmt.t_Formatter -> Core.Fmt.t_Arguments -> Core.Fmt.t_Formatter & Core.Result_Option_bundle.t_Result unit Core.Fmt.t_Error
+
+[@FStar.Tactics.Typeclasses.tcinstance]
+val impl_t_debug_string : t_Debug Prims.string
+
+[@FStar.Tactics.Typeclasses.tcinstance]
+val impl_t_display_string : t_Display Prims.string
 
 instance debuggable_bool : t_Debug Prims.bool =
 {
@@ -56,3 +62,7 @@ instance debuggable_pair (#a:Type) (#b:Type) (x: t_Debug a) (y: t_Debug b): t_De
      | Core.Result.Result_Ok v -> f_dbg_fmt pair._2 fmt_a
      | Core.Result.Result_Err e -> (fmt_a, result_a));
 }
+
+/// Default empty implementation, used for lax-checking
+[@FStar.Tactics.Typeclasses.tcinstance]
+val derive_debug (#t: Type) : t_Debug t

@@ -26,8 +26,10 @@
 //! The current implementation considers all predicates on traits to be outputs, which has the
 //! benefit of reducing the size of signatures. Moreover, the rules on which bounds are required vs
 //! implied are subtle. We may change this if this proves to be a problem.
+use hax_frontend_exporter_options::BoundsOptions;
 use rustc_hir::def::DefKind;
 use rustc_middle::ty::*;
+use rustc_span::DUMMY_SP;
 use rustc_span::def_id::DefId;
 
 /// Returns a list of type predicates for the definition with ID `def_id`, including inferred
@@ -59,9 +61,16 @@ pub fn predicates_defined_on(tcx: TyCtxt<'_>, def_id: DefId) -> GenericPredicate
 ///     type Type<T: Clone>: Debug;
 /// }
 /// ```
-pub fn required_predicates<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> GenericPredicates<'tcx> {
+///
+/// If `add_drop` is true, we add a `T: Drop` bound for every type generic.
+pub fn required_predicates<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    options: BoundsOptions,
+) -> GenericPredicates<'tcx> {
     use DefKind::*;
-    match tcx.def_kind(def_id) {
+    let def_kind = tcx.def_kind(def_id);
+    let mut predicates = match def_kind {
         AssocConst
         | AssocFn
         | AssocTy
@@ -73,14 +82,37 @@ pub fn required_predicates<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> GenericPre
         | OpaqueTy
         | Static { .. }
         | Struct
-        | TraitAlias
         | TyAlias
         | Union => predicates_defined_on(tcx, def_id),
         // We consider all predicates on traits to be outputs
-        Trait => Default::default(),
+        Trait | TraitAlias => Default::default(),
         // `predicates_defined_on` ICEs on other def kinds.
         _ => Default::default(),
+    };
+    if options.resolve_drop {
+        // Add a `T: Drop` bound for every generic, unless the current trait is `Drop` itself, or
+        // `Sized`.
+        let drop_trait = tcx.lang_items().drop_trait().unwrap();
+        let sized_trait = tcx.lang_items().sized_trait().unwrap();
+        if def_id != drop_trait && def_id != sized_trait {
+            let extra_bounds = tcx
+                .generics_of(def_id)
+                .own_params
+                .iter()
+                .filter(|param| matches!(param.kind, GenericParamDefKind::Type { .. }))
+                .map(|param| tcx.mk_param_from_def(param))
+                .map(|ty| Binder::dummy(TraitRef::new(tcx, drop_trait, [ty])))
+                .map(|tref| tref.upcast(tcx))
+                .map(|clause| (clause, DUMMY_SP));
+            predicates.predicates = tcx
+                .arena
+                .alloc_from_iter(predicates.predicates.iter().copied().chain(extra_bounds));
+        }
     }
+    if options.prune_sized {
+        prune_sized_predicates(tcx, &mut predicates);
+    }
+    predicates
 }
 
 /// The special "self" predicate on a trait.
@@ -100,32 +132,60 @@ pub fn self_predicate<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> PolyTraitRef<'t
 ///     type Type<T: Clone>: Debug;
 /// }
 /// ```
-pub fn implied_predicates<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> GenericPredicates<'tcx> {
+///
+/// If `add_drop` is true, we add a `T: Drop` bound for every type generic and associated type.
+pub fn implied_predicates<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    options: BoundsOptions,
+) -> GenericPredicates<'tcx> {
     use DefKind::*;
     let parent = tcx.opt_parent(def_id);
-    match tcx.def_kind(def_id) {
+    let mut predicates = match tcx.def_kind(def_id) {
         // We consider all predicates on traits to be outputs
-        Trait => predicates_defined_on(tcx, def_id),
+        Trait | TraitAlias => predicates_defined_on(tcx, def_id),
         AssocTy if matches!(tcx.def_kind(parent.unwrap()), Trait) => {
-            GenericPredicates {
+            let mut predicates = GenericPredicates {
                 parent,
-                // `skip_binder` is for an `EarlyBinder`
+                // `skip_binder` is for the GAT `EarlyBinder`
                 predicates: tcx.explicit_item_bounds(def_id).skip_binder(),
                 ..GenericPredicates::default()
+            };
+            if options.resolve_drop {
+                // Add a `Drop` bound to the assoc item.
+                let drop_trait = tcx.lang_items().drop_trait().unwrap();
+                let ty =
+                    Ty::new_projection(tcx, def_id, GenericArgs::identity_for_item(tcx, def_id));
+                let tref = Binder::dummy(TraitRef::new(tcx, drop_trait, [ty]));
+                predicates.predicates = tcx.arena.alloc_from_iter(
+                    predicates
+                        .predicates
+                        .iter()
+                        .copied()
+                        .chain([(tref.upcast(tcx), DUMMY_SP)]),
+                );
             }
+            predicates
         }
         _ => GenericPredicates::default(),
+    };
+    if options.prune_sized {
+        prune_sized_predicates(tcx, &mut predicates);
     }
+    predicates
 }
 
-/// Erase all regions. Largely copied from `tcx.erase_regions`.
-pub fn erase_all_regions<'tcx, T>(tcx: TyCtxt<'tcx>, value: T) -> T
+/// Erase free regions from the given value. Largely copied from `tcx.erase_regions`, but also
+/// erases bound regions that are bound outside `value`, so we can call this function inside a
+/// `Binder`.
+fn erase_free_regions<'tcx, T>(tcx: TyCtxt<'tcx>, value: T) -> T
 where
     T: TypeFoldable<TyCtxt<'tcx>>,
 {
     use rustc_middle::ty;
     struct RegionEraserVisitor<'tcx> {
         tcx: TyCtxt<'tcx>,
+        depth: u32,
     }
 
     impl<'tcx> TypeFolder<TyCtxt<'tcx>> for RegionEraserVisitor<'tcx> {
@@ -141,31 +201,82 @@ where
         where
             T: TypeFoldable<TyCtxt<'tcx>>,
         {
-            // Empty the binder
-            Binder::dummy(t.skip_binder().fold_with(self))
+            let t = self.tcx.anonymize_bound_vars(t);
+            self.depth += 1;
+            let t = t.super_fold_with(self);
+            self.depth -= 1;
+            t
         }
 
-        fn fold_region(&mut self, _r: ty::Region<'tcx>) -> ty::Region<'tcx> {
-            // We erase bound regions despite it being possibly incorrect. `for<'a> fn(&'a
-            // ())` and `fn(&'free ())` are different types: they may implement different
-            // traits and have a different `TypeId`. It's unclear whether this can cause us
-            // to select the wrong trait reference.
-            self.tcx.lifetimes.re_erased
+        fn fold_region(&mut self, r: ty::Region<'tcx>) -> ty::Region<'tcx> {
+            // We don't erase bound regions that are bound inside the expression we started with,
+            // but we do erase those that point "outside of it".
+            match r.kind() {
+                ty::ReBound(dbid, _) if dbid.as_u32() < self.depth => r,
+                _ => self.tcx.lifetimes.re_erased,
+            }
         }
     }
-    value.fold_with(&mut RegionEraserVisitor { tcx })
+    value.fold_with(&mut RegionEraserVisitor { tcx, depth: 0 })
 }
 
-// Lifetimes are irrelevant when resolving instances.
+// Normalize and erase lifetimes, erasing more lifetimes than normal because we might be already
+// inside a binder and rustc doesn't like that.
 pub fn erase_and_norm<'tcx, T>(tcx: TyCtxt<'tcx>, typing_env: TypingEnv<'tcx>, x: T) -> T
 where
     T: TypeFoldable<TyCtxt<'tcx>> + Copy,
 {
-    erase_all_regions(
+    erase_free_regions(
         tcx,
         tcx.try_normalize_erasing_regions(typing_env, x)
             .unwrap_or(x),
     )
+}
+
+/// Given our currently hacky handling of binders, in order for trait resolution to work we must
+/// empty out the binders of trait refs. Specifically it's so that we can reconnect associated type
+/// constraints with the trait ref they come from, given that the projection in question doesn't
+/// track the right binder currently.
+pub fn normalize_bound_val<'tcx, T>(
+    tcx: TyCtxt<'tcx>,
+    typing_env: TypingEnv<'tcx>,
+    x: Binder<'tcx, T>,
+) -> Binder<'tcx, T>
+where
+    T: TypeFoldable<TyCtxt<'tcx>> + Copy,
+{
+    Binder::dummy(erase_and_norm(tcx, typing_env, x.skip_binder()))
+}
+
+/// Returns true whenever `def_id` is `MetaSized`, `Sized` or `PointeeSized`.
+pub fn is_sized_related_trait<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> bool {
+    use rustc_hir::lang_items::LangItem;
+    let lang_item = tcx.as_lang_item(def_id);
+    matches!(
+        lang_item,
+        Some(LangItem::PointeeSized | LangItem::MetaSized | LangItem::Sized)
+    )
+}
+
+/// Given a `GenericPredicates`, prune every occurence of a sized-related clause.
+/// Prunes bounds of the shape `T: MetaSized`, `T: Sized` or `T: PointeeSized`.
+fn prune_sized_predicates<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    generic_predicates: &mut GenericPredicates<'tcx>,
+) {
+    let predicates: Vec<(Clause<'tcx>, rustc_span::Span)> = generic_predicates
+        .predicates
+        .iter()
+        .filter(|(clause, _)| {
+            clause.as_trait_clause().is_some_and(|trait_predicate| {
+                !is_sized_related_trait(tcx, trait_predicate.skip_binder().def_id())
+            })
+        })
+        .copied()
+        .collect();
+    if predicates.len() != generic_predicates.predicates.len() {
+        generic_predicates.predicates = tcx.arena.alloc_slice(&predicates);
+    }
 }
 
 pub trait ToPolyTraitRef<'tcx> {

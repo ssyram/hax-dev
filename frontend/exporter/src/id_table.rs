@@ -19,7 +19,7 @@
 use crate::prelude::*;
 use std::{
     hash::{Hash, Hasher},
-    sync::{atomic::Ordering, Arc, LazyLock, Mutex, MutexGuard},
+    sync::{Arc, LazyLock, Mutex, MutexGuard, atomic::Ordering},
 };
 
 /// Unique IDs in a ID table.
@@ -48,6 +48,7 @@ impl Session {
 pub enum Value {
     Ty(Arc<TyKind>),
     DefId(Arc<DefIdContents>),
+    ItemRef(Arc<ItemRefContents>),
 }
 
 impl SupportedType<Value> for TyKind {
@@ -69,6 +70,18 @@ impl SupportedType<Value> for DefIdContents {
     fn from_types(t: &Value) -> Option<Arc<Self>> {
         match t {
             Value::DefId(value) => Some(value.clone()),
+            _ => None,
+        }
+    }
+}
+
+impl SupportedType<Value> for ItemRefContents {
+    fn to_types(value: Arc<Self>) -> Value {
+        Value::ItemRef(value)
+    }
+    fn from_types(t: &Value) -> Option<Arc<Self>> {
+        match t {
+            Value::ItemRef(value) => Some(value.clone()),
             _ => None,
         }
     }
@@ -222,7 +235,9 @@ impl<T> WithTable<T> {
     /// skip the field `value`.
     pub fn run<R>(map: Table, value: T, f: impl FnOnce(&Self) -> R) -> R {
         if serialize_use_id() {
-            panic!("CACHE_MAP_LOCK: only one WithTable serialization can occur at a time (nesting is forbidden)")
+            panic!(
+                "CACHE_MAP_LOCK: only one WithTable serialization can occur at a time (nesting is forbidden)"
+            )
         }
         SERIALIZATION_MODE_USE_IDS.store(true, Ordering::Relaxed);
         let result = f(&Self { table: map, value });

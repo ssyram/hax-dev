@@ -47,7 +47,7 @@ fn name_of_local(
 /// Enumerates the kinds of Mir bodies. TODO: use const generics
 /// instead of an open list of types.
 pub mod mir_kinds {
-    use crate::prelude::{derive_group, JsonSchema};
+    use crate::prelude::{JsonSchema, derive_group};
 
     #[derive_group(Serializers)]
     #[derive(Clone, Copy, Debug, JsonSchema)]
@@ -192,14 +192,9 @@ pub enum ConstOperandKind {
     Value(ConstantExpr),
     /// Part of a MIR body that was promoted to be a constant. May not be evaluatable because of
     /// generics.
-    Promoted {
-        /// The `def_id` of the constant. Note that rustc does not give a DefId to promoted constants,
-        /// but we do in hax.
-        def_id: DefId,
-        /// The generics applied to the definition corresponding to `def_id`.
-        args: Vec<GenericArg>,
-        impl_exprs: Vec<ImplExpr>,
-    },
+    /// It's a reference to the `DefId` of the constant. Note that rustc does not give a `DefId` to
+    /// promoted constants, but we do in hax.
+    Promoted(ItemRef),
 }
 
 #[cfg(feature = "rustc")]
@@ -240,8 +235,8 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
     span: rustc_span::Span,
     konst: mir::Const<'tcx>,
 ) -> ConstOperandKind {
-    use rustc_middle::mir::Const;
     use ConstOperandKind::{Promoted, Value};
+    use rustc_middle::mir::Const;
     let tcx = s.base().tcx;
     match konst {
         Const::Val(const_value, ty) => {
@@ -263,14 +258,12 @@ fn translate_mir_const<'tcx, S: UnderOwnerState<'tcx>>(
             );
             match ucv.promoted {
                 Some(promoted) => {
-                    // Construct a def_id for the promoted constant.
-                    let def_id = ucv.def.sinto(s).make_promoted_child(s, promoted.sinto(s));
-                    let impl_exprs = solve_item_required_traits(s, ucv.def, ucv.args);
-                    Promoted {
-                        def_id,
-                        args: ucv.args.sinto(s),
-                        impl_exprs,
-                    }
+                    let mut item = translate_item_ref(s, ucv.def, ucv.args);
+                    item.mutate(s, |item| {
+                        // Construct a def_id for the promoted constant.
+                        item.def_id = item.def_id.make_promoted_child(s, promoted.sinto(s));
+                    });
+                    Promoted(item)
                 }
                 None => Value(match translate_constant_reference(s, span, ucv.shrink()) {
                     Some(val) => val,
@@ -359,47 +352,6 @@ pub struct Terminator {
 }
 
 #[cfg(feature = "rustc")]
-/// Compute the
-pub(crate) fn get_function_from_def_id_and_generics<'tcx, S: UnderOwnerState<'tcx>>(
-    s: &S,
-    def_id: rustc_hir::def_id::DefId,
-    generics: rustc_middle::ty::GenericArgsRef<'tcx>,
-) -> (DefId, Vec<GenericArg>, Vec<ImplExpr>, Option<ImplExpr>) {
-    // Retrieve the trait requirements for the item.
-    let trait_refs = solve_item_required_traits(s, def_id, generics);
-
-    // If this is a trait method call, retreive the impl expr information for that trait.
-    // Check if this is a trait method call: retrieve the trait source if
-    let (generics, trait_impl) = if let Some(tinfo) = self_clause_for_item(s, def_id, generics) {
-        // The generics are split in two: the arguments of the container (trait decl or impl
-        // block) and the arguments of the method.
-        //
-        // For instance, if we have:
-        // ```
-        // trait Foo<T> {
-        //     fn baz<U>(...) { ... }
-        // }
-        //
-        // fn test<T : Foo<u32>(x: T) {
-        //     x.baz(...);
-        //     ...
-        // }
-        // ```
-        // The generics for the call to `baz` will be the concatenation: `<T, u32, U>`, which we
-        // split into `<T, u32>` and `<U>`.
-        let num_trait_generics = tinfo.r#trait.hax_skip_binder_ref().generic_args.len();
-        // Return only the method generics; the trait generics are included in `trait_impl_expr`.
-        let method_generics = &generics[num_trait_generics..];
-        (method_generics.sinto(s), Some(tinfo))
-    } else {
-        // Regular function call
-        (generics.sinto(s), None)
-    };
-
-    (def_id.sinto(s), generics, trait_refs, trait_impl)
-}
-
-#[cfg(feature = "rustc")]
 fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasOwnerId>(
     s: &S,
     terminator: &rustc_middle::mir::TerminatorKind<'tcx>,
@@ -422,7 +374,8 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
     let hax_ty: crate::Ty = ty.sinto(s);
     let sig = match hax_ty.kind() {
         TyKind::Arrow(sig) => sig,
-        TyKind::Closure(_, args) => &args.untupled_sig,
+        TyKind::FnDef { fn_sig, .. } => fn_sig,
+        TyKind::Closure(args) => &args.fn_sig,
         _ => supposely_unreachable_fatal!(
             s,
             "TerminatorKind_Call_expected_fn_type";
@@ -432,14 +385,8 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
     let fun_op = if let ty::TyKind::FnDef(def_id, generics) = ty.kind() {
         // The type of the value is one of the singleton types that corresponds to each function,
         // which is enough information.
-        let (def_id, generics, trait_refs, trait_info) =
-            get_function_from_def_id_and_generics(s, *def_id, *generics);
-        FunOperand::Static {
-            def_id,
-            generics,
-            trait_refs,
-            trait_info,
-        }
+        let item = translate_item_ref(s, *def_id, *generics);
+        FunOperand::Static(item)
     } else {
         use mir::Operand;
         match func {
@@ -484,6 +431,38 @@ fn translate_terminator_kind_call<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasO
         target: target.sinto(s),
         unwind: unwind.sinto(s),
         fn_span: fn_span.sinto(s),
+    }
+}
+
+#[cfg(feature = "rustc")]
+fn translate_terminator_kind_drop<'tcx, S: BaseState<'tcx> + HasMir<'tcx> + HasOwnerId>(
+    s: &S,
+    terminator: &rustc_middle::mir::TerminatorKind<'tcx>,
+) -> TerminatorKind {
+    let tcx = s.base().tcx;
+    let mir::TerminatorKind::Drop {
+        place,
+        target,
+        unwind,
+        ..
+    } = terminator
+    else {
+        unreachable!()
+    };
+
+    let local_decls = &s.mir().local_decls;
+    let place_ty = place.ty(local_decls, tcx).ty;
+    let drop_trait = tcx.lang_items().drop_trait().unwrap();
+    let impl_expr = solve_trait(
+        s,
+        ty::Binder::dummy(ty::TraitRef::new(tcx, drop_trait, [place_ty])),
+    );
+
+    TerminatorKind::Drop {
+        place: place.sinto(s),
+        impl_expr,
+        target: target.sinto(s),
+        unwind: unwind.sinto(s),
     }
 }
 
@@ -547,18 +526,7 @@ fn translate_switchint<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>>(
 #[derive(Clone, Debug, JsonSchema)]
 pub enum FunOperand {
     /// Call to a statically-known function.
-    Static {
-        def_id: DefId,
-        /// If `Some`, this is a method call on the given trait reference. Otherwise this is a call
-        /// to a known function.
-        trait_info: Option<ImplExpr>,
-        /// If this is a trait method call, this only includes the method generics; the trait
-        /// generics are included in the `ImplExpr` in `trait_info`.
-        generics: Vec<GenericArg>,
-        /// Trait predicates required by the function generics. Like for `generics`, this only
-        /// includes the predicates required by the method, if applicable.
-        trait_refs: Vec<ImplExpr>,
-    },
+    Static(ItemRef),
     /// Use of a closure or a function pointer value. Counts as a move from the given place.
     DynamicMove(Place),
 }
@@ -597,11 +565,17 @@ pub enum TerminatorKind {
     },
     Return,
     Unreachable,
+    #[custom_arm(
+        x @ rustc_middle::mir::TerminatorKind::Drop { .. } => {
+          translate_terminator_kind_drop(s, x)
+        }
+    )]
     Drop {
         place: Place,
+        /// Implementation of `place.ty(): Drop`.
+        impl_expr: ImplExpr,
         target: BasicBlock,
         unwind: UnwindAction,
-        replace: bool,
     },
     #[custom_arm(
         x @ rustc_middle::mir::TerminatorKind::Call { .. } => {
@@ -807,12 +781,10 @@ impl<'tcx, S: UnderOwnerState<'tcx> + HasMir<'tcx>> SInto<S, Place>
                             ty::Closure(..) => {
                                 ProjectionElemFieldKind::ClosureState(index.sinto(s))
                             }
-                            ty_kind => {
-                                supposely_unreachable_fatal!(
-                                    s, "ProjectionElemFieldBadType";
-                                    {index, ty_kind, &place_ty, &place}
-                                );
-                            }
+                            ty_kind => supposely_unreachable_fatal!(
+                                s, "ProjectionElemFieldBadType";
+                                {index, ty_kind, &place_ty, &place}
+                            ),
                         };
                         ProjectionElem::Field(field_pj)
                     }
@@ -861,34 +833,32 @@ pub enum AggregateKind {
     Tuple,
     #[custom_arm(rustc_middle::mir::AggregateKind::Adt(def_id, vid, generics, annot, fid) => {
         let adt_kind = s.base().tcx.adt_def(def_id).adt_kind().sinto(s);
-        let trait_refs = solve_item_required_traits(s, *def_id, generics);
+        let item = translate_item_ref(s, *def_id, generics);
         AggregateKind::Adt(
-            def_id.sinto(s),
+            item,
             vid.sinto(s),
             adt_kind,
-            generics.sinto(s),
-            trait_refs,
             annot.sinto(s),
             fid.sinto(s),
         )
     })]
     Adt(
-        DefId,
+        ItemRef,
         VariantIdx,
         AdtKind,
-        Vec<GenericArg>,
-        Vec<ImplExpr>,
         Option<UserTypeAnnotationIndex>,
         Option<FieldIdx>,
     ),
     #[custom_arm(rustc_middle::mir::AggregateKind::Closure(def_id, generics) => {
         let closure = generics.as_closure();
         let args = ClosureArgs::sfrom(s, *def_id, closure);
-        AggregateKind::Closure(def_id.sinto(s), args)
+        AggregateKind::Closure(args)
     })]
-    Closure(DefId, ClosureArgs),
-    Coroutine(DefId, Vec<GenericArg>),
-    CoroutineClosure(DefId, Vec<GenericArg>),
+    Closure(ClosureArgs),
+    #[custom_arm(FROM_TYPE::Coroutine(def_id, generics) => TO_TYPE::Coroutine(translate_item_ref(s, *def_id, generics)),)]
+    Coroutine(ItemRef),
+    #[custom_arm(FROM_TYPE::CoroutineClosure(def_id, generics) => TO_TYPE::CoroutineClosure(translate_item_ref(s, *def_id, generics)),)]
+    CoroutineClosure(ItemRef),
     RawPtr(Ty, Mutability),
 }
 
@@ -981,7 +951,7 @@ make_idx_wrapper!(rustc_abi, FieldIdx);
 /// Reflects [`rustc_middle::mir::UnOp`]
 #[derive_group(Serializers)]
 #[derive(AdtInto, Copy, Clone, Debug, JsonSchema)]
-#[args(<'slt, S: UnderOwnerState<'slt>>, from: rustc_middle::mir::UnOp, state: S as _s)]
+#[args(<'slt, S: UnderOwnerState<'slt>>, from: mir::UnOp, state: S as _s)]
 pub enum UnOp {
     Not,
     Neg,
@@ -991,37 +961,26 @@ pub enum UnOp {
 /// Reflects [`rustc_middle::mir::BinOp`]
 #[derive_group(Serializers)]
 #[derive(AdtInto, Copy, Clone, Debug, JsonSchema)]
-#[args(<'slt, S: UnderOwnerState<'slt>>, from: rustc_middle::mir::BinOp, state: S as _s)]
+#[args(<'slt, S: UnderOwnerState<'slt>>, from: mir::BinOp, state: S as _s)]
 pub enum BinOp {
-    // We merge the checked and unchecked variants because in either case overflow is failure.
-    #[custom_arm(
-        rustc_middle::mir::BinOp::Add | rustc_middle::mir::BinOp::AddUnchecked => BinOp::Add,
-    )]
     Add,
-    #[custom_arm(
-        rustc_middle::mir::BinOp::Sub | rustc_middle::mir::BinOp::SubUnchecked => BinOp::Sub,
-    )]
-    Sub,
-    #[custom_arm(
-        rustc_middle::mir::BinOp::Mul | rustc_middle::mir::BinOp::MulUnchecked => BinOp::Mul,
-    )]
-    Mul,
+    AddUnchecked,
     AddWithOverflow,
+    Sub,
+    SubUnchecked,
     SubWithOverflow,
+    Mul,
+    MulUnchecked,
     MulWithOverflow,
     Div,
     Rem,
     BitXor,
     BitAnd,
     BitOr,
-    #[custom_arm(
-        rustc_middle::mir::BinOp::Shl | rustc_middle::mir::BinOp::ShlUnchecked => BinOp::Shl,
-    )]
     Shl,
-    #[custom_arm(
-        rustc_middle::mir::BinOp::Shr | rustc_middle::mir::BinOp::ShrUnchecked => BinOp::Shr,
-    )]
+    ShlUnchecked,
     Shr,
+    ShrUnchecked,
     Eq,
     Lt,
     Le,
@@ -1032,9 +991,26 @@ pub enum BinOp {
     Offset,
 }
 
+/// Reflects [`rustc_middle::mir::AssignOp`]
+#[derive_group(Serializers)]
+#[derive(AdtInto, Copy, Clone, Debug, JsonSchema)]
+#[args(<'tcx, S: BaseState<'tcx>>, from: mir::AssignOp, state: S as _s)]
+pub enum AssignOp {
+    AddAssign,
+    SubAssign,
+    MulAssign,
+    DivAssign,
+    RemAssign,
+    BitXorAssign,
+    BitAndAssign,
+    BitOrAssign,
+    ShlAssign,
+    ShrAssign,
+}
+
 /// Reflects [`rustc_middle::mir::BorrowKind`]
 #[derive(AdtInto)]
-#[args(<S>, from: rustc_middle::mir::BorrowKind, state: S as gstate)]
+#[args(<S>, from: mir::BorrowKind, state: S as gstate)]
 #[derive_group(Serializers)]
 #[derive(Copy, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BorrowKind {

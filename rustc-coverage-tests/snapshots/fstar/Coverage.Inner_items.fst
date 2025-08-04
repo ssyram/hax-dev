@@ -14,15 +14,18 @@ let main__t_in_mod__v_IN_MOD_CONST: u32 = mk_u32 1000
 let main__in_func (a: u32) : Prims.unit =
   let b:u32 = mk_u32 1 in
   let c:u32 = a +! b in
+  let args:t_Array Core.Fmt.Rt.t_Argument (mk_usize 1) =
+    let list = [Core.Fmt.Rt.impl__new_display #u32 c] in
+    FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
+    Rust_primitives.Hax.array_of_list 1 list
+  in
   let _:Prims.unit =
-    Std.Io.Stdio.e_print (Core.Fmt.impl_4__new_v1 (mk_usize 2)
+    Std.Io.Stdio.e_print (Core.Fmt.Rt.impl_1__new_v1 (mk_usize 2)
           (mk_usize 1)
           (let list = ["c = "; "\n"] in
             FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 2);
             Rust_primitives.Hax.array_of_list 2 list)
-          (let list = [Core.Fmt.Rt.impl_1__new_display #u32 c <: Core.Fmt.Rt.t_Argument] in
-            FStar.Pervasives.assert_norm (Prims.eq2 (List.Tot.length list) 1);
-            Rust_primitives.Hax.array_of_list 1 list)
+          args
         <:
         Core.Fmt.t_Arguments)
   in
@@ -69,15 +72,14 @@ Last AST:
                                         }
                                       });
                               path =
-                              [{ Types.data =
-                                 (Types.TypeNs (Some "inner_items"));
+                              [{ Types.data = (Types.TypeNs "inner_items");
                                  disambiguator = 0 }
                                 ]
                               }
                             }
                           });
                   path =
-                  [{ Types.data = (Types.TypeNs (Some "inner_items"));
+                  [{ Types.data = (Types.TypeNs "inner_items");
                      disambiguator = 0 };
                     { Types.data = (Types.ValueNs "main"); disambiguator = 0
                       }
@@ -86,10 +88,9 @@ Last AST:
                 }
               });
       path =
-      [{ Types.data = (Types.TypeNs (Some "inner_items")); disambiguator = 0
-         };
+      [{ Types.data = (Types.TypeNs "inner_items"); disambiguator = 0 };
         { Types.data = (Types.ValueNs "main"); disambiguator = 0 };
-        { Types.data = (Types.TypeNs (Some "InTrait")); disambiguator = 0 }]
+        { Types.data = (Types.TypeNs "InTrait"); disambiguator = 0 }]
       }
     };
   moved = None; suffix = None }) */

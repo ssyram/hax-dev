@@ -103,10 +103,10 @@ let fresh_owner_id (owner : Types.def_id) : owner_id =
   owner_id_list := owner :: !owner_id_list;
   next_id
 
-(** This state changes the behavior of `of_thir`: the hint placed into
-this state will be inserted automatically by `of_thir`. The field
-`owner_hint` shall be used solely for reporting to the user, not for
-any logic within the engine. *)
+(** This state changes the behavior of `of_thir`: the hint placed into this
+    state will be inserted automatically by `of_thir`. The field `owner_hint`
+    shall be used solely for reporting to the user, not for any logic within the
+    engine. *)
 let state_owner_hint : owner_id option ref = ref None
 
 let with_owner_hint (type t) (owner : Types.def_id) (f : unit -> t) : t =
@@ -151,3 +151,13 @@ let default = { id = 0; data = []; owner_hint = None }
 let owner_hint span =
   span.owner_hint
   |> Option.bind ~f:(fun (OwnerId id) -> List.nth !owner_id_list id)
+
+let to_span2 span : Types.span2 =
+  {
+    data = List.map ~f:Imported.span_to_thir span.data;
+    id = Int.to_string span.id;
+    owner_hint =
+      Option.map
+        ~f:(fun (OwnerId n) -> Types.Newtypeowner_id (Int.to_string n))
+        span.owner_hint;
+  }
