@@ -436,7 +436,13 @@ instance instHaxAdd : HaxAdd ISize where
 theorem HaxAdd_spec_bv (x y: isize) :
   ⦃ ¬ (BitVec.saddOverflow x.toBitVec y.toBitVec) ⦄
   (x +? y)
-  ⦃ ⇓ r => r = x + y ⦄ := by mvcgen [instHaxAdd ]
+  ⦃ ⇓ r => r = x + y ⦄ := by mvcgen [instHaxAdd]
+
+theorem HaxAdd_spec_bv_rw (x y: isize) :
+   ¬ (BitVec.saddOverflow x.toBitVec y.toBitVec) →
+   x +? y = Result.ok (x + y)
+:= by simp [instHaxAdd]
+
 
 instance instHaxSub : HaxSub ISize where
   sub x y :=
@@ -863,10 +869,31 @@ def constr_ops_range_Range {α} (ops_range_Range_start : α) (ops_range_Range_en
 # Polymorphic index access
 
 Hax introduces polymorphic index accesses, for any integer type (returning a
-single value) and for ranges (returning an array of values)
+single value) and for ranges (returning an array of values). A typeclass-based
+notation `a[i]_?` is introduced to support panicking lookups
 
 -/
-section PolymorphicIndexing
+section Lookup
+
+/--
+The classes `GetElemResult` implement lookup notation `xs[i]_?`.
+-/
+class GetElemResult (coll : Type u) (idx : Type v) (elem : outParam (Type w)) where
+  /--
+  The syntax `arr[i]_?` gets the `i`'th element of the collection `arr`. It
+  can panic if the index is out of bounds.
+  -/
+  getElemResult (xs : coll) (i : idx) : Result elem
+
+export GetElemResult (getElemResult)
+
+@[inherit_doc getElemResult]
+syntax:max term noWs "[" withoutPosition(term) "]" noWs "_?": term
+macro_rules | `($x[$i]_?) => `(getElemResult $x $i)
+
+@[app_unexpander getElemResult] meta def unexpandGetElemResult : Lean.PrettyPrinter.Unexpander
+  | `($_ $array $index) => `($array[$index]_?)
+  | _ => throw ()
 
 /--
 
@@ -874,105 +901,116 @@ Until the backend introduces notations, a definition for the explicit name
 `ops_index_index_index` is provided as a proxy
 
 -/
-
 @[simp, spec]
-def ops_index_Index_index {α β γ} (a: α) (i:β)
-  [GetElem α β (Result γ) (fun _ _ => True) ] : (Result γ) := a[i]
+def ops_index_Index_index {α β γ} (a: α) (i:β) [GetElemResult α β γ] : (Result γ) := a[i]_?
 
-@[simp]
-instance :
-  GetElem
+
+instance Range.instGetElemResultArrayUSize :
+  GetElemResult
     (Array α)
     (ops_range_Range usize)
-    (Result (Array α)) (fun _ _ => True) where
-  getElem xs i _ := match i with
+    (Array α) where
+  getElemResult xs i := match i with
   | ops_range_Range.range s e =>
     let size := xs.size;
-    if (s > e || e > size || s > size) then
-      Result.fail Error.arrayOutOfBounds
-    else
+    if s ≤ e && e ≤ size then
       pure ( xs.extract s e )
-
-@[simp]
-instance {α n} [tn: ToNat β]:
-  GetElem
-    (Vector α n)
-    (ops_range_Range β)
-    (Result (Array α)) (fun _ _ => True) where
-  getElem xs i _ := match i with
-  | ops_range_Range.range s e =>
-    let e := tn.toNat e;
-    let s := tn.toNat s;
-    let size := xs.size;
-    if (s > e || e > size || s > size) then
-      Result.fail Error.arrayOutOfBounds
     else
-      pure ( (Vector.extract xs s e ).toArray)
+      Result.fail Error.arrayOutOfBounds
 
-instance GetElemResult [tn: ToNat β] : GetElem (Array α) β (Result α) (fun _ _ => True) where
-  getElem xs i _ := Result.ofOption (xs[tn.toNat i]?) .arrayOutOfBounds
-
-instance USize.instGetElemArrayResult {α} : GetElem (Array α) (usize) (Result α) (fun _ _ => True) :=
+instance Range.instGetElemResultVectorUSize :
   GetElemResult
+    (Vector α n)
+    (ops_range_Range usize)
+    (Array α) where
+  getElemResult xs i := match i with
+  | ops_range_Range.range s e =>
+    if s ≤ e && e ≤ n then
+      pure (xs.extract s e).toArray
+    else
+      Result.fail Error.arrayOutOfBounds
 
-instance : GetElem (Array α) Nat (Result α) (fun _ _ => True) :=
-  GetElemResult
 
-@[simp]
-instance {α β : Type} {n : Nat} [tn: ToNat β]: GetElem (Vector α n) β (Result α) (fun _ _ => True) where
-  getElem xs i _ := Result.ofOption (xs[tn.toNat i]?) .arrayOutOfBounds
+instance USize.instGetElemResultArray {α} : GetElemResult (Array α) usize α where
+  getElemResult xs i :=
+    if h: i.toNat < xs.size then pure (xs[i])
+    else .fail arrayOutOfBounds
 
-@[simp]
-instance {α : Type} {n : Nat}: GetElem (Vector α n) Nat (Result α) (fun _ _ => True) where
-  getElem xs i _ := Result.ofOption xs[i]? .arrayOutOfBounds
+instance USize.instGetElemResultVector {α n} : GetElemResult (Vector α n) usize α where
+  getElemResult xs i :=
+    if h: i.toNat < n then pure (xs[i.toNat])
+    else .fail arrayOutOfBounds
 
--- @[spec]
--- theorem ops_index_Index_index_usize_range_vector_spec
---   (α : Type) (v: Vector α n ) (s e: usize) :
---   ⦃ s ≤ e ∧ e < n ⦄
---   ( v[ ops_range_Range.range s e] : Result (Array α))
---   ⦃ ⇓ r => r = (Vector.extract v s e).toArray ⦄
--- := by
---   mvcgen
---   simp
---   split <;> try split at * <;> try grind
---   all_goals simp [Vector.size] at *  <;> try grind
---   intros
---   expose_names
---   cases h
---   . expose_names
---     cases h <;> try omega
---     . rw [← USize.lt_iff_toNat_lt] at * ; bv_decide
---     . sorry
---   . sorry
+instance Nat.instGetElemResultArray {α} : GetElemResult (Array α) Nat α where
+  getElemResult xs i :=
+    if h: i < xs.size then pure (xs[i])
+    else .fail arrayOutOfBounds
+
+instance Nat.instGetElemResultVector {α n} : GetElemResult (Vector α n) Nat α where
+  getElemResult xs i :=
+    if h: i < n then pure (xs[i])
+    else .fail arrayOutOfBounds
 
 @[spec]
-theorem ops_index_Index_index_usize_range_array_spec
+theorem Nat.getElemArrayResult_spec
+  (α : Type) (a: Array α) (i: Nat):
+  ⦃ i < a.size ⦄
+  ( a[i]_? )
+  ⦃ ⇓ r => a[i]? = some r ⦄
+:= by
+  mvcgen [Result.ofOption, Nat.instGetElemResultArray]
+  simp
+
+@[spec]
+theorem Nat.getElemVectorResult_spec
+  (α : Type) (n:Nat) (a: Vector α n) (i: Nat):
+  ⦃ i < n ⦄
+  ( a[i]_? )
+  ⦃ ⇓ r => a[i]? = some r ⦄
+:= by
+  mvcgen [Nat.instGetElemResultVector]
+  simp
+
+@[spec]
+theorem USize.getElemArrayResult_spec
+  (α : Type) (a: Array α) (i: usize):
+  ⦃ i.toNat < a.size ⦄
+  ( a[i]_? )
+  ⦃ ⇓ r => a[i.toNat]? = some r ⦄
+:= by
+  mvcgen [USize.instGetElemResultArray]
+  simp
+
+@[spec]
+theorem USize.getElemVectorResult_spec
+  (α : Type) (n:Nat) (a: Vector α n) (i: usize):
+  ⦃ i.toNat < n ⦄
+  ( a[i]_? )
+  ⦃ ⇓ r => a[i.toNat]? = some r ⦄
+:= by
+  mvcgen [USize.instGetElemResultVector]
+  simp
+
+@[spec]
+theorem Range.getElemArrayUSize_spec
   (α : Type) (a: Array α) (s e: usize) :
   ⦃ s ≤ e ∧ e ≤ a.size ⦄
-  (a[ (ops_range_Range.range s e)])
+  ( a[(ops_range_Range.range s e)]_? )
   ⦃ ⇓ r => r = Array.extract a s e ⦄
 := by
-  mvcgen [ops_index_Index_index,
-          USize.instGetElemArrayResult,
-          GetElemResult, Result.ofOption] <;> expose_names
-  simp [GetElem.getElem]
-  intros
-  split <;> try simp
-  . split at *
-    . grind
-    injections
-    subst_eqs
-    constructor
-  . split at * <;> injections
-    subst_eqs
-    expose_names
-    cases h_2 <;> try bv_decide
-    simp [USize.le_iff_toNat_le, USize.lt_iff_toNat_lt] at *
-    omega
-  . split at * <;> try grind
+  mvcgen [ops_index_Index_index, Range.instGetElemResultArrayUSize] <;> grind
 
-end PolymorphicIndexing
+@[spec]
+theorem Range.getElemVectorUSize_spec
+  (α : Type) (n: Nat) (a: Vector α n) (s e: usize) :
+  ⦃ s ≤ e ∧ e ≤ n ⦄
+  ( a[(ops_range_Range.range s e)]_? )
+  ⦃ ⇓ r => r = (Vector.extract a s e).toArray ⦄
+:= by
+  mvcgen [ops_index_Index_index, Range.instGetElemResultVectorUSize] <;> grind
+
+
+end Lookup
 
 
 
