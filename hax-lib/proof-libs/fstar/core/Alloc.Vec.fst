@@ -26,7 +26,7 @@ let impl_1__pop #t
   (v: t_Vec t alloc)
    : t_Vec t alloc & Core.Option.t_Option t = 
      if Seq.length v = 0 then v, Core.Option.Option_None
-      else (Seq.slice v 0 ((Seq.length v) - 1) ), Seq.last v
+      else (Seq.slice v 0 ((Seq.length v) - 1) ), Core.Option.Option_Some (Seq.last v)
 
 let impl_1__len #t (#[(Tactics.exact (`()))]alloc:unit) (v: t_Vec t alloc) =
   let n = Seq.length v in
