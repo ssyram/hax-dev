@@ -16,6 +16,8 @@ import Std.Tactic.Do.Syntax
 open Std.Do
 open Std.Tactic
 
+set_option mvcgen.warning false
+set_option linter.unusedVariables false
 
 /-
 # Monadic encoding
