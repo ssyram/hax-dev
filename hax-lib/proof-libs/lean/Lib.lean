@@ -585,10 +585,10 @@ for each implementation of typeclasses
 -/
 
 @[simp, spec]
-def num_8_impl_wrapping_add (x y: u32) : Result u32 := pure (x + y)
+def num__8_impl_wrapping_add (x y: u32) : Result u32 := pure (x + y)
 
-@[simp]
-def num_8_impl_rotate_left (x: u32) (n: Nat) : Result u32 :=
+@[simp, spec]
+def num__8_impl_rotate_left (x: u32) (n: Nat) : Result u32 :=
   pure (UInt32.ofBitVec (BitVec.rotateLeft x.toBitVec n))
 
 
@@ -627,8 +627,8 @@ section Tuples
 
 abbrev hax_Tuple0 : Type := Unit
 def constr_hax_Tuple0 : hax_Tuple0 := ()
-instance : CoeDep Type hax_Tuple0 (Result hax_Tuple0) where
-  coe := pure ()
+instance : CoeDep Type hax_Tuple0 (hax_Tuple0) where
+  coe := ()
 
 
 abbrev hax_Tuple1 (α: Type) : Type := α × Unit
