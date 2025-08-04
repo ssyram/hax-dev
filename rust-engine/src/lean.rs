@@ -427,15 +427,10 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 } else {
                     None
                 };
-                docs![
-                    allocator,
-                    "constr_",
-                    constructor,
-                    record_args
-                ]
-                .parens()
-                .group()
-                .nest(INDENT)
+                docs![allocator, "constr_", constructor, record_args]
+                    .parens()
+                    .group()
+                    .nest(INDENT)
             }
             ExprKind::Match {
                 scrutinee: _,
