@@ -30,25 +30,21 @@ pub trait Print<T>: Printer {
     fn print(self, fragment: &mut T) -> Option<(String, SourceMap)>;
 }
 
-macro_rules! derive_print {
-    ($($ty:ty),*) => {
-        $(
-            impl<P: Printer> Print<$ty> for P
-            where
-                for<'a, 'b> &'b $ty: Pretty<'a, Allocator<Self>, ast::span::Span>,
-            {
-                fn print(self, fragment: &mut $ty) -> Option<(String, SourceMap)> {
-                    for mut reguaring_phase in Self::resugaring_phases() {
-                        reguaring_phase.visit(fragment)
-                    }
-                    let allocator = Allocator::new(self);
-                    let doc = fragment.pretty(&allocator).into_doc();
-                    let mut mem = Vec::new();
-                    doc.render(80, &mut mem).ok()?;
-                    Some((str::from_utf8(&mem).ok()?.to_string(), SourceMap))
-                }
-            }
-        )*
-    };
+impl<P: Printer, T: ast::visitors::AstVisitorMut + ast::visitors::AstVisitableInfallible> Print<T>
+    for P
+where
+    for<'a, 'b> &'b T: Pretty<'a, Allocator<Self>, ast::span::Span>,
+    // The following node is equivalent to "T is an AST node"
+    for<'a> dyn Resugaring: dyn_compatible::AstVisitableMut<'a, T>,
+{
+    fn print(self, fragment: &mut T) -> Option<(String, SourceMap)> {
+        for mut reguaring_phase in Self::resugaring_phases() {
+            reguaring_phase.visit(fragment)
+        }
+        let allocator = Allocator::new(self);
+        let doc = fragment.pretty(&allocator).into_doc();
+        let mut mem = Vec::new();
+        doc.render(80, &mut mem).ok()?;
+        Some((str::from_utf8(&mem).ok()?.to_string(), SourceMap))
+    }
 }
-derive_print!(ast::Expr, ast::Item, ast::Pat, ast::Ty, ast::Module);
