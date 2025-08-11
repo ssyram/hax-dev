@@ -134,6 +134,17 @@ pub mod codegen {
 
     use std::collections::{HashMap, HashSet};
 
+    /// Replace the crate name `"hax_engine_names"` with `"rust_primitives"` in the given `DefId`.
+    fn rename_krate(def_id: &mut DefId) {
+        let mut current = Some(def_id);
+        while let Some(def_id) = current {
+            if def_id.krate == "hax_engine_names" {
+                def_id.krate = "rust_primitives".into();
+            }
+            current = def_id.parent.as_deref_mut();
+        }
+    }
+
     /// Visit items and collect all the `DefId`s
     fn collect_def_ids(items: Vec<Item>) -> Vec<DefId> {
         #[derive(Default)]
@@ -150,22 +161,14 @@ pub mod codegen {
         }
 
         // Collect names
-        let mut vec: Vec<_> = DefIdCollector::default()
+        let mut names: Vec<_> = DefIdCollector::default()
             .visit_by_val(&items)
             .0
             .into_iter()
             .collect();
 
         // In the OCaml engine, `hax_engine_names` is renamed to `rust_primitives`.
-        for id in &mut vec {
-            let mut current = Some(id);
-            while let Some(def_id) = current {
-                if def_id.krate == "hax_engine_names" {
-                    def_id.krate = "rust_primitives".into();
-                }
-                current = def_id.parent.as_deref_mut();
-            }
-        }
+        names.iter_mut().for_each(rename_krate);
 
         // We consume names after import by the OCaml engine. Thus, the OCaml
         // engine may have introduced already some hax-specific Rust names,
@@ -176,9 +179,9 @@ pub mod codegen {
         // inserts `rust_primitives::unsize`. In the same time,
         // `hax_engine_names::unsize` exists and was renamed to
         // `rust_primitives::unsize`. Whence the need to dedup here.
-        vec.sort();
-        vec.dedup();
-        vec
+        names.sort();
+        names.dedup();
+        names
     }
 
     /// Crafts a docstring for a `DefId`, hopefully (rustdoc) linking it back to
