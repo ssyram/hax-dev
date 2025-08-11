@@ -225,53 +225,8 @@ pub mod wrappers {
     }
 }
 
-mod infallible {
-    use super::*;
-    use diagnostics::*;
-    use identifiers::*;
-    use literals::*;
-    use resugared::*;
-    use span::*;
-
-    #[visitable_group(
-        visitor(drive_map(
-            /// An mutable visitor that visits the AST for hax.
-            /// 
-            /// ```rust,ignore
-            /// use crate::ast::{diagnostics::*, visitors::*};
-            /// #[setup_error_handling_struct]
-            /// #[derive(Default)]
-            /// struct MyVisitor;
-            ///
-            /// impl VisitorWithContext for MyVisitor {
-            ///     fn context(&self) -> Context {
-            ///         Context::Import
-            ///     }
-            /// }
-            ///
-            /// impl AstVisitorMut for MyVisitor {
-            ///     setup_error_handling_impl!();
-            /// }
-            /// 
-            /// // MyVisitor::visit(my_ast_node)
-            /// ```
-            &mut AstVisitorMut
-        ), infallible),
-        visitor(drive(
-            /// An immutable visitor that visits the AST for hax.
-            &AstVisitor
-        ), infallible),
-        skip(
-            String, bool, char, hax_frontend_exporter::Span,
-        ),
-        drive(
-            for<T: AstVisitable> Box<T>, for<T: AstVisitable> Option<T>, for<T: AstVisitable> Vec<T>,
-            for<A: AstVisitable, B: AstVisitable> (A, B),
-            for<A: AstVisitable, B: AstVisitable, C: AstVisitable> (A, B, C),
-            usize
-        ),
-        override(
-            Expr, Pat, ExprKind, PatKind, Ty, TyKind, Metadata, Literal,
+#[hax_rust_engine_macros::replace(AstNodes =>
+    Expr, Pat, ExprKind, PatKind, Ty, TyKind, Metadata, Literal,
             LocalId, Lhs, Symbol, LoopKind, SafetyKind, Quote,
             SpannedTy, BindingMode, PrimitiveTy, Region, ImplExpr,
             IntKind, FloatKind, GenericValue, Arm, LoopState, ControlFlowKind,
@@ -284,63 +239,90 @@ mod infallible {
 
             ResugaredExprKind, ResugaredTyKind, ResugaredPatKind,
             ResugaredImplItemKind, ResugaredTraitItemKind, ResugaredItemKind
-        ),
-        override_skip(
-            Span, Fragment, GlobalId, Diagnostic,
-        ),
-    )]
-    /// Helper trait to drive visitor.
-    pub trait AstVisitable {}
-}
-#[allow(missing_docs)]
-mod faillible {
+)]
+mod replaced {
     use super::*;
-    use diagnostics::*;
-    use identifiers::*;
-    use literals::*;
-    use resugared::*;
-    use span::*;
+    pub mod infallible {
+        use super::*;
 
-    #[visitable_group(
-        visitor(drive(
-            /// An immutable visitor that can exit early.
-            &AstEarlyExitVisitor
-        )),
-        visitor(drive_mut(
-            /// An immutable visitor that can exit early and mutate the AST fragments.
-            &mut AstEarlyExitVisitorMut
-        )),
-        skip(
-            String, bool, char, hax_frontend_exporter::Span,
-        ),
-        drive(
-            for<T: AstVisitable> Box<T>, for<T: AstVisitable> Option<T>, for<T: AstVisitable> Vec<T>,
-            for<A: AstVisitable, B: AstVisitable> (A, B),
-            for<A: AstVisitable, B: AstVisitable, C: AstVisitable> (A, B, C),
-            usize
-        ),
-        override(
-            Expr, Pat, ExprKind, PatKind, Ty, TyKind, Metadata, Literal,
-            LocalId, Lhs, Symbol, LoopKind, SafetyKind, Quote,
-            SpannedTy, BindingMode, PrimitiveTy, Region, ImplExpr,
-            IntKind, FloatKind, GenericValue, Arm, LoopState, ControlFlowKind,
-            DynTraitGoal, Attribute, QuoteContent, BorrowKind,
-            TraitGoal, ImplExprKind, IntSize, Signedness, Guard, AttributeKind,
-            GuardKind, ImplItem, ImplItemKind, TraitItem, TraitItemKind,
-            ItemQuoteOrigin, ItemQuoteOriginKind, ItemQuoteOriginPosition, GenericParamKind, ImplIdent,
-            ProjectionPredicate, GenericParam, Generics, DocCommentKind, Param, Variant, ItemKind, Item,
-            GenericConstraint, ErrorNode,
+        #[visitable_group(
+            visitor(drive_map(
+                /// An mutable visitor that visits the AST for hax.
+                /// 
+                /// ```rust,ignore
+                /// use crate::ast::{diagnostics::*, visitors::*};
+                /// #[setup_error_handling_struct]
+                /// #[derive(Default)]
+                /// struct MyVisitor;
+                ///
+                /// impl VisitorWithContext for MyVisitor {
+                ///     fn context(&self) -> Context {
+                ///         Context::Import
+                ///     }
+                /// }
+                ///
+                /// impl AstVisitorMut for MyVisitor {
+                ///     setup_error_handling_impl!();
+                /// }
+                /// 
+                /// // MyVisitor::visit(my_ast_node)
+                /// ```
+                &mut AstVisitorMut
+            ), infallible),
+            visitor(drive(
+                /// An immutable visitor that visits the AST for hax.
+                &AstVisitor
+            ), infallible),
+            skip(
+                String, bool, char, hax_frontend_exporter::Span,
+            ),
+            drive(
+                for<T: AstVisitable> Box<T>, for<T: AstVisitable> Option<T>, for<T: AstVisitable> Vec<T>,
+                for<A: AstVisitable, B: AstVisitable> (A, B),
+                for<A: AstVisitable, B: AstVisitable, C: AstVisitable> (A, B, C),
+                usize
+            ),
+            override(AstNodes),
+            override_skip(
+                Span, Fragment, GlobalId, Diagnostic,
+            ),
+        )]
+        /// Helper trait to drive visitor.
+        pub trait AstVisitable {}
+    }
+    #[allow(missing_docs)]
+    pub mod faillible {
+        use super::*;
 
-            ResugaredExprKind, ResugaredTyKind, ResugaredPatKind,
-            ResugaredImplItemKind, ResugaredTraitItemKind, ResugaredItemKind
-        ),
-        override_skip(
-            Span, Fragment, GlobalId, Diagnostic,
-        ),
-    )]
-    /// Helper trait to drive visitor.
-    pub trait AstVisitable {}
+        #[visitable_group(
+            visitor(drive(
+                /// An immutable visitor that can exit early.
+                &AstEarlyExitVisitor
+            )),
+            visitor(drive_mut(
+                /// An immutable visitor that can exit early and mutate the AST fragments.
+                &mut AstEarlyExitVisitorMut
+            )),
+            skip(
+                String, bool, char, hax_frontend_exporter::Span,
+            ),
+            drive(
+                for<T: AstVisitable> Box<T>, for<T: AstVisitable> Option<T>, for<T: AstVisitable> Vec<T>,
+                for<A: AstVisitable, B: AstVisitable> (A, B),
+                for<A: AstVisitable, B: AstVisitable, C: AstVisitable> (A, B, C),
+                usize
+            ),
+            override(AstNodes),
+            override_skip(
+                Span, Fragment, GlobalId, Diagnostic,
+            ),
+        )]
+        /// Helper trait to drive visitor.
+        pub trait AstVisitable {}
+    }
 }
+
+pub(self) use replaced::{faillible, infallible};
 
 pub use faillible::{
     AstEarlyExitVisitor, AstEarlyExitVisitorMut, AstVisitable as AstVisitableFaillible,
