@@ -6,8 +6,8 @@ use std::io::BufRead;
 
 use hax_frontend_exporter::ThirBody;
 use hax_types::engine_api::{
-    protocol::{FromEngine, ToEngine},
     EngineOptions,
+    protocol::{FromEngine, ToEngine},
 };
 use serde::Deserialize;
 
@@ -126,7 +126,9 @@ impl Query {
                     crate::hax_io::write(&from_engine);
                     if from_engine.requires_response() {
                         let ExtendedToEngine::ToEngine(response) = crate::hax_io::read() else {
-                            panic!("The frontend sent an incorrect message: expected `ExtendedToEngine::ToEngine` since we sent a `ExtendedFromEngine::FromEngine`.")
+                            panic!(
+                                "The frontend sent an incorrect message: expected `ExtendedToEngine::ToEngine` since we sent a `ExtendedFromEngine::FromEngine`."
+                            )
                         };
                         send!(stdin, &response);
                     }

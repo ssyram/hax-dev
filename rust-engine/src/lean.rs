@@ -8,7 +8,7 @@ use crate::ast::span::Span;
 use crate::printer::Allocator;
 use std::iter::once;
 
-use pretty::{docs, DocAllocator, DocBuilder, Pretty};
+use pretty::{DocAllocator, DocBuilder, Pretty, docs};
 
 use crate::ast::identifiers::*;
 use crate::ast::literals::*;

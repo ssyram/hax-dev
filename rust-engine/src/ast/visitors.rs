@@ -348,7 +348,7 @@ pub use infallible::{
     AstVisitable as AstVisitableInfaillible, AstVisitableInfaillibleWrapper, AstVisitor,
     AstVisitorMut,
 };
-pub use wrappers::{setup_error_handling_impl, VisitorWithContext, VisitorWithErrors};
+pub use wrappers::{VisitorWithContext, VisitorWithErrors, setup_error_handling_impl};
 
 #[test]
 fn double_literals_in_ast() {

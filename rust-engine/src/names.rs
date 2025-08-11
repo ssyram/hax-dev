@@ -127,7 +127,7 @@ pub mod codegen {
 
     use crate::ast::Item;
     use crate::{
-        ast::identifiers::{global_id::DefId, GlobalId},
+        ast::identifiers::{GlobalId, global_id::DefId},
         names::serialization_helpers,
     };
     use hax_frontend_exporter::DefKind;
@@ -219,7 +219,7 @@ pub mod codegen {
                 format!("This is an inline const from [`{parent_path_str}`]")
             }
             DefKind::OpaqueTy => {
-                return format!("This is an opaque type for [`{parent_path_str}`]")
+                return format!("This is an opaque type for [`{parent_path_str}`]");
             }
             DefKind::Field => format!("field [`{def}`] from {parent_path_str}"),
             DefKind::LifetimeParam => return "This is a lifetime parameter.".to_string(),
