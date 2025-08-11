@@ -73,9 +73,15 @@ pub fn derive_group_for_ast_base(_attr: TokenStream, item: TokenStream) -> Token
     )
 }
 
+/// Adds a new field with a fresh name to an existing `struct` type definition.
+/// The new field contains error handling and span information to be used with a
+/// visitor. This macro will also derive implementations of
+/// [`hax_rust_engine::ast::visitors::wrappers::VisitorWithErrors`] and
+/// [`hax_rust_engine::ast::HasSpan`] for the struct.
 #[proc_macro_attribute]
 pub fn setup_error_handling_struct(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut item: syn::ItemStruct = parse_macro_input!(item);
+    // Deal with the case of unit structs.
     if let fields @ syn::Fields::Unit = &mut item.fields {
         let span = Group::new(proc_macro2::Delimiter::Brace, fields.to_token_stream()).delim_span();
         *fields = syn::Fields::Unnamed(FieldsUnnamed {
@@ -83,6 +89,7 @@ pub fn setup_error_handling_struct(_attr: TokenStream, item: TokenStream) -> Tok
             unnamed: Punctuated::default(),
         })
     }
+    /// Computes a fresh identifier given a list of existing identifiers.
     fn fresh_ident(base: &str, existing: &[Ident]) -> Ident {
         let existing: std::collections::HashSet<_> =
             existing.iter().map(|id| id.to_string()).collect();
@@ -99,10 +106,11 @@ pub fn setup_error_handling_struct(_attr: TokenStream, item: TokenStream) -> Tok
             .map(|name| Ident::new(&name, Span::call_site()))
             .expect("should always find a fresh identifier")
     }
+    // Collect fields, disregarding their kind (are they named or not)
     let (fields, named) = match &mut item.fields {
         syn::Fields::Named(fields_named) => (&mut fields_named.named, true),
         syn::Fields::Unnamed(fields_unnamed) => (&mut fields_unnamed.unnamed, false),
-        syn::Fields::Unit => unreachable!(),
+        syn::Fields::Unit => unreachable!("Unit structs were dealt with."),
     };
 
     let existing_names = fields
