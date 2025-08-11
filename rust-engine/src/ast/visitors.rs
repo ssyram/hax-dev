@@ -37,13 +37,21 @@ pub mod wrappers {
     pub struct SpanWrapper<'a, V>(pub &'a mut V);
 
     impl<'a, V: HasSpan> SpanWrapper<'a, V> {
-        fn spanned_action<T: Deref, U>(&mut self, x: T, action: impl Fn(&mut Self, T) -> U) -> U
+        /// Performs a spanned action: calls the function `action` on
+        /// `ast_fragment`, with the contextual span information in `self` being
+        /// the span found in `ast_fragment`.
+        fn spanned_action<T: Deref, U>(
+            &mut self,
+            ast_fragment: T,
+            action: impl Fn(&mut Self, T) -> U,
+        ) -> U
         where
             T::Target: HasSpan,
         {
             let span_before = self.0.span();
-            *self.0.span_mut() = x.span();
-            let result = action(self, x);
+            *self.0.span_mut() = ast_fragment.span();
+            // Perform the provided action on `ast_fragment` with `ast_fragment`'s span as contextual span.
+            let result = action(self, ast_fragment);
             *self.0.span_mut() = span_before;
             result
         }
