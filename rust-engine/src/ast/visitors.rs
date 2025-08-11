@@ -114,7 +114,7 @@ pub mod wrappers {
     }
 
     /// Helper struct that contains error-handling related state information.
-    /// This is used internally by [`setup_error_handling`].
+    /// This is used internally by [`setup_error_handling_struct`].
     pub struct ErrorHandlingState(pub Span, pub ErrorVault);
     impl Default for ErrorHandlingState {
         fn default() -> Self {
