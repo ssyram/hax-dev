@@ -1445,6 +1445,17 @@ pub struct Item {
     pub meta: Metadata,
 }
 
+/// A "flat" module: this contains only non-module items.
+#[derive_group_for_ast]
+pub struct Module {
+    /// The global identifier of the module.
+    pub ident: GlobalId,
+    /// The list of items that belongs to this module.
+    pub items: Vec<Item>,
+    /// Source span and attributes.
+    pub meta: Metadata,
+}
+
 /// Traits for utilities on AST data types
 pub mod traits {
     use super::*;
