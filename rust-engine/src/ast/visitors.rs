@@ -28,7 +28,7 @@ pub mod wrappers {
 
     use std::ops::Deref;
 
-    use super::{infaillible::AstVisitable as AstVisitableInfaillible, *};
+    use super::{infallible::AstVisitable as AstVisitableInfaillible, *};
     use diagnostics::*;
 
     /// A visitor wrapper that tracks span while visiting the AST. Whenever an
@@ -222,7 +222,7 @@ pub mod wrappers {
     }
 }
 
-mod infaillible {
+mod infallible {
     use super::*;
     use diagnostics::*;
     use identifiers::*;
@@ -253,11 +253,11 @@ mod infaillible {
             /// // MyVisitor::visit(my_ast_node)
             /// ```
             &mut AstVisitorMut
-        ), infaillible),
+        ), infallible),
         visitor(drive(
             /// An immutable visitor that visits the AST for hax.
             &AstVisitor
-        ), infaillible),
+        ), infallible),
         skip(
             String, bool, char, hax_frontend_exporter::Span,
         ),
@@ -344,7 +344,7 @@ pub use faillible::{
     AstVisitableWrapper,
 };
 pub use hax_rust_engine_macros::setup_error_handling_struct;
-pub use infaillible::{
+pub use infallible::{
     AstVisitable as AstVisitableInfaillible, AstVisitableInfaillibleWrapper, AstVisitor,
     AstVisitorMut,
 };
