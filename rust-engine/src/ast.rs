@@ -1586,7 +1586,7 @@ pub mod traits {
     }
 
     /// Fragments of the AST on which we can store an `ErrorNode`.
-    pub trait HasErrorNode {
+    pub trait FallibleAstNode {
         /// Replace the current node with an error.
         fn set_error(&mut self, error_node: ErrorNode);
         /// Extract an error if any.
@@ -1594,7 +1594,7 @@ pub mod traits {
     }
     macro_rules! derive_error_node {
         ($($ty:ident => $kind:ident),*) => {$(
-            impl HasErrorNode for $ty {
+            impl FallibleAstNode for $ty {
                 fn set_error(&mut self, mut error_node: ErrorNode) {
                     if let Some(base) = self.get_error().cloned() {
                         error_node.diagnostics.extend_from_slice(&base.diagnostics);

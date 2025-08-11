@@ -179,7 +179,10 @@ pub mod wrappers {
     }
 
     impl<'a, V: VisitorWithErrors> ErrorWrapper<'a, V> {
-        fn error_handled_action<T: HasErrorNode + Clone + std::fmt::Debug + Into<Fragment>, U>(
+        fn error_handled_action<
+            T: FallibleAstNode + Clone + std::fmt::Debug + Into<Fragment>,
+            U,
+        >(
             &mut self,
             x: &mut T,
             action: impl Fn(&mut Self, &mut T) -> U,
