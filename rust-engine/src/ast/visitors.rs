@@ -291,7 +291,7 @@ mod replaced {
         pub trait AstVisitable {}
     }
     #[allow(missing_docs)]
-    pub mod faillible {
+    pub mod fallible {
         use super::*;
 
         #[visitable_group(
@@ -320,12 +320,93 @@ mod replaced {
         /// Helper trait to drive visitor.
         pub trait AstVisitable {}
     }
+
+    /// This modules provides `dyn` compatible trait for visitors.
+    pub mod dyn_compatible {
+        use super::*;
+
+        macro_rules! derive_erased_ast_visitors {
+            ({$($attrs:tt)*}, $name: ident, $helper: ident, $($ty:ty),*) => {
+                $($attrs)*
+                pub trait $name<'a>: $($helper<'a, $ty> + )* {}
+            };
+        }
+
+        macro_rules! render_path {
+            ($head:ident) => {stringify!($head)};
+            ($head:ident $(::$tail:ident)*) => {
+                concat!(stringify!($head), "::", render_path!($($tail)::*))
+            };
+        }
+
+        macro_rules! make_dyn_compatible {
+            ($($visitable_trait:ident)::*, $($visitor_trait:ident)::*, $helper_name: ident, $name: ident, mut:{$($mut:tt)?}, super:{$($super:ident)::*}, $ret:ty) => {
+                #[doc = concat!("A [dyn-compatible](https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility) trait similar to [`", render_path!($($visitor_trait)::*),"`].")]
+                #[doc = concat!("This trait provides one `visit` method to visit a given type `T` with a given visitor.")]
+                pub trait $helper_name<'a, T: ?Sized>: $($super)::* {
+                    /// Visit a value with the visitor.
+                    fn visit(&mut self, _: &'a $($mut)? T) -> $ret;
+                }
+
+                impl<'a, T: $($visitable_trait)::*, V: $($visitor_trait)::*> $helper_name<'a, T> for V {
+                    fn visit(&mut self, e: &'a $($mut)? T) -> $ret {
+                        <Self as $($visitor_trait)::*>::visit(self, e)
+                    }
+                }
+                derive_erased_ast_visitors!({
+                    #[doc = concat!("A [dyn-compatible](https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility) trait similar to [`", render_path!($($visitor_trait)::*),"`].")]
+                    #[doc = concat!("This trait is empty, but it implies a super bound for every type in the AST, so that you can use [`", stringify!($helper_name), "::visit", "`] with the entire AST.")]
+                }, $name, $helper_name, AstNodes);
+
+                impl<'a, V: $($visitor_trait)::*> $name<'a> for V {}
+            };
+        }
+
+        make_dyn_compatible!(
+            infallible::AstVisitable,
+            infallible::AstVisitorMut,
+            AstVisitableMut,
+            AstVisitorMut,
+            mut:{mut},
+            super:{},
+            ()
+        );
+        make_dyn_compatible!(
+            infallible::AstVisitable,
+            infallible::AstVisitor,
+            AstVisitable,
+            AstVisitor,
+            mut:{},
+            super:{},
+            ()
+        );
+
+        make_dyn_compatible!(
+            fallible::AstVisitable,
+            fallible::AstEarlyExitVisitorMut,
+            AstEarlyExitVisitableMut,
+            AstEarlyExitVisitorMut,
+            mut:{mut},
+            super:{Visitor},
+            ControlFlow<<Self as Visitor>::Break>
+        );
+        make_dyn_compatible!(
+            fallible::AstVisitable,
+            fallible::AstEarlyExitVisitor,
+            AstEarlyExitVisitable,
+            AstEarlyExitVisitor,
+            mut:{},
+            super:{Visitor},
+            ControlFlow<<Self as Visitor>::Break>
+        );
+    }
 }
 
-pub(self) use replaced::{faillible, infallible};
+pub use replaced::dyn_compatible;
+pub(self) use replaced::{fallible, infallible};
 
-pub use faillible::{
-    AstEarlyExitVisitor, AstEarlyExitVisitorMut, AstVisitable as AstVisitableFaillible,
+pub use fallible::{
+    AstEarlyExitVisitor, AstEarlyExitVisitorMut, AstVisitable as AstVisitableFallible,
     AstVisitableWrapper,
 };
 pub use hax_rust_engine_macros::setup_error_handling_struct;
