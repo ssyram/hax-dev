@@ -271,6 +271,10 @@ let driver_for_rust_engine () : unit =
     (Concrete_ident_generated.impl_infos @ query.impl_infos);
   match query.kind with
   | Types.ImportThir { input; apply_phases } ->
+      (* Note: `apply_phases` comes from the type `QueryKind` in
+      `ocaml_engine.rs`. This is a temporary flag that applies some phases while
+      importing THIR. In the future (when #1550 is merged), we will be able to
+      import THIR and then apply phases. *)
       let imported_items = import_thir_items [] input in
       let rust_ast_items =
         if apply_phases then
