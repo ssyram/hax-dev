@@ -362,7 +362,7 @@ dependencies = [
 [[package]]
 name = "derive_generic_visitor"
 version = "0.2.0"
-source = "git+https://github.com/W95Psp/derive-generic-visitor.git?branch=visitable-group-add-attrs#91c178f30428a873fd5fbc301833e704b8c548fc"
+source = "git+https://github.com/W95Psp/derive-generic-visitor.git?branch=visitable-group-add-attrs#fc4fb41661e59deb48feec66d06b579a1236d5f3"
 dependencies = [
  "derive_generic_visitor_macros",
 ]
@@ -370,7 +370,7 @@ dependencies = [
 [[package]]
 name = "derive_generic_visitor_macros"
 version = "0.2.0"
-source = "git+https://github.com/W95Psp/derive-generic-visitor.git?branch=visitable-group-add-attrs#91c178f30428a873fd5fbc301833e704b8c548fc"
+source = "git+https://github.com/W95Psp/derive-generic-visitor.git?branch=visitable-group-add-attrs#fc4fb41661e59deb48feec66d06b579a1236d5f3"
 dependencies = [
  "convert_case",
  "darling",

@@ -28,7 +28,7 @@ pub mod wrappers {
 
     use std::ops::Deref;
 
-    use super::{infallible::AstVisitable as AstVisitableInfaillible, *};
+    use super::{infallible::AstVisitable as AstVisitableInfallible, *};
     use diagnostics::*;
 
     /// A visitor wrapper that tracks span while visiting the AST. Whenever an
@@ -60,8 +60,8 @@ pub mod wrappers {
     impl<'a, V: AstVisitorMut + HasSpan> AstVisitorMut for SpanWrapper<'a, V> {
         fn visit_inner<T>(&mut self, x: &mut T)
         where
-            T: AstVisitableInfaillible,
-            T: for<'s> DriveMut<'s, AstVisitableInfaillibleWrapper<Self>>,
+            T: AstVisitableInfallible,
+            T: for<'s> DriveMut<'s, AstVisitableInfallibleWrapper<Self>>,
         {
             x.drive_map(self.0)
         }
@@ -126,7 +126,7 @@ pub mod wrappers {
     /// Use this macro in an implementation of `AstVisitorMut` to get automatic spans and error handling.
     macro_rules! setup_error_handling_impl {
         () => {
-            fn visit<'a, T: $crate::ast::visitors::AstVisitableInfaillible>(
+            fn visit<'a, T: $crate::ast::visitors::AstVisitableInfallible>(
                 &'a mut self,
                 x: &mut T,
             ) {
@@ -205,8 +205,8 @@ pub mod wrappers {
     impl<'a, V: AstVisitorMut + VisitorWithErrors> AstVisitorMut for ErrorWrapper<'a, V> {
         fn visit_inner<T>(&mut self, x: &mut T)
         where
-            T: AstVisitableInfaillible,
-            T: for<'s> DriveMut<'s, AstVisitableInfaillibleWrapper<Self>>,
+            T: AstVisitableInfallible,
+            T: for<'s> DriveMut<'s, AstVisitableInfallibleWrapper<Self>>,
         {
             x.drive_map(self.0)
         }
@@ -348,7 +348,7 @@ pub use faillible::{
 };
 pub use hax_rust_engine_macros::setup_error_handling_struct;
 pub use infallible::{
-    AstVisitable as AstVisitableInfaillible, AstVisitableInfaillibleWrapper, AstVisitor,
+    AstVisitable as AstVisitableInfallible, AstVisitableInfallibleWrapper, AstVisitor,
     AstVisitorMut,
 };
 pub use wrappers::{VisitorWithContext, VisitorWithErrors, setup_error_handling_impl};
