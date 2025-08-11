@@ -82,6 +82,25 @@ fn disambiguated_def_path_item_to_str(defpath: &DisambiguatedDefPathItem) -> Str
     format!("{data}{disambiguator}")
 }
 
+/// Replaces the crate name `HAX_ENGINE_NAMES_CRATE` by `"rust_primitives"`.
+fn rename_krate(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (key, val) in map.iter_mut() {
+                if let Value::String(s) = val
+                    && key == "krate"
+                    && s == "hax_engine_names"
+                {
+                    *s = "rust_primitives".to_string();
+                }
+                rename_krate(val);
+            }
+        }
+        Value::Array(v) => v.iter_mut().for_each(rename_krate),
+        _ => {}
+    }
+}
+
 fn def_id_to_str(def_id: &DefId) -> (Value, String) {
     let crate_name = if def_id.krate == HAX_ENGINE_NAMES_CRATE {
         "rust_primitives"
@@ -91,7 +110,7 @@ fn def_id_to_str(def_id: &DefId) -> (Value, String) {
 
     // Update the crate name in the json output as well.
     let mut json = serde_json::to_value(def_id).unwrap();
-    json["contents"]["value"]["krate"] = Value::String(crate_name.to_owned());
+    rename_krate(&mut json);
 
     let crate_name = uppercase_first_letter(crate_name);
     let path = [crate_name]
