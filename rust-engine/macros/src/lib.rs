@@ -16,6 +16,8 @@ use syn::{
 };
 use utils::*;
 
+mod replace;
+
 mod utils {
     use super::*;
     pub(crate) fn crate_name() -> Ident {
@@ -158,4 +160,10 @@ pub fn setup_error_handling_struct(_attr: TokenStream, item: TokenStream) -> Tok
         }
     }
     .into()
+}
+
+#[proc_macro_attribute]
+/// Replaces all occurrences of an identifier within the attached item.
+pub fn replace(attr: TokenStream, item: TokenStream) -> TokenStream {
+    replace::replace(attr, item)
 }
