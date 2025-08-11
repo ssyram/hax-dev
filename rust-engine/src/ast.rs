@@ -1482,6 +1482,8 @@ pub mod traits {
         type Kind;
         /// Get kind
         fn kind(&self) -> &Self::Kind;
+        /// Get mutable borrow on kind
+        fn kind_mut(&mut self) -> &mut Self::Kind;
     }
 
     macro_rules! derive_has_metadata {
@@ -1502,6 +1504,9 @@ pub mod traits {
                 type Kind = $kind;
                 fn kind(&self) -> &Self::Kind {
                     &self.kind
+                }
+                fn kind_mut(&mut self) -> &mut Self::Kind {
+                    &mut self.kind
                 }
             })*
         };
@@ -1575,33 +1580,37 @@ pub mod traits {
         fn kind(&self) -> &Self::Kind {
             &self.0
         }
+        fn kind_mut(&mut self) -> &mut Self::Kind {
+            &mut self.0
+        }
     }
 
     /// Fragments of the AST on which we can store an `ErrorNode`.
     pub trait HasErrorNode {
         /// Replace the current node with an error.
         fn set_error(&mut self, error_node: ErrorNode);
+        /// Extract an error if any.
+        fn get_error(&self) -> Option<&ErrorNode>;
+    }
+    macro_rules! derive_error_node {
+        ($($ty:ident => $kind:ident),*) => {$(
+            impl HasErrorNode for $ty {
+                fn set_error(&mut self, mut error_node: ErrorNode) {
+                    if let Some(base) = self.get_error().cloned() {
+                        error_node.diagnostics.extend_from_slice(&base.diagnostics);
+                    }
+                    *self.kind_mut() = $kind::Error(error_node)
+                }
+                fn get_error(&self) -> Option<&ErrorNode> {
+                    match &self.kind() {
+                        $kind::Error(error_node) => Some(error_node),
+                        _ => None,
+                    }
+                }
+            }
+        )*};
     }
 
-    impl HasErrorNode for Item {
-        fn set_error(&mut self, error_node: ErrorNode) {
-            self.kind = ItemKind::Error(error_node)
-        }
-    }
-    impl HasErrorNode for Pat {
-        fn set_error(&mut self, error_node: ErrorNode) {
-            self.kind = Box::new(PatKind::Error(error_node))
-        }
-    }
-    impl HasErrorNode for Expr {
-        fn set_error(&mut self, error_node: ErrorNode) {
-            self.kind = Box::new(ExprKind::Error(error_node))
-        }
-    }
-    impl HasErrorNode for Ty {
-        fn set_error(&mut self, error_node: ErrorNode) {
-            self.0 = Box::new(TyKind::Error(error_node))
-        }
-    }
+    derive_error_node!(Item => ItemKind, Pat => PatKind, Expr => ExprKind, Ty => TyKind);
 }
 pub use traits::*;
