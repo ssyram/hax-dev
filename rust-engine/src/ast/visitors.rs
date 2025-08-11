@@ -31,7 +31,7 @@ pub mod wrappers {
     use super::{infaillible::AstVisitable as AstVisitableInfaillible, *};
     use diagnostics::*;
 
-    /// A visitor wrapper that tracks span while visiting the AST. Whenever a
+    /// A visitor wrapper that tracks span while visiting the AST. Whenever an
     /// AST node that carries a span is visited, using this wrapper, the ambiant
     /// span is mutated and accisble via the `HasSpan` trait.
     pub struct SpanWrapper<'a, V>(pub &'a mut V);
