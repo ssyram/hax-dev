@@ -32,7 +32,7 @@ pub mod wrappers {
     use diagnostics::*;
 
     /// A visitor wrapper that tracks span while visiting the AST. Whenever an
-    /// AST node that carries a span is visited, using this wrapper, the ambiant
+    /// AST node that carries a span is visited, using this wrapper, the ambient
     /// span is mutated and accisble via the `HasSpan` trait.
     pub struct SpanWrapper<'a, V>(pub &'a mut V);
 
