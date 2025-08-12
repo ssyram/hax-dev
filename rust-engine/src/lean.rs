@@ -15,7 +15,12 @@ use crate::ast::*;
 
 macro_rules! print_todo {
     ($allocator:ident) => {
-        $allocator.text(format!("/- Unsupported by the Lean Backend (line {}) -/", line!())).parens()
+        $allocator
+            .text(format!(
+                "/- Unsupported by the Lean Backend (line {}) -/",
+                line!()
+            ))
+            .parens()
     };
 }
 
@@ -355,20 +360,16 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 bounds_impls: _,
                 trait_: _,
             } => {
-                let generic_args = if generic_args.is_empty() {
-                    None
-                } else {
-                    Some(
-                        allocator
-                            .line()
-                            .append(
-                                allocator
-                                    .intersperse(generic_args, allocator.line())
-                                    .nest(INDENT),
-                            )
-                            .group(),
-                    )
-                };
+                let generic_args = !generic_args.is_empty().then_some(
+                    allocator
+                        .line()
+                        .append(
+                            allocator
+                                .intersperse(generic_args, allocator.line())
+                                .nest(INDENT),
+                        )
+                        .group(),
+                );
                 let args = if args.is_empty() {
                     None
                 } else {
@@ -401,32 +402,28 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 base: _,
             } => {
                 // Should be turned into a resugaring once https://github.com/cryspen/hax/pull/1528 have been merged
-                let record_args = if fields.len() > 0 {
-                    Some(
-                        allocator
-                            .line()
-                            .append(
-                                allocator
-                                    .intersperse(
-                                        fields.iter().map(|field: &(GlobalId, Expr)| {
-                                            docs![
-                                                allocator,
-                                                &field.0,
-                                                allocator.reflow(" := "),
-                                                &field.1
-                                            ]
-                                            .parens()
-                                            .group()
-                                        }),
-                                        allocator.line(),
-                                    )
-                                    .group(),
-                            )
-                            .group(),
-                    )
-                } else {
-                    None
-                };
+                let record_args = (fields.len() > 0).then_some(
+                    allocator
+                        .line()
+                        .append(
+                            allocator
+                                .intersperse(
+                                    fields.iter().map(|field: &(GlobalId, Expr)| {
+                                        docs![
+                                            allocator,
+                                            &field.0,
+                                            allocator.reflow(" := "),
+                                            &field.1
+                                        ]
+                                        .parens()
+                                        .group()
+                                    }),
+                                    allocator.line(),
+                                )
+                                .group(),
+                        )
+                        .group(),
+                );
                 docs![allocator, "constr_", constructor, record_args]
                     .parens()
                     .group()
