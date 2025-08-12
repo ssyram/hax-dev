@@ -102,12 +102,14 @@ pub mod global_id {
             }
         }
 
-        /// Returns true if the GlobalId is actually empty (reduced to "_")
+        /// Tests if the raw output is reduced to "_". Should be used only for
+        /// testing. See https://github.com/cryspen/hax/issues/1599
         pub fn is_empty(&self) -> bool {
             self.to_debug_string() == "_".to_string()
         }
 
-        /// Raw printing of identifier separated by underscore. Used for testing
+        /// Raw printing of identifier separated by underscore. Should be used
+        /// only for testing. See https://github.com/cryspen/hax/issues/1599
         pub fn to_debug_string(&self) -> String {
             match self {
                 GlobalId::Concrete(concrete_id) => concrete_id
