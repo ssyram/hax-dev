@@ -317,13 +317,23 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
             } => match else_ {
                 Some(else_branch) => docs![
                     allocator,
-                    docs![allocator, "if", allocator.line(), condition].group(),
+                    allocator
+                        .text("if")
+                        .append(allocator.line())
+                        .append(condition)
+                        .group(),
                     allocator.line(),
-                    docs![allocator, "then", allocator.line(), then]
+                    allocator
+                        .text("then")
+                        .append(allocator.line())
+                        .append(then)
                         .group()
                         .nest(INDENT),
                     allocator.line(),
-                    docs![allocator, "else", allocator.line(), else_branch]
+                    allocator
+                        .text("else")
+                        .append(allocator.line())
+                        .append(else_branch)
                         .group()
                         .nest(INDENT),
                 ]
