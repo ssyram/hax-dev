@@ -15,7 +15,7 @@ use crate::ast::*;
 
 macro_rules! print_todo {
     ($allocator:ident) => {
-        $allocator.text(format!("Todo at {}", line!())).parens()
+        $allocator.text(format!("/- Unsupported by the Lean Backend (line {}) -/", line!())).parens()
     };
 }
 
@@ -169,7 +169,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
             ItemKind::Quote { quote, origin: _ } => quote.pretty(allocator),
             ItemKind::Error(_diagnostic) => print_todo!(allocator),
             ItemKind::Resugared(_resugared_ty_kind) => print_todo!(allocator),
-            ItemKind::NotImplementedYet => allocator.nil(),
+            ItemKind::NotImplementedYet => allocator.text("/- unsupported by Hax engine (yet) -/"),
         }
     }
 }
