@@ -465,7 +465,6 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                     _ => Some("← "),
                 };
                 docs![allocator, monadic_encoding, e, allocator.reflow(" : "), ty]
-                    //.nest(INDENT)
                     .parens()
                     .group()
             }
@@ -492,7 +491,6 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 allocator.line(),
                 body
             ]
-            //.nest(INDENT)
             .parens()
             .group()
             .nest(INDENT),
