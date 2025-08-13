@@ -30,7 +30,7 @@ impl<T: serde::Serialize> Display for DebugJSON<T> {
                 .create(true)
                 .open(path)?;
             let count = BufReader::new(&file).lines().count();
-            writeln!(&file, "{}", value)?;
+            writeln!(&file, "{value}")?;
             Ok(count)
         }
 
@@ -44,7 +44,7 @@ impl<'a, 'b, A: 'a + Clone, P: PrettyAst<'a, 'b, A>, T: 'b + serde::Serialize> P
     for DebugJSON<T>
 {
     fn pretty(self, allocator: &'a P) -> DocBuilder<'a, P, A> {
-        allocator.as_string(format!("{}", self))
+        allocator.as_string(format!("{self}"))
     }
 }
 

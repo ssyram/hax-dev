@@ -7,8 +7,7 @@
 //!
 //! We provide four main visitors.
 //!  - [`AstVisitor`] and [`AstVisitorMut`]: visitor that never early exit.
-//!  - [`AstEarlyExitVisitor`] and [`AstEarlyExitVisitorMut`]: visitor that can
-//!        early exit.
+//!  - [`AstEarlyExitVisitor`] and [`AstEarlyExitVisitorMut`]: visitor that can early exit.
 //!
 //! Each trait provides methods `visit_expr`, `visit_ty`, etc. enabling easy AST
 //! traversal.
@@ -403,7 +402,7 @@ mod replaced {
 }
 
 pub use replaced::dyn_compatible;
-pub(self) use replaced::{fallible, infallible};
+use replaced::{fallible, infallible};
 
 pub use fallible::{
     AstEarlyExitVisitor, AstEarlyExitVisitorMut, AstVisitable as AstVisitableFallible,
