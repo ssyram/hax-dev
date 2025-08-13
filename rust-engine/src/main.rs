@@ -1,5 +1,5 @@
 use hax_rust_engine::{
-    ast::{span::Span, Item},
+    ast::{Item, span::Span},
     lean::Lean,
     ocaml_engine::{ExtendedToEngine, Response},
     printer::Allocator,
@@ -52,7 +52,10 @@ fn main() {
     let query = hax_rust_engine::ocaml_engine::Query {
         hax_version: value.hax_version,
         impl_infos: value.impl_infos,
-        kind: hax_rust_engine::ocaml_engine::QueryKind::ImportThir { input: value.input },
+        kind: hax_rust_engine::ocaml_engine::QueryKind::ImportThir {
+            input: value.input,
+            apply_phases: !matches!(&value.backend.backend, Backend::GenerateRustEngineNames),
+        },
     };
 
     let Some(Response::ImportThir { output: items }) = query.execute() else {
