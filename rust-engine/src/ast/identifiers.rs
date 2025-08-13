@@ -102,6 +102,12 @@ pub mod global_id {
             }
         }
 
+        /// Tests if the raw output is reduced to "_". Should be used only for
+        /// testing. See https://github.com/cryspen/hax/issues/1599
+        pub fn is_empty(&self) -> bool {
+            self.to_debug_string() == "_".to_string()
+        }
+
         /// Extract the raw `DefId` from a `GlobalId`.
         /// This should never be used for name printing.
         pub fn def_id(&self) -> DefId {
@@ -109,7 +115,8 @@ pub mod global_id {
             concrete_id.def_id.def_id.clone()
         }
 
-        /// Raw printing of identifier separated by underscore. Used for testing
+        /// Raw printing of identifier separated by underscore. Should be used
+        /// only for testing. See https://github.com/cryspen/hax/issues/1599
         pub fn to_debug_string(&self) -> String {
             match self {
                 GlobalId::Concrete(concrete_id) => concrete_id
@@ -118,12 +125,20 @@ pub mod global_id {
                     .clone()
                     .path
                     .into_iter()
-                    .map(|def| match def.clone().data {
-                        hax_frontend_exporter::DefPathItem::ValueNs(s)
-                        | hax_frontend_exporter::DefPathItem::MacroNs(s)
-                        | hax_frontend_exporter::DefPathItem::TypeNs(s) => s.clone(),
-                        hax_frontend_exporter::DefPathItem::Impl => "impl".to_string(),
-                        other => unimplemented!("{other:?}"),
+                    .map(|def| {
+                        let data = match def.clone().data {
+                            hax_frontend_exporter::DefPathItem::ValueNs(s)
+                            | hax_frontend_exporter::DefPathItem::MacroNs(s)
+                            | hax_frontend_exporter::DefPathItem::TypeNs(s) => s.clone(),
+                            hax_frontend_exporter::DefPathItem::Impl => "impl".to_string(),
+                            other => unimplemented!("{other:?}"),
+                        };
+                        if def.disambiguator != 0 && !data.is_empty() && data != "_" {
+                            // Don't print disambiguator of empty data
+                            format!("_{}_{}", def.disambiguator, data)
+                        } else {
+                            data
+                        }
                     })
                     .collect::<Vec<String>>()
                     .join("_"),
