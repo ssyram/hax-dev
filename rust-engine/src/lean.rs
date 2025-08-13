@@ -370,7 +370,7 @@ impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
                 bounds_impls: _,
                 trait_: _,
             } => {
-                let generic_args = !generic_args.is_empty().then_some(
+                let generic_args = (!generic_args.is_empty()).then_some(
                     allocator
                         .line()
                         .append(
