@@ -16,6 +16,7 @@ use syn::{
 };
 use utils::*;
 
+mod partial_application;
 mod replace;
 
 mod utils {
@@ -174,4 +175,19 @@ pub fn setup_error_handling_struct(_attr: TokenStream, item: TokenStream) -> Tok
 /// Replaces all occurrences of an identifier within the attached item.
 pub fn replace(attr: TokenStream, item: TokenStream) -> TokenStream {
     replace::replace(attr, item)
+}
+
+/// An attribute procedural macro that creates a new `macro_rules!` definition
+/// by partially applying an existing macro or function with a given token stream.
+///
+/// Usage:
+/// ```rust,ignore
+/// #[partial_apply(original_macro!, my_expression,)]
+/// macro_rules! new_proxy_macro {
+///     // This content is ignored and replaced by the proc macro.
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn partial_apply(attr: TokenStream, item: TokenStream) -> TokenStream {
+    partial_application::partial_apply(attr, item)
 }
