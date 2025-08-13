@@ -108,6 +108,13 @@ pub mod global_id {
             self.to_debug_string() == "_".to_string()
         }
 
+        /// Extract the raw `DefId` from a `GlobalId`.
+        /// This should never be used for name printing.
+        pub fn def_id(&self) -> DefId {
+            let (GlobalId::Concrete(concrete_id) | GlobalId::Projector(concrete_id)) = self;
+            concrete_id.def_id.def_id.clone()
+        }
+
         /// Raw printing of identifier separated by underscore. Should be used
         /// only for testing. See https://github.com/cryspen/hax/issues/1599
         pub fn to_debug_string(&self) -> String {
