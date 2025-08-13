@@ -74,7 +74,7 @@ let variantNameOf = s => {
         return v + "'";
     return v;
 };
-let typeNameOf = s => s.replace(/[A-Z]/g, (l, i) => `${i ? '_' : ''}${l.toLowerCase()}`);
+let typeNameOf = s => s.replace(/[A-Z]/g, (l, i) => `${i ? '_' : ''}${l.toLowerCase()}`).replace(/^module$/, "module'");
 let fieldNameOf = s => {
     let ocaml_keywords = ["and", "as", "assert", "asr", "begin", "class", "constraint",
         "do", "done", "downto", "else", "end", "exception", "external",
