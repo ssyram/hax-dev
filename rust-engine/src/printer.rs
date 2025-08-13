@@ -9,6 +9,9 @@ use crate::ast;
 use ast::visitors::dyn_compatible;
 use pretty::Pretty;
 
+pub mod pretty_ast;
+pub use pretty_ast::PrettyAst;
+
 /// A resugaring is an erased mapper visitor with a name.
 /// A resugaring is a *local* transformation on the AST that produces exclusively `ast::resugared` nodes.
 /// Any involved or non-local transformation should be a phase, not a resugaring.
