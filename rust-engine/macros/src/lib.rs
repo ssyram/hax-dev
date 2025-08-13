@@ -12,7 +12,7 @@ use proc_macro2::{Group, Ident, Span};
 use quote::{ToTokens, quote};
 use syn::{
     Field, FieldsUnnamed, Token, parse_macro_input, parse_quote, punctuated::Punctuated,
-    token::Paren,
+    token::Paren, visit_mut::VisitMut,
 };
 use utils::*;
 
@@ -190,4 +190,45 @@ pub fn replace(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn partial_apply(attr: TokenStream, item: TokenStream) -> TokenStream {
     partial_application::partial_apply(attr, item)
+}
+
+/// Prepend the body any associated function with the given attribute payload.
+/// ```rust,ignore
+/// #[prepend_associated_functions_with(println!("self is {self}");)]
+/// impl Foo {
+///   fn f(self) {}
+/// }
+/// ```
+///
+/// Expands to:
+/// ```rust,ignore
+/// impl Foo {
+///   fn f(self) {
+///     println!("self is {self}");
+///   }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn prepend_associated_functions_with(attr: TokenStream, item: TokenStream) -> TokenStream {
+    struct Visitor {
+        prefix: syn::Expr,
+    }
+    impl VisitMut for Visitor {
+        fn visit_item_impl_mut(&mut self, impl_block: &mut syn::ItemImpl) {
+            // let mut impl_block: syn::ItemImpl = parse_macro_input!(item);
+            for item in &mut impl_block.items {
+                let syn::ImplItem::Fn(impl_item_fn) = item else {
+                    continue;
+                };
+                impl_item_fn.block.stmts.insert(
+                    0,
+                    syn::Stmt::Expr(self.prefix.clone(), Some(Token![;](Span::mixed_site()))),
+                );
+            }
+        }
+    }
+    let mut item: syn::Item = parse_macro_input!(item);
+    let prefix = parse_macro_input!(attr);
+    Visitor { prefix }.visit_item_mut(&mut item);
+    quote! {#item}.into()
 }
