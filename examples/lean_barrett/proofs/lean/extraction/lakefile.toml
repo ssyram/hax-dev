@@ -7,4 +7,4 @@ name = "lean_barrett"
 
 [[require]]
 name = "Hax"
-path = "../../../../../proof-libs/lean"
+path = "../../../../../hax-lib/proof-libs/lean"
