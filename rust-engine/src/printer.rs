@@ -1,4 +1,13 @@
-//! This modules provides types and helper for the printers of hax.
+//! Printer infrastructure: allocators, traits, and the printing pipeline.
+//!
+//! This module contains the common plumbing that backends and printers rely on
+//! to turn AST values into formatted text:
+//! - [`Allocator`]: a thin wrapper around the `pretty` crate's allocator,
+//!   parameterized by the backend, used to produce [`pretty::Doc`] nodes.
+//! - [`PrettyAst`]: the trait that printers implement to provide per-type
+//!   formatting of Hax AST nodes (re-exported from [`pretty_ast`]).
+//! - The resugaring pipeline: a sequence of local AST rewrites that make
+//!   emitted code idiomatic for the target language before pretty-printing.
 
 mod allocator;
 use std::ops::Deref;
@@ -15,6 +24,15 @@ pub use pretty_ast::PrettyAst;
 /// A resugaring is an erased mapper visitor with a name.
 /// A resugaring is a *local* transformation on the AST that produces exclusively `ast::resugared` nodes.
 /// Any involved or non-local transformation should be a phase, not a resugaring.
+///
+/// Backends may provide **multiple resugaring phases** to incrementally refine
+/// the tree into something idiomatic for the target language (e.g., desugaring
+/// pattern sugar into a more uniform core, then resugaring back into target
+/// idioms). Each phase mutates the AST in place and should be small, focused,
+/// and easy to test.
+///
+/// If you add a new phase, make sure it appears in the backend’s
+/// `resugaring_phases()` list in the correct order.
 pub trait Resugaring: for<'a> dyn_compatible::AstVisitorMut<'a> {
     /// Get the name of the resugar.
     fn name(&self) -> String;
@@ -43,7 +61,7 @@ pub struct SourceMap;
 
 /// Helper trait to print AST fragments.
 pub trait Print<T>: Printer {
-    /// Print a fragment using a backend.
+    /// Print a single AST fragment using this backend.
     fn print(self, fragment: T) -> (String, SourceMap);
 }
 

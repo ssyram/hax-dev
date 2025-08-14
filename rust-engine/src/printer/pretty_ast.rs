@@ -1,5 +1,23 @@
-//! This module provides the trait [`PrettyAst`] which is the main trait a printer should implement.
-//! The module also provides a set of macros and helpers.
+//! Pretty-printing support for the hax AST.
+//!
+//! This module defines the trait [`PrettyAst`], which is the **primary trait a printer should
+//! implement**. It also exposes a handful of ergonomic helper macros that wire the
+//! [`pretty`](https://docs.rs/pretty/) crate's allocator into concise printing code, while
+//! taking care of annotations/spans for you.
+//!
+//! # Quickstart
+//! In most printers you:
+//! 1. Implement [`Printer`] for your allocator/type,
+//! 2. Implement [`PrettyAst`] for that allocator,
+//! 3. Call `x.pretty(&allocator)` on AST values.
+//!
+//! See [`super::backends`] for backend and printer examples.
+//!
+//! # Lifetimes and Parameters
+//! - `'a`: lifetime tied to the **document allocator** (from `pretty::DocAllocator`).
+//! - `'b`: lifetime of the **borrowed AST** node(s) being printed.
+//! - `A`: the **annotation** type carried in documents (e.g., spans for source maps).
+//!   `PrettyAst` is generic over `A`.
 
 use std::fmt::Display;
 
@@ -12,10 +30,32 @@ use identifiers::*;
 use literals::*;
 use resugared::*;
 
-/// A newtype for any value that serde can serialize. When formatted, this
-/// renders to a convenient `just` command line invocation to see the full
-/// value, serialized as JSON.
-pub struct DebugJSON<T: serde::Serialize>(T);
+/// This type is primarily useful inside printer implementations when you want a
+/// low-friction way to inspect an AST fragment.
+///
+/// # What it does
+/// - Appends a JSON representation of the wrapped value to
+///   `"/tmp/hax-ast-debug.json"` (one JSON document per line).
+/// - Implements [`std::fmt::Display`] to print a `just` invocation you can paste in a shell
+///   to re-open that same JSON by line number:
+///   `just debug-json <line-id>`
+///
+/// # Example
+/// ```rust
+/// # use hax_rust_engine::printer::pretty_ast::DebugJSON;
+/// # #[derive(serde::Serialize)]
+/// # struct Small { x: u32 }
+/// let s = Small { x: 42 };
+/// // Prints something like: `just debug-json 17`.
+/// println!("{}", DebugJSON(&s));
+/// // Running `just debug-json 17` will print `{"x":42}`
+/// ```
+///
+/// # Notes
+/// - This is a **debugging convenience** and intentionally has a side-effect (file write).
+///   Avoid keeping it in user-facing output paths.
+/// - The file grows over time; occasionally delete it if you no longer need historical entries.
+pub struct DebugJSON<T: serde::Serialize>(pub T);
 
 impl<T: serde::Serialize> Display for DebugJSON<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -64,7 +104,37 @@ macro_rules! todo_document {
 pub use todo_document;
 
 #[macro_export]
-/// `install_pretty_helpers!(allocator: AllocatorType)` defines locally the helpers macros and functions using allocator `allocator`.
+/// Install pretty-printing helpers partially applied with a given local
+/// allocator.
+///
+/// This macro declares a set of small, local macros that proxy to the
+/// underlying [`pretty::DocAllocator`] methods and macro while capturing your
+/// allocator value. It keeps printing code concise and avoids passing the
+/// allocator around explicitly.
+///
+/// # Syntax
+/// ```rust,ignore
+/// install_pretty_helpers!(alloc_ident: AllocatorType)
+/// ```
+///
+/// - `alloc_ident`: the in-scope variable that implements both
+///   [`pretty::DocAllocator`] and [`Printer`].
+/// - `AllocatorType`: the concrete type of that variable.
+///
+/// # What gets installed
+/// - macro shorthands for common allocator methods:
+///   [`pretty::DocAllocator::nil`], [`pretty::DocAllocator::fail`],
+///   [`pretty::DocAllocator::hardline`], [`pretty::DocAllocator::space`],
+///   [`pretty::DocAllocator::line`], [`pretty::DocAllocator::line_`],
+///   [`pretty::DocAllocator::softline`], [`pretty::DocAllocator::softline_`],
+///   [`pretty::DocAllocator::as_string`], [`pretty::DocAllocator::text`],
+///   [`pretty::DocAllocator::concat`], [`pretty::DocAllocator::intersperse`],
+///   [`pretty::DocAllocator::column`], [`pretty::DocAllocator::nesting`],
+///   [`pretty::DocAllocator::reflow`].
+/// - a partially applied version of [`pretty::docs!`].
+/// - [`opt!`]: expands `opt!(expr)` to `expr.as_ref().map(|e| e.pretty(alloc_ident))`.
+/// - [`iter_pretty!`]: expands to `iter.map(|x| x.pretty(alloc_ident))`.
+/// - [`todo_document!`]: produce a placeholder document (that does not panic).
 macro_rules! install_pretty_helpers {
     ($allocator:ident : $allocator_type:ty) => {
         /// `opt!(e)` is a shorthand for `e.as_ref().map(|e| docs![e])`
@@ -132,22 +202,54 @@ macro_rules! mk {
     ($($ty:ident),*) => {
         pastey::paste! {
             /// A trait that defines a print method per type in the AST.
-            /// This is the main trait a printer should implement.
-            /// This trait takes care automatically of annotations (think source maps).
+            ///
+            /// This is the main trait a printer should implement. It ties
+            /// together:
+            /// - the [`pretty::DocAllocator`] implementation that builds
+            ///   documents,
+            /// - the [`Printer`] behavior (syntax highlighting, punctuation
+            ///   helpers, …),
+            /// - and annotation plumbing (`A`) used for source maps.
+            ///
+            /// ## Lifetimes and Type Parameters
+            /// - `'a`: the allocator/document lifetime.
+            /// - `'b`: the lifetime of borrowed AST values being printed.
+            /// - `A`: the annotation type carried by documents (must be
+            ///   `Clone`).
+            ///
+            /// ## Implementing `PrettyAst`
+            /// ```rust,ignore
+            /// impl<'a, 'b, A: 'a + Clone> PrettyAst<'a, 'b, A> for MyPrinter { }
+            /// ```
+            ///
+            /// You then implement the actual formatting logic in the generated
+            /// per-type methods. These methods are intentionally marked
+            /// `#[deprecated]` to discourage calling them directly; instead,
+            /// call `node.pretty(self)` from the [`pretty::Pretty`] trait to
+            /// ensure annotations and spans are applied correctly.
+            ///
+            /// Note that using `install_pretty_helpers!` will produce macro
+            /// that implicitely use `self` as allocator. Take a look at a
+            /// printer in the [`backends`] module for an example.
             pub trait PrettyAst<'a, 'b, A: 'a + Clone>: DocAllocator<'a, A> + Printer {
-                /// Produces a todo document.
+                /// Produce a non-panicking placeholder document. In general, prefer the use of the helper macro [`todo_document!`].
                 fn todo_document(&'a self, message: &str) -> DocBuilder<'a, Self, A> {
                     self.as_string(message)
                 }
-                /// Produces an error document for an unimplemented document.
+                /// Produce a structured error document for an unimplemented
+                /// method.
+                ///
+                /// Printers may override this for nicer diagnostics (e.g.,
+                /// colored "unimplemented" banners or links back to source
+                /// locations). The default produces a small, debuggable piece
+                /// of text that includes the method name and a JSON handle for
+                /// the AST fragment (via [`DebugJSON`]).
                 fn unimplemented_method(&'a self, method: &str, ast: ast::fragment::FragmentRef<'_>) -> DocBuilder<'a, Self, A> {
                     self.text(format!("`{method}` unimpl, {}", DebugJSON(ast))).parens()
                 }
                 $(
-                    #[doc = "Defines how a printer prints a given type."]
-                    #[doc = "Don't call this method directly, instead use `Pretty::pretty`."]
-                    #[doc = "Calling this method directly will cause issues related to spans or syntax highlighting."]
-                    #[deprecated = concat!("Please use `Pretty::pretty` instead: the method `", stringify!([<$ty:snake>]), "` should never be called directly.")]
+                    #[doc = "Define how the printer formats a value of this AST type."]
+                    #[doc = "⚠️ **Do not call this method directly**. Use [`pretty::Pretty::pretty`] instead, so annotations/spans are preserved correctly."]
                     fn [<$ty:snake>](&'a self, [<$ty:snake>]: &'b $ty) -> DocBuilder<'a, Self, A> {
                         mk!(@method_body $ty [<$ty:snake>] self [<$ty:snake>])
                     }

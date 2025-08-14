@@ -1,11 +1,31 @@
-//! The `Fragment` type for holding arbitrary AST fragments.
+//! Enumeration types of any possible fragment of AST (`Fragment` / `FragmentRef`).
 //!
-//! This enum is useful for diagnostics or dynamic dispatch on generic AST values.
-//! It acts as a type-erased wrapper around various core AST node types.
+//! Many components (diagnostics, logging, printers) want to refer to “some AST
+//! node” without knowing its concrete type. This module provides:
+//! - [`Fragment`]: an **owned** enum covering core AST node types.
+//! - [`FragmentRef`]: a **borrowed** counterpart.
+//!
+//! These are handy when implementing generic facilities such as error reporters,
+//! debugging helpers, or pretty-printers that need to branch on “what kind of
+//! node is this?” at runtime.
+//!
+//! ## Notes
+//! - Both enums are mechanically generated to stay in sync with the canonical
+//!   AST types. If you add a new core AST node, update the macro invocation at
+//!   the bottom of this file so `Fragment`/`FragmentRef` learn about it.
+//! - The [`Unknown`] variant exists as a last-resort placeholder when a value
+//!   cannot be represented by a known variant. Prefer concrete variants when
+//!   possible.
 
 use crate::ast::*;
 
-/// Macro that derives automatically the `Fragment` and `FragmentRef` enumerations.
+/// The `mk!` macro takes a flat list of AST type identifiers and expands to
+/// two enums:
+/// - `Fragment` with owned variants (`Foo(Foo)`), and
+/// - `FragmentRef<'a>` with borrowed variants (`Foo(&'a Foo)`).
+///
+/// The generated enums also implement the obvious `From<T>` conversions, making
+/// it ergonomic to wrap concrete AST values as fragments.
 macro_rules! mk {
     ($($ty:ident),*) => {
         #[derive_group_for_ast]
