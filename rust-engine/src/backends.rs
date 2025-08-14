@@ -1,14 +1,15 @@
 //! Code generation backends.
 //!
-//! A backend turns the hax AST into a concrete textual form: F*, Lean, or any
-//! future target.
+//! A backend is consititued of:
+//!  - a list of AST transformations to apply, those are called phases.
+//!  - and a printer.
 //!
-//! This top-level module is mostly an **index** of available backends and a
-//! small **prelude** to make backend modules concise.
+//! This top-level module is mostly an index of available backends and a
+//! small prelude to make backend modules concise.
 //!
 //! # Adding a new backend
 //! 1. Create a submodule under `src/backends/`, e.g. `foo.rs`.
-//! 2. Put your printer + glue code there.
+//! 2. Put your printer and backend there.
 //! 3. Re-export it here with `pub mod foo;`.
 //!
 //! See [`rust`] for an example implementation.
