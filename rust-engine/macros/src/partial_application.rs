@@ -21,6 +21,7 @@ impl syn::parse::Parse for PartialApplyArgs {
     }
 }
 
+/// See [`super::partial_apply`].
 pub(crate) fn partial_apply(attr: TokenStream, item: TokenStream) -> TokenStream {
     let PartialApplyArgs {
         ident,
