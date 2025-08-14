@@ -215,7 +215,6 @@ pub fn prepend_associated_functions_with(attr: TokenStream, item: TokenStream) -
     }
     impl VisitMut for Visitor {
         fn visit_item_impl_mut(&mut self, impl_block: &mut syn::ItemImpl) {
-            // let mut impl_block: syn::ItemImpl = parse_macro_input!(item);
             for item in &mut impl_block.items {
                 let syn::ImplItem::Fn(impl_item_fn) = item else {
                     continue;
