@@ -173,6 +173,13 @@ pub fn setup_error_handling_struct(_attr: TokenStream, item: TokenStream) -> Tok
 
 #[proc_macro_attribute]
 /// Replaces all occurrences of an identifier within the attached item.
+///
+/// For example, `#[replace(Name => A, B, C)]` will replace `Name` by `A, B, C`
+/// in the item the proc-macro is applied on.
+///
+/// The special case `#[replace(Name => include(VisitableAstNodes))]` will
+/// expand to a list of visitable AST nodes. This is useful in practice, as this
+/// list is often repeated.
 pub fn replace(attr: TokenStream, item: TokenStream) -> TokenStream {
     replace::replace(attr, item)
 }
