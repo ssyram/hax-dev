@@ -132,17 +132,10 @@ pub use todo_document;
 ///   [`pretty::DocAllocator::column`], [`pretty::DocAllocator::nesting`],
 ///   [`pretty::DocAllocator::reflow`].
 /// - a partially applied version of [`pretty::docs!`].
-/// - [`opt!`]: expands `opt!(expr)` to `expr.as_ref().map(|e| e.pretty(alloc_ident))`.
 /// - [`iter_pretty!`]: expands to `iter.map(|x| x.pretty(alloc_ident))`.
 /// - [`todo_document!`]: produce a placeholder document (that does not panic).
 macro_rules! install_pretty_helpers {
     ($allocator:ident : $allocator_type:ty) => {
-        /// `opt!(e)` is a shorthand for `e.as_ref().map(|e| docs![e])`
-        #[allow(unused)]
-        macro_rules! opt {
-            ($e:expr) => {$e.as_ref().map(|e| <_ as pretty::Pretty<'_, $allocator_type, _>>::pretty(e, $allocator))};
-        }
-
         /// `iter_pretty(e)` is a shorthand for `e.iter().map(|e| docs![e])`
         #[allow(unused)]
         macro_rules! iter_pretty {
