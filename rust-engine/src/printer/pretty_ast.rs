@@ -132,16 +132,9 @@ pub use todo_document;
 ///   [`pretty::DocAllocator::column`], [`pretty::DocAllocator::nesting`],
 ///   [`pretty::DocAllocator::reflow`].
 /// - a partially applied version of [`pretty::docs!`].
-/// - [`iter_pretty!`]: expands to `iter.map(|x| x.pretty(alloc_ident))`.
 /// - [`todo_document!`]: produce a placeholder document (that does not panic).
 macro_rules! install_pretty_helpers {
     ($allocator:ident : $allocator_type:ty) => {
-        /// `iter_pretty(e)` is a shorthand for `e.iter().map(|e| docs![e])`
-        #[allow(unused)]
-        macro_rules! iter_pretty {
-            ($e:expr) => {$e.iter().map(|el| el.pretty($allocator))};
-        }
-
         $crate::printer::pretty_ast::install_pretty_helpers!(
             @$allocator,
             #[doc = ::std::concat!("Proxy macro for [`", stringify!($crate), "::printer::pretty_ast::todo_document`] that automatically uses `", stringify!($allocator),"` as allocator.")]

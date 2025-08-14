@@ -30,7 +30,7 @@ const _: () = {
 
     impl<'a, 'b, A: 'a + Clone> PrettyAst<'a, 'b, A> for Allocator<Rust> {
         fn module(&'a self, module: &'b Module) -> pretty::DocBuilder<'a, Self, A> {
-            intersperse!(iter_pretty!(module.items), docs![hardline!(), hardline!()])
+            intersperse!(&module.items, docs![hardline!(), hardline!()])
         }
         fn item(&'a self, item: &'b Item) -> pretty::DocBuilder<'a, Self, A> {
             docs![&item.meta, item.kind()]
@@ -49,7 +49,7 @@ const _: () = {
                         text!("fn"),
                         space!(),
                         name,
-                        intersperse!(iter_pretty!(params), docs![",", line!()])
+                        intersperse!(params, docs![",", line!()])
                             .enclose(line_!(), line_!())
                             .nest(INDENT)
                             .parens()
