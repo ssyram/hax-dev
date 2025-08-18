@@ -11,7 +11,6 @@
 pub mod ast;
 pub mod backends;
 pub mod hax_io;
-pub mod lean;
 pub mod names;
 pub mod ocaml_engine;
 pub mod printer;

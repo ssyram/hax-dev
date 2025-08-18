@@ -1,6 +1,6 @@
 use hax_rust_engine::{
     ast::{Item, span::Span},
-    lean::Lean,
+    backends::lean::Lean,
     ocaml_engine::{ExtendedToEngine, Response},
     printer::Allocator,
 };

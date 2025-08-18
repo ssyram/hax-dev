@@ -14,6 +14,7 @@
 //!
 //! See [`rust`] for an example implementation.
 
+pub mod lean;
 pub mod rust;
 
 #[allow(unused)]
