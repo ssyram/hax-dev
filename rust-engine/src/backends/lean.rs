@@ -12,6 +12,11 @@ use crate::ast::identifiers::*;
 use crate::ast::literals::*;
 use crate::ast::*;
 
+// Note: this module was moved here temporarly.
+// This module used to provide a wrapper type `Allocator`.
+// This wrapper type is no longer useful.
+// It was thus removed from the `printer`, and moved here, where it is still used.
+// This is temporary: see https://github.com/cryspen/hax/issues/1604.
 mod deprecated_allocator_module {
     //! This module provides a custom [`pretty`] allocator, indexed by a printer,
     //! enabling multiple printers to cohexist and to implement the type `Pretty`.
