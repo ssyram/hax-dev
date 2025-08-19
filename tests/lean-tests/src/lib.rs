@@ -39,13 +39,3 @@ def multiline : Unit := ()
 fn test_before_verbatim_multi_line(x: u8) -> u8 {
     32
 }
-
-type TId = i8;
-type TTuple = (
-    (),
-    (u8,),
-    (u8, u16),
-    (u8, u16, u32),
-    (u8, u16, u32, u64),
-    (u8, u16, u32, u64, usize),
-);

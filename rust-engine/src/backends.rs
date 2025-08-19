@@ -18,7 +18,7 @@ pub mod lean;
 pub mod rust;
 
 use crate::{
-    ast::{span::Span, Item, Metadata, Module},
+    ast::{Item, Metadata, Module, span::Span},
     printer::{Print, Printer},
 };
 use hax_types::engine_api::File;
