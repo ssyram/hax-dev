@@ -1,6 +1,6 @@
 use hax_rust_engine::{
     ast::{Item, span::Span},
-    backends::lean::Lean,
+    backends,
     ocaml_engine::{ExtendedToEngine, Response},
 };
 use hax_types::{cli_options::Backend, engine_api::File};
@@ -12,8 +12,8 @@ fn krate_name(items: &Vec<Item>) -> String {
     head_item.ident.krate()
 }
 
-fn lean_backend(items: Vec<Item>) {
-    use hax_rust_engine::backends::lean::Allocator;
+fn lean_backend(items: Vec<Item>) -> Vec<File> {
+    use backends::lean::*;
     let krate = krate_name(&items);
 
     // For now, the main function always calls the Lean backend
@@ -47,11 +47,11 @@ set_option linter.unusedVariables false"
     let item_docs: DocBuilder<_, Span> =
         header.append(allocator.intersperse(items, allocator.hardline()));
 
-    hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(File {
+    vec![File {
         path: krate + ".lean",
         contents: item_docs.pretty(80).to_string(),
         sourcemap: None,
-    }));
+    }]
 }
 
 fn main() {
@@ -73,7 +73,7 @@ fn main() {
         panic!()
     };
 
-    match &value.backend.backend {
+    let files = match &value.backend.backend {
         Backend::Fstar { .. }
         | Backend::Coq { .. }
         | Backend::Ssprove { .. }
@@ -83,21 +83,14 @@ fn main() {
             value.backend.backend
         ),
         Backend::Lean => lean_backend(items),
-        Backend::Rust => {
-            use hax_rust_engine::backends::{apply_backend, rust::RustBackend};
-            let files = apply_backend(RustBackend, items);
-            for file in files {
-                hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(
-                    file,
-                ));
-            }
-        }
-        Backend::GenerateRustEngineNames => hax_rust_engine::hax_io::write(
-            &hax_types::engine_api::protocol::FromEngine::File(File {
-                path: "generated.rs".into(),
-                contents: hax_rust_engine::names::codegen::export_def_ids_to_mod(items),
-                sourcemap: None,
-            }),
-        ),
+        Backend::Rust => backends::apply_backend(backends::rust::RustBackend, items),
+        Backend::GenerateRustEngineNames => vec![File {
+            path: "generated.rs".into(),
+            contents: hax_rust_engine::names::codegen::export_def_ids_to_mod(items),
+            sourcemap: None,
+        }],
+    };
+    for file in files {
+        hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(file));
     }
 }
