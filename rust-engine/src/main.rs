@@ -2,7 +2,6 @@ use hax_rust_engine::{
     ast::{Item, span::Span},
     backends::lean::Lean,
     ocaml_engine::{ExtendedToEngine, Response},
-    printer::Allocator,
 };
 use hax_types::{cli_options::Backend, engine_api::File};
 
@@ -14,6 +13,7 @@ fn krate_name(items: &Vec<Item>) -> String {
 }
 
 fn lean_backend(items: Vec<Item>) {
+    use hax_rust_engine::backends::lean::Allocator;
     let krate = krate_name(&items);
 
     // For now, the main function always calls the Lean backend
