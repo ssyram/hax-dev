@@ -19,15 +19,6 @@ use pretty::Pretty;
 pub mod pretty_ast;
 pub use pretty_ast::PrettyAst;
 
-// /// The allocator used by hax' printer.
-// pub struct Allocator(pretty::BoxAllocator);
-
-// impl Default for Allocator {
-//     fn default() -> Self {
-//         Self(pretty::BoxAllocator)
-//     }
-// }
-
 /// Implements `pretty::DocAllocator<'a, A>` for a local types
 /// that already implement `HasAllocator<'a, A>`.
 ///
