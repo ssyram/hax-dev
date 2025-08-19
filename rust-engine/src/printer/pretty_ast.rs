@@ -23,7 +23,7 @@ use std::fmt::Display;
 
 use super::*;
 use crate::ast::*;
-use pretty::DocBuilder;
+use pretty::{DocAllocator, DocBuilder};
 
 use crate::symbol::Symbol;
 use identifiers::*;
@@ -217,7 +217,7 @@ macro_rules! mk {
             /// Note that using `install_pretty_helpers!` will produce macro
             /// that implicitely use `self` as allocator. Take a look at a
             /// printer in the [`backends`] module for an example.
-            pub trait PrettyAst<'a, 'b, A: 'a + Clone>: pretty::DocAllocator<'a, A> + Sized {
+            pub trait PrettyAst<'a, 'b, A: 'a + Clone>: DocAllocator<'a, A> + Sized {
                 /// Produce a non-panicking placeholder document. In general, prefer the use of the helper macro [`todo_document!`].
                 fn todo_document(&'a self, message: &str) -> DocBuilder<'a, Self, A> {
                     self.as_string(message)
