@@ -42,13 +42,13 @@ const _: () = {
     macro_rules! concat {($($tt:tt)*) => {disambiguated_concat!($($tt)*)};}
 
     impl<'a, 'b, A: 'a + Clone> PrettyAst<'a, 'b, A> for RustPrinter {
-        fn module(&'a self, module: &'b Module) -> pretty::DocBuilder<'a, Self, A> {
+        fn module(&'a self, module: &'b Module) -> DocBuilder<'a, Self, A> {
             intersperse!(&module.items, docs![hardline!(), hardline!()])
         }
-        fn item(&'a self, item: &'b Item) -> pretty::DocBuilder<'a, Self, A> {
+        fn item(&'a self, item: &'b Item) -> DocBuilder<'a, Self, A> {
             docs![&item.meta, item.kind()]
         }
-        fn item_kind(&'a self, item_kind: &'b ItemKind) -> pretty::DocBuilder<'a, Self, A> {
+        fn item_kind(&'a self, item_kind: &'b ItemKind) -> DocBuilder<'a, Self, A> {
             match item_kind {
                 ItemKind::Fn {
                     name,
