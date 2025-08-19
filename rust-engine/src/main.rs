@@ -83,6 +83,15 @@ fn main() {
             value.backend.backend
         ),
         Backend::Lean => lean_backend(items),
+        Backend::Rust => {
+            use hax_rust_engine::backends::{apply_backend, rust::RustBackend};
+            let files = apply_backend(RustBackend, items);
+            for file in files {
+                hax_rust_engine::hax_io::write(&hax_types::engine_api::protocol::FromEngine::File(
+                    file,
+                ));
+            }
+        }
         Backend::GenerateRustEngineNames => hax_rust_engine::hax_io::write(
             &hax_types::engine_api::protocol::FromEngine::File(File {
                 path: "generated.rs".into(),
