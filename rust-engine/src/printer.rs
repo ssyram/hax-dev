@@ -9,7 +9,6 @@
 //! - The resugaring pipeline: a sequence of local AST rewrites that make
 //!   emitted code idiomatic for the target language before pretty-printing.
 
-mod allocator;
 use std::ops::Deref;
 
 use crate::ast::{self, span::Span};
