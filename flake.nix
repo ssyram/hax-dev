@@ -226,6 +226,7 @@
               packages.fstar
               packages.proverif
               pkgs.jq
+              pkgs.elan
             ];
           };
           default = pkgs.mkShell {
