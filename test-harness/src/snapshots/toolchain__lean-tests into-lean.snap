@@ -30,7 +30,7 @@ diagnostics = []
 "lean_tests.lean" = '''
 
 -- Experimental lean backend for Hax
--- Lib.lean can be found in hax/proof-libs/lean :
+-- The Hax prelude library can be found in hax/proof-libs/lean
 import Hax
 import Std.Tactic.Do
 import Std.Do.Triple
@@ -42,7 +42,7 @@ set_option mvcgen.warning false
 set_option linter.unusedVariables false
 
 
-sorry /- unsupported by the Hax engine -/
+
 def FORTYTWO : USize := 42
 def MinusFORTYTWO : ISize := -42
 def returns42 (_ : hax_Tuple0) : Result USize := do FORTYTWO
@@ -70,12 +70,10 @@ def closure (_ : hax_Tuple0) : Result Int32 := do
     f2
       (constr_hax_Tuple2 (hax_Tuple2_Tuple0 := 2) (hax_Tuple2_Tuple1 := 3))))
 
-def _ : Result hax_Tuple0 := do hax_Tuple0
 
 @[spec]
 def test_before_verbatime_single_line (x : UInt8) : Result UInt8 := do 42
 
-def _ : Result hax_Tuple0 := do hax_Tuple0
 
 
 def multiline : Unit := ()
