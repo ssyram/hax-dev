@@ -39,7 +39,9 @@ jobs:
         
     - name: Test the examples
       run: |
-        nix build .#check-examples -L
+        cd examples
+        nix develop ..#ci-examples --command make clean
+        nix develop ..#ci-examples --command make
 
     - name: Try to extract Rust By Examples
       run: |
