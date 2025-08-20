@@ -85,7 +85,7 @@ const _: () = {
                 intersperse!(
                     "
 -- Experimental lean backend for Hax
--- Lib.lean can be found in hax/proof-libs/lean :
+-- The Hax prelude library can be found in hax/proof-libs/lean
 import Hax
 import Std.Tactic.Do
 import Std.Do.Triple
@@ -94,12 +94,13 @@ open Std.Do
 open Std.Tactic
 
 set_option mvcgen.warning false
-set_option linter.unusedVariables false"
-                        .lines(),
+set_option linter.unusedVariables false
+
+
+"
+                    .lines(),
                     hardline!(),
                 ),
-                hardline!(),
-                hardline!(),
                 intersperse!(items, hardline!())
             ]
         }
