@@ -220,6 +220,8 @@ instance {β} : Coe (α -> i32 -> β) (α -> Nat -> β) where
 instance : OfNat (Result Nat) n where
   ofNat := pure (n)
 
+instance {α n} [i: OfNat α n] : OfNat (Result α) n where
+  ofNat := pure (i.ofNat)
 
 /-
 
