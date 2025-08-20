@@ -59,11 +59,14 @@ pub struct DebugJSON<T: serde::Serialize>(pub T);
 
 impl<T: serde::Serialize> Display for DebugJSON<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const PATH: &str = "/tmp/hax-ast-debug.json";
+        /// Write a new JSON as a line at the end of `PATH`
         fn append_line_json(path: &str, value: &serde_json::Value) -> std::io::Result<usize> {
             use std::{
                 fs::OpenOptions,
                 io::{BufRead, BufReader, Write},
             };
+            cleanup();
             let file = OpenOptions::new()
                 .read(true)
                 .append(true)
@@ -74,7 +77,18 @@ impl<T: serde::Serialize> Display for DebugJSON<T> {
             Ok(count)
         }
 
-        const PATH: &str = "/tmp/hax-ast-debug.json";
+        /// Drop the file at `PATH` when we first write
+        fn cleanup() {
+            static DID_RUN: AtomicBool = AtomicBool::new(false);
+            use std::sync::atomic::{AtomicBool, Ordering};
+            if DID_RUN
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                let _ignored = std::fs::remove_file(PATH);
+            }
+        }
+
         let id = append_line_json(PATH, &serde_json::to_value(&self.0).unwrap()).unwrap();
         write!(f, "`just debug-json {id}`")
     }
