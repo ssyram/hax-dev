@@ -419,7 +419,11 @@ set_option linter.unusedVariables false
         }
 
         fn item(&'a self, item: &'b Item) -> DocBuilder<'a, Self, A> {
-            docs![item.kind()]
+            if LeanPrinter::printable_item(&item) {
+                docs![item.kind()]
+            } else {
+                nil!()
+            }
         }
     }
 };
