@@ -44,7 +44,7 @@ The `<EXAMPLE>/proofs/coq/extraction` folders contain the generated Coq modules.
 
 Two examples are fine-tuned to showcase the Lean backend: `lean_barrett` and
 `lean_chacha20`. For both, the lean extraction can be obtained by running `cargo
-hax into lean`
+hax into lean`.
 
 ### Barrett
 
