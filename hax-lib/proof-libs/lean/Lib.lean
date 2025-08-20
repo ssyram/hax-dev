@@ -817,7 +817,9 @@ end Fold
 Rust arrays, are represented as Lean `Vector` (Lean Arrays of known size)
 
 -/
-section Array
+section RustArray
+
+abbrev RustArray := Vector
 
 inductive array_TryFromSliceError where
   | array_TryFromSliceError
@@ -849,7 +851,7 @@ def convert_TryInto_try_into {α n} (a: Array α) :
        .err .array_TryFromSliceError
      )
 
-end Array
+end RustArray
 
 /-
 
@@ -1039,6 +1041,8 @@ Rust vectors are represented as Lean Arrays (variable size)
 
 -/
 section RustVectors
+
+abbrev RustVector := Array
 
 def alloc_Global : Type := Unit
 def vec_Vec (α: Type) (_Allocator:Type) : Type := Array α
