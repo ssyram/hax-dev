@@ -168,7 +168,6 @@ set_option linter.unusedVariables false
                     fields,
                     base: _,
                 } => {
-                    // Should be turned into a resugaring once https://github.com/cryspen/hax/pull/1528 have been merged
                     let record_args = (fields.len() > 0).then_some(
                         docs![
                             line!(),
