@@ -79,8 +79,6 @@ const _: () = {
     impl<'a, 'b, A: 'a + Clone> PrettyAst<'a, 'b, A> for LeanPrinter {
         fn module(&'a self, module: &'b Module) -> DocBuilder<'a, Self, A> {
             let items = &module.items;
-            // .iter()
-            //     .filter(LeanPrinter::printable_item);
             docs![
                 intersperse!(
                     "
