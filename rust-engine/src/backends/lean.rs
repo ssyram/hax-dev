@@ -134,7 +134,8 @@ set_option linter.unusedVariables false
                         ]
                         .group()
                     } else {
-                        todo!()
+                        // The Hax engine should ensure that there is always an else branch
+                        unreachable!()
                     }
                 }
                 ExprKind::App {
