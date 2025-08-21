@@ -25,9 +25,9 @@ fn main() {
 
     let files = match &value.backend.backend {
         Backend::Fstar { .. }
-        | Backend::Coq { .. }
-        | Backend::Ssprove { .. }
-        | Backend::Easycrypt { .. }
+        | Backend::Coq
+        | Backend::Ssprove
+        | Backend::Easycrypt
         | Backend::ProVerif { .. } => panic!(
             "The Rust engine cannot be called with backend {}.",
             value.backend.backend

@@ -27,7 +27,7 @@ pub struct LeanBackend;
 fn crate_name(items: &Vec<Item>) -> String {
     // We should have a proper treatment of empty modules, see
     // https://github.com/cryspen/hax/issues/1617
-    let head_item = items.get(0).unwrap();
+    let head_item = items.first().unwrap();
     head_item.ident.krate()
 }
 
@@ -170,7 +170,7 @@ set_option linter.unusedVariables false
                     fields,
                     base: _,
                 } => {
-                    let record_args = (fields.len() > 0).then_some(
+                    let record_args = (!fields.is_empty()).then_some(
                         docs![
                             line!(),
                             intersperse!(
@@ -267,11 +267,7 @@ set_option linter.unusedVariables false
                     }
                 }
                 TyKind::Arrow { inputs, output } => docs![
-                    concat![
-                        inputs
-                            .into_iter()
-                            .map(|input| docs![input, reflow!(" -> ")])
-                    ],
+                    concat![inputs.iter().map(|input| docs![input, reflow!(" -> ")])],
                     "Result ",
                     output
                 ],
@@ -288,9 +284,9 @@ set_option linter.unusedVariables false
 
         fn literal(&'a self, literal: &'b Literal) -> DocBuilder<'a, Self, A> {
             docs![match literal {
-                Literal::String(symbol) => format!("\"{}\"", symbol.to_string()),
-                Literal::Char(c) => format!("'{}'", c),
-                Literal::Bool(b) => format!("{}", b),
+                Literal::String(symbol) => format!("\"{symbol}\""),
+                Literal::Char(c) => format!("'{c}'"),
+                Literal::Bool(b) => format!("{b}"),
                 Literal::Int {
                     value,
                     negative,
@@ -381,7 +377,7 @@ set_option linter.unusedVariables false
                 } => match &*body.kind {
                     // Literal consts. This should be done by a resugaring, see
                     // https://github.com/cryspen/hax/issues/1614
-                    ExprKind::Literal(l) if params.len() == 0 => {
+                    ExprKind::Literal(l) if params.is_empty() => {
                         docs!["def ", name, reflow!(" : "), &body.ty, reflow!(" := "), l].group()
                     }
                     _ => {
@@ -426,7 +422,7 @@ set_option linter.unusedVariables false
         }
 
         fn item(&'a self, item: &'b Item) -> DocBuilder<'a, Self, A> {
-            if LeanPrinter::printable_item(&item) {
+            if LeanPrinter::printable_item(item) {
                 docs![item.kind()]
             } else {
                 nil!()
