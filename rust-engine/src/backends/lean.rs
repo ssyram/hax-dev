@@ -274,8 +274,12 @@ set_option linter.unusedVariables false
                     output
                 ],
                 TyKind::Param(local_id) => docs![local_id],
-                TyKind::Slice(ty) => docs!["RustSlice ", ty].parens().group(),
-                TyKind::Array { ty, length } => docs!["RustArray ", ty, softline!(), &(**length)],
+                TyKind::Slice(ty) => docs!["RustSlice", line!(), ty].parens().group(),
+                TyKind::Array { ty, length } => {
+                    docs!["RustArray", line!(), ty, line!(), &(**length)]
+                        .parens()
+                        .group()
+                }
                 _ => todo!(),
             }
         }
