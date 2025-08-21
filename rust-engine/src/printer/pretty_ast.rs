@@ -61,24 +61,21 @@ impl<T: serde::Serialize> Display for DebugJSON<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         const PATH: &str = "/tmp/hax-ast-debug.json";
         /// Write a new JSON as a line at the end of `PATH`
-        fn append_line_json(path: &str, value: &serde_json::Value) -> std::io::Result<usize> {
-            use std::{
-                fs::OpenOptions,
-                io::{BufRead, BufReader, Write},
-            };
+        fn append_line_json(value: &serde_json::Value) -> std::io::Result<usize> {
+            use std::io::{BufRead, BufReader, Write};
             cleanup();
-            let file = OpenOptions::new()
+            let file = std::fs::OpenOptions::new()
                 .read(true)
                 .append(true)
                 .create(true)
-                .open(path)?;
+                .open(PATH)?;
             let count = BufReader::new(&file).lines().count();
             writeln!(&file, "{value}")?;
             Ok(count)
         }
 
         /// Drop the file at `PATH` when we first write
-        fn clean_up() {
+        fn cleanup() {
             static DID_RUN: AtomicBool = AtomicBool::new(false);
             use std::sync::atomic::{AtomicBool, Ordering};
             if DID_RUN
@@ -89,7 +86,7 @@ impl<T: serde::Serialize> Display for DebugJSON<T> {
             }
         }
 
-        let id = append_line_json(PATH, &serde_json::to_value(&self.0).unwrap()).unwrap();
+        let id = append_line_json(&serde_json::to_value(&self.0).unwrap()).unwrap();
         write!(f, "`just debug-json {id}`")
     }
 }
