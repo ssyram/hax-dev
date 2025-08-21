@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 const FORTYTWO: usize = 42;
-const MinusFORTYTWO: isize = -42;
+const MINUS_FORTYTWO: isize = -42;
 
 fn returns42() -> usize {
     FORTYTWO

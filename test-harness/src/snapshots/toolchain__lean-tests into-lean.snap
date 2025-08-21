@@ -44,7 +44,7 @@ set_option linter.unusedVariables false
 
 
 def FORTYTWO : USize := 42
-def MinusFORTYTWO : ISize := -42
+def MINUS_FORTYTWO : ISize := -42
 def returns42 (_ : hax_Tuple0) : Result USize := do FORTYTWO
 
 def add_two_numbers (x : USize) (y : USize) : Result USize := do
