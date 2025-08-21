@@ -25,7 +25,8 @@ impl Backend for RustBackend {
     type Printer = RustPrinter;
 
     fn module_path(&self, _module: &Module) -> camino::Utf8PathBuf {
-        camino::Utf8PathBuf::from("test.rs")
+        // TODO: dummy path for now, until we have GlobalId rendering (see #1599).
+        camino::Utf8PathBuf::from("dummy.rs")
     }
 }
 
