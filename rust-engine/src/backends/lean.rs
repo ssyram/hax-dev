@@ -256,7 +256,7 @@ set_option linter.unusedVariables false
                 TyKind::Primitive(primitive_ty) => docs![primitive_ty],
                 TyKind::Tuple(items) => intersperse!(items, reflow![" * "]).parens().group(),
                 TyKind::App { head, args } => {
-                    if args.len() == 0 {
+                    if args.is_empty() {
                         docs![head]
                     } else {
                         docs![head, softline!(), intersperse!(args, softline!())]
