@@ -78,7 +78,7 @@ impl<T: serde::Serialize> Display for DebugJSON<T> {
         }
 
         /// Drop the file at `PATH` when we first write
-        fn cleanup() {
+        fn clean_up() {
             static DID_RUN: AtomicBool = AtomicBool::new(false);
             use std::sync::atomic::{AtomicBool, Ordering};
             if DID_RUN
