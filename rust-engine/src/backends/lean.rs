@@ -248,7 +248,7 @@ set_option linter.unusedVariables false
         }
 
         fn ty(&'a self, ty: &'b Ty) -> DocBuilder<'a, Self, A> {
-            ty.kind().pretty(self)
+            docs![ty.kind()]
         }
 
         fn ty_kind(&'a self, ty_kind: &'b TyKind) -> DocBuilder<'a, Self, A> {
