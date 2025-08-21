@@ -24,8 +24,8 @@ pub struct RustBackend;
 impl Backend for RustBackend {
     type Printer = RustPrinter;
 
-    fn module_path(&self, _module: &Module) -> std::path::PathBuf {
-        std::path::PathBuf::from("test.rs")
+    fn module_path(&self, _module: &Module) -> camino::Utf8PathBuf {
+        camino::Utf8PathBuf::from("test.rs")
     }
 }
 
