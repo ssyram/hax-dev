@@ -361,16 +361,18 @@ dependencies = [
 
 [[package]]
 name = "derive_generic_visitor"
-version = "0.2.0"
-source = "git+https://github.com/W95Psp/derive-generic-visitor.git?branch=visitable-group-add-attrs#fc4fb41661e59deb48feec66d06b579a1236d5f3"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8307b157ef1ca852032be5723dd87063a30a58bc373d663eb327cfbf71f198da"
 dependencies = [
  "derive_generic_visitor_macros",
 ]
 
 [[package]]
 name = "derive_generic_visitor_macros"
-version = "0.2.0"
-source = "git+https://github.com/W95Psp/derive-generic-visitor.git?branch=visitable-group-add-attrs#fc4fb41661e59deb48feec66d06b579a1236d5f3"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e20916a23e6247d36d3526a9dce953303a6a83091eaae6d96f08fb3d976ab257"
 dependencies = [
  "convert_case",
  "darling",
