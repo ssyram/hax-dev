@@ -104,6 +104,8 @@ set_option linter.unusedVariables false
         }
 
         fn global_id(&'a self, global_id: &'b GlobalId) -> DocBuilder<'a, Self, A> {
+            // This a temporary fix before a proper treatment of identifiers,
+            // see https://github.com/cryspen/hax/issues/1599
             docs![global_id.to_debug_string()]
         }
 
