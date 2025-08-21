@@ -377,7 +377,8 @@ set_option linter.unusedVariables false
                     params,
                     safety: _,
                 } => match &*body.kind {
-                    // Literal consts
+                    // Literal consts. This should be done by a resugaring, see
+                    // https://github.com/cryspen/hax/issues/1614
                     ExprKind::Literal(l) if params.len() == 0 => {
                         docs!["def ", name, reflow!(" : "), &body.ty, reflow!(" := "), l].group()
                     }
