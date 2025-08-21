@@ -58,6 +58,11 @@ use resugared::*;
 pub struct DebugJSON<T: serde::Serialize>(pub T);
 
 impl<T: serde::Serialize> Display for DebugJSON<T> {
+    #[cfg(not(unix))]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<unknown, DebugJSON supported on unix plateforms only>")
+    }
+    #[cfg(unix)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         const PATH: &str = "/tmp/hax-ast-debug.json";
         /// Write a new JSON as a line at the end of `PATH`
