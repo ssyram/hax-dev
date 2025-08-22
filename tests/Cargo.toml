@@ -38,5 +38,6 @@ members = [
         "unsafe",
         "constructor-as-closure",
         "statics",
+        "lifetime-trait-issue",
 ]
 resolver = "2"

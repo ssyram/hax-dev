@@ -344,7 +344,21 @@ pub fn assoc_tys_for_trait<'tcx>(
                 .in_definition_order()
                 .filter(|assoc| matches!(assoc.kind, ty::AssocKind::Type { .. }))
                 .filter(|assoc| tcx.generics_of(assoc.def_id).own_params.is_empty())
-                .map(|assoc| ty::AliasTy::new(tcx, assoc.def_id, tref.args)),
+                .map(|assoc| {
+                    // Get the generics to determine how many parent args we need
+                    let generics = tcx.generics_of(assoc.def_id);
+                    let parent_count = generics.parent_count;
+                    
+                    // Only pass the parent arguments, not the full trait args
+                    let args = if parent_count <= tref.args.len() {
+                        &tref.args[..parent_count]
+                    } else {
+                        // If we don't have enough args, use empty args to prevent index out of bounds
+                        &[]
+                    };
+                    
+                    ty::AliasTy::new(tcx, assoc.def_id, tcx.mk_args(args))
+                }),
         );
         for clause in tcx
             .explicit_super_predicates_of(tref.def_id)
