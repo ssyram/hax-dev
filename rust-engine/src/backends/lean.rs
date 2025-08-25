@@ -34,8 +34,8 @@ fn crate_name(items: &Vec<Item>) -> String {
 impl Backend for LeanBackend {
     type Printer = LeanPrinter;
 
-    fn module_path(&self, module: &Module) -> std::path::PathBuf {
-        std::path::PathBuf::from(format!("{}.lean", crate_name(&module.items)))
+    fn module_path(&self, module: &Module) -> camino::Utf8PathBuf {
+        camino::Utf8PathBuf::from(format!("{}.lean", crate_name(&module.items)))
     }
 }
 

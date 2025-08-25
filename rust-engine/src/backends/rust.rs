@@ -24,8 +24,9 @@ pub struct RustBackend;
 impl Backend for RustBackend {
     type Printer = RustPrinter;
 
-    fn module_path(&self, _module: &Module) -> std::path::PathBuf {
-        std::path::PathBuf::from("test.rs")
+    fn module_path(&self, _module: &Module) -> camino::Utf8PathBuf {
+        // TODO: dummy path for now, until we have GlobalId rendering (see #1599).
+        camino::Utf8PathBuf::from("dummy.rs")
     }
 }
 

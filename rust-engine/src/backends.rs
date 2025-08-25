@@ -21,8 +21,8 @@ use crate::{
     ast::{Item, Metadata, Module, span::Span},
     printer::{Print, Printer},
 };
+use camino::Utf8PathBuf;
 use hax_types::engine_api::File;
-use std::path::PathBuf;
 
 /// A hax backend.
 ///
@@ -76,7 +76,7 @@ pub trait Backend {
     }
 
     /// Compute the relative filesystem path where a given module should be written.
-    fn module_path(&self, module: &Module) -> PathBuf;
+    fn module_path(&self, module: &Module) -> Utf8PathBuf;
 }
 
 /// Apply a backend to a collection of AST items, producing output files.
@@ -93,11 +93,7 @@ pub fn apply_backend<B: Backend + 'static>(backend: B, mut items: Vec<Item>) -> 
     modules
         .into_iter()
         .map(|module: Module| {
-            let path = backend
-                .module_path(&module)
-                .into_os_string()
-                .into_string()
-                .unwrap();
+            let path = backend.module_path(&module).into_string();
             let (contents, _) = backend.printer().print(module);
             File {
                 path,
