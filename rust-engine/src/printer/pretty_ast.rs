@@ -91,8 +91,11 @@ impl<T: serde::Serialize> Display for DebugJSON<T> {
             }
         }
 
-        let id = append_line_json(&serde_json::to_value(&self.0).unwrap()).unwrap();
-        write!(f, "`just debug-json {id}`")
+        if let Ok(id) = append_line_json(&serde_json::to_value(&self.0).unwrap()) {
+            write!(f, "`just debug-json {id}`")
+        } else {
+            write!(f, "<DebugJSON failed>")
+        }
     }
 }
 
