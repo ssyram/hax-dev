@@ -51,7 +51,7 @@ pub trait Backend {
 
     /// The AST phases to apply before printing.
     ///
-    /// Backends can override this to add transformations.  
+    /// Backends can override this to add transformations.
     /// The default is an empty list (no transformations).
     fn phases(&self) -> Vec<Box<dyn crate::phase::Phase>> {
         vec![]
@@ -111,10 +111,15 @@ mod prelude {
     //! Importing this prelude saves repetitive `use` lists in per-backend
     //! modules without forcing these names on downstream users.
     pub use super::Backend;
+    pub use crate::ast::identifiers::*;
+    pub use crate::ast::literals::*;
+    pub use crate::ast::resugared::*;
     pub use crate::ast::*;
     pub use crate::printer::*;
+    pub use crate::symbol::Symbol;
     pub use hax_rust_engine_macros::prepend_associated_functions_with;
     pub use pretty::DocAllocator;
+    pub use pretty::DocBuilder;
     pub use pretty::Pretty;
     pub use pretty_ast::install_pretty_helpers;
 }

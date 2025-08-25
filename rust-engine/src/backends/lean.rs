@@ -4,128 +4,42 @@
 //! Pretty::Doc type, which can in turn be exported to string (or, eventually,
 //! source maps).
 
-use crate::ast::span::Span;
+use super::prelude::*;
 
-use pretty::{DocAllocator, DocBuilder, Pretty, docs};
+/// The Lean printer
+#[derive(Default)]
+pub struct LeanPrinter;
+impl_doc_allocator_for!(LeanPrinter);
 
-use crate::ast::identifiers::*;
-use crate::ast::literals::*;
-use crate::ast::*;
-
-// Note: this module was moved here temporarly.
-// This module used to provide a wrapper type `Allocator`.
-// This wrapper type is no longer useful.
-// It was thus removed from the `printer`, and moved here, where it is still used.
-// This is temporary: see https://github.com/cryspen/hax/issues/1604.
-mod deprecated_allocator_module {
-    //! This module provides a custom [`pretty`] allocator, indexed by a printer,
-    //! enabling multiple printers to cohexist and to implement the type `Pretty`.
-
-    use crate::ast::span::Span;
-    use pretty::*;
-
-    /// A printer-specific [`pretty`] allocator.
-    pub struct Allocator<Printer> {
-        /// The pretty allocator
-        allocator: BoxAllocator,
-        /// Extra printer-specific context
-        pub printer: Printer,
+impl Printer for LeanPrinter {
+    fn resugaring_phases() -> Vec<Box<dyn Resugaring>> {
+        vec![]
     }
 
-    impl<Printer> Allocator<Printer> {
-        /// Creates a new allocator from a printer.
-        pub fn new(printer: Printer) -> Self {
-            Self {
-                allocator: BoxAllocator,
-                printer,
-            }
-        }
-    }
-
-    impl<'a, P, A: 'a> DocAllocator<'a, A> for Allocator<P> {
-        type Doc = <BoxAllocator as DocAllocator<'a, A>>::Doc;
-
-        fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
-            self.allocator.alloc(doc)
-        }
-
-        fn alloc_column_fn(
-            &'a self,
-            f: impl Fn(usize) -> Self::Doc + 'a,
-        ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
-            self.allocator.alloc_column_fn(f)
-        }
-
-        fn alloc_width_fn(
-            &'a self,
-            f: impl Fn(isize) -> Self::Doc + 'a,
-        ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
-            self.allocator.alloc_width_fn(f)
-        }
-    }
-
-    /// A helper type used to manually implement `Pretty` for types that carry spans.
-    ///
-    /// By default, we implement the `Pretty` trait for all span-carrying
-    /// types. These implementations annotate spans in the generated document, allowing
-    /// source spans to be produced during pretty-printing. However, this default behavior
-    /// does not provide access to the underlying data, which is sometimes necessary
-    /// for custom printing logic.
-    ///
-    /// For example, when printing an item, it's often useful to access its attributes.
-    /// To support this, the default `Pretty` implementations delegate to `Manual<Item>`,
-    /// which allows printers to access the inner value directly.
-    ///
-    /// In practice, calling `expr.pretty(..)` will internally use
-    /// `Manual(expr).pretty(..)`, enabling more flexible control over printing behavior.
-    struct Manual<T>(T);
-
-    use crate::ast::*;
-    macro_rules! impl_pretty_kind_meta {
-        ($($type:ty),*) => {
-            $(impl<'a, 'b, P> Pretty<'a, Allocator<P>, Span> for &'b $type
-            where
-                Manual<&'b $type>: Pretty<'a, Allocator<P>, Span>,
-            {
-                fn pretty(self, allocator: &'a Allocator<P>) -> DocBuilder<'a, Allocator<P>, Span> {
-                    let doc = Manual(self).pretty(allocator);
-                    doc.annotate(self.span())
-                }
-            })*
-        };
-    }
-    impl_pretty_kind_meta!(
-        Item,
-        Expr,
-        Pat,
-        Guard,
-        Arm,
-        ImplItem,
-        TraitItem,
-        GenericParam,
-        Attribute
-    );
-}
-
-pub use deprecated_allocator_module::Allocator;
-
-macro_rules! print_todo {
-    ($allocator:ident) => {
-        $allocator
-            .text(format!(
-                "/- Unsupported by the Lean Backend (line {}) -/",
-                line!()
-            ))
-            .parens()
-    };
+    const NAME: &str = "Lean";
 }
 
 const INDENT: isize = 2;
 
-/// Placeholder structure for lean printer
-pub struct Lean;
+/// The Lean backend
+pub struct LeanBackend;
 
-impl Lean {
+fn crate_name(items: &[Item]) -> String {
+    // We should have a proper treatment of empty modules, see
+    // https://github.com/cryspen/hax/issues/1617
+    let head_item = items.first().unwrap();
+    head_item.ident.krate()
+}
+
+impl Backend for LeanBackend {
+    type Printer = LeanPrinter;
+
+    fn module_path(&self, module: &Module) -> camino::Utf8PathBuf {
+        camino::Utf8PathBuf::from(format!("{}.lean", crate_name(&module.items)))
+    }
+}
+
+impl LeanPrinter {
     /// A filter for items blacklisted by the Lean backend : returns false if
     /// the item is definitely not printable, but might return true on
     /// unsupported items
@@ -154,568 +68,367 @@ impl Lean {
     }
 }
 
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Item {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        self.kind.pretty(allocator)
-    }
-}
+#[prepend_associated_functions_with(install_pretty_helpers!(self: Self))]
+const _: () = {
+    // Boilerplate: define local macros to disambiguate otherwise `std` macros.
+    #[allow(unused)]
+    macro_rules! todo {($($tt:tt)*) => {disambiguated_todo!($($tt)*)};}
+    #[allow(unused)]
+    macro_rules! line {($($tt:tt)*) => {disambiguated_line!($($tt)*)};}
+    #[allow(unused)]
+    macro_rules! concat {($($tt:tt)*) => {disambiguated_concat!($($tt)*)};}
 
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ItemKind {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            ItemKind::Fn {
-                name,
-                generics,
-                body,
-                params,
-                safety: _,
-            } => {
-                match &*body.kind {
-                    ExprKind::Literal(l) => {
-                        // Literal consts, printed without monadic encoding
-                        // Todo: turn it into a proper refactor (see Hax issue #1542)
+    impl<'a, 'b, A: 'a + Clone> PrettyAst<'a, 'b, A> for LeanPrinter {
+        fn module(&'a self, module: &'b Module) -> DocBuilder<'a, Self, A> {
+            let items = &module.items;
+            docs![
+                intersperse!(
+                    "
+-- Experimental lean backend for Hax
+-- The Hax prelude library can be found in hax/proof-libs/lean
+import Hax
+import Std.Tactic.Do
+import Std.Do.Triple
+import Std.Tactic.Do.Syntax
+open Std.Do
+open Std.Tactic
+
+set_option mvcgen.warning false
+set_option linter.unusedVariables false
+
+
+"
+                    .lines(),
+                    hardline!(),
+                ),
+                intersperse!(items, hardline!())
+            ]
+        }
+
+        fn global_id(&'a self, global_id: &'b GlobalId) -> DocBuilder<'a, Self, A> {
+            // This a temporary fix before a proper treatment of identifiers,
+            // see https://github.com/cryspen/hax/issues/1599
+            docs![global_id.to_debug_string()]
+        }
+
+        fn expr(&'a self, expr: &'b Expr) -> DocBuilder<'a, Self, A> {
+            docs![expr.kind()]
+        }
+
+        fn pat(&'a self, pat: &'b Pat) -> DocBuilder<'a, Self, A> {
+            docs![&*pat.kind, reflow!(" : "), &pat.ty].parens().group()
+        }
+
+        fn expr_kind(&'a self, expr_kind: &'b ExprKind) -> DocBuilder<'a, Self, A> {
+            match expr_kind {
+                ExprKind::If {
+                    condition,
+                    then,
+                    else_,
+                } => {
+                    if let Some(else_branch) = else_ {
                         docs![
-                            allocator,
-                            "def ",
-                            name,
-                            allocator.reflow(" : "),
-                            &body.ty,
-                            allocator.reflow(" :="),
-                            allocator.line(),
-                            l
+                            docs!["if", line!(), condition].group(),
+                            line!(),
+                            docs!["then", line!(), then].group().nest(INDENT),
+                            line!(),
+                            docs!["else", line!(), else_branch].group().nest(INDENT)
                         ]
                         .group()
-                    }
-                    _ => {
-                        // Normal definition
-                        let generics = if generics.params.is_empty() {
-                            None
-                        } else {
-                            Some(
-                                docs![
-                                    allocator,
-                                    allocator.line(),
-                                    allocator
-                                        .intersperse(&generics.params, allocator.softline())
-                                        .braces()
-                                        .group()
-                                ]
-                                .group(),
-                            )
-                        };
-                        let args = if params.is_empty() {
-                            allocator.nil()
-                        } else {
-                            docs![
-                                allocator,
-                                allocator.line(),
-                                allocator.intersperse(params, allocator.softline()),
-                            ]
-                            .nest(INDENT)
-                            .group()
-                        };
-                        docs![
-                            allocator,
-                            "def ",
-                            name,
-                            generics,
-                            args,
-                            docs![
-                                allocator,
-                                allocator.line(),
-                                ": ",
-                                docs![allocator, "Result ", &body.ty].group()
-                            ]
-                            .group(),
-                            " := do",
-                            allocator.line(),
-                            docs![allocator, &*body.kind].group()
-                        ]
-                        .nest(INDENT)
-                        .group()
-                        .append(allocator.hardline())
+                    } else {
+                        // The Hax engine should ensure that there is always an else branch
+                        unreachable!()
                     }
                 }
-            }
-            ItemKind::TyAlias {
-                name,
-                generics: _,
-                ty,
-            } => docs![allocator, "abbrev ", name, allocator.reflow(" := "), ty].group(),
-            ItemKind::Type {
-                name: _,
-                generics: _,
-                variants: _,
-                is_struct: _,
-            } => print_todo!(allocator),
-            ItemKind::Trait {
-                name: _,
-                generics: _,
-                items: _,
-            } => print_todo!(allocator),
-            ItemKind::Impl {
-                generics: _,
-                self_ty: _,
-                of_trait: _,
-                items: _,
-                parent_bounds: _,
-                safety: _,
-            } => print_todo!(allocator),
-            ItemKind::Alias { name: _, item: _ } => print_todo!(allocator),
-            ItemKind::Use {
-                path: _,
-                is_external: _,
-                rename: _,
-            } => allocator.nil(),
-            ItemKind::Quote { quote, origin: _ } => quote.pretty(allocator),
-            ItemKind::Error(_diagnostic) => print_todo!(allocator),
-            ItemKind::Resugared(_resugared_ty_kind) => print_todo!(allocator),
-            ItemKind::NotImplementedYet => allocator.text("/- unsupported by Hax engine (yet) -/"),
-        }
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Ty {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        self.kind().pretty(allocator)
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b TyKind {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            TyKind::Primitive(primitive_ty) => primitive_ty.pretty(allocator),
-            TyKind::Tuple(items) => allocator.intersperse(items, allocator.reflow(" * ")),
-            TyKind::App { head, args } => {
-                if args.len() == 0 {
-                    head.pretty(allocator)
-                } else {
-                    head.pretty(allocator)
-                        .append(allocator.softline())
-                        .append(allocator.intersperse(args, allocator.softline()))
+                ExprKind::App {
+                    head,
+                    args,
+                    generic_args,
+                    bounds_impls: _,
+                    trait_: _,
+                } => {
+                    let generic_args = (!generic_args.is_empty()).then_some(
+                        docs![
+                            line!(),
+                            self.intersperse(generic_args, line!()).nest(INDENT)
+                        ]
+                        .group(),
+                    );
+                    let args = (!args.is_empty()).then_some(
+                        docs![line!(), intersperse!(args, line!()).nest(INDENT)].group(),
+                    );
+                    docs!["← ", head, generic_args, args].parens().group()
+                }
+                ExprKind::Literal(literal) => docs![literal],
+                ExprKind::Array(exprs) => {
+                    docs!["#v[", intersperse!(exprs, reflow!(", ")).nest(INDENT)].group()
+                }
+                ExprKind::Construct {
+                    constructor,
+                    is_record: _,
+                    is_struct: _,
+                    fields,
+                    base: _,
+                } => {
+                    let record_args = (!fields.is_empty()).then_some(
+                        docs![
+                            line!(),
+                            intersperse!(
+                                fields.iter().map(|field: &(GlobalId, Expr)| docs![
+                                    &field.0,
+                                    reflow!(" := "),
+                                    &field.1
+                                ]
+                                .parens()
+                                .group()),
+                                line!()
+                            )
+                            .group()
+                        ]
+                        .group(),
+                    );
+                    docs!["constr_", constructor, record_args]
                         .parens()
                         .group()
+                        .nest(INDENT)
                 }
-            }
-            TyKind::Arrow { inputs, output } => docs![
-                allocator,
-                allocator.concat(inputs.into_iter().map(|input| docs![
-                    allocator,
-                    input,
-                    allocator.reflow(" -> ")
-                ])),
-                "Result ",
-                output
-            ]
-            .parens(),
-            TyKind::Ref {
-                inner: _,
-                mutable: _,
-                region: _,
-            } => print_todo!(allocator),
-            TyKind::Param(local_id) => local_id.pretty(allocator),
-            TyKind::Slice(ty) => docs![allocator, "Array ", ty].parens(),
-            TyKind::Array { ty, length } => {
-                docs![allocator, "Vector ", ty, allocator.softline(), &(**length),]
-                    .parens()
-                    .group()
-            }
-            TyKind::RawPointer => print_todo!(allocator),
-            TyKind::AssociatedType { impl_: _, item: _ } => print_todo!(allocator),
-            TyKind::Opaque(_global_id) => print_todo!(allocator),
-            TyKind::Dyn(_dyn_trait_goals) => print_todo!(allocator),
-            TyKind::Resugared(_resugared_ty_kind) => print_todo!(allocator),
-            TyKind::Error(_diagnostic) => print_todo!(allocator),
-        }
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b SpannedTy {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        self.ty.pretty(allocator)
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b PrimitiveTy {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            PrimitiveTy::Bool => allocator.text("Bool"),
-            PrimitiveTy::Int(int_kind) => int_kind.pretty(allocator),
-            PrimitiveTy::Float(float_kind) => float_kind.pretty(allocator),
-            PrimitiveTy::Char => allocator.text("Char"),
-            PrimitiveTy::Str => allocator.text("String"),
-        }
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Expr {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        (*self.kind).pretty(allocator)
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Pat {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        docs![
-            allocator,
-            self.kind.pretty(allocator),
-            allocator.reflow(" : "),
-            &self.ty
-        ]
-        .parens()
-        .group()
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b PatKind {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            PatKind::Wild => allocator.text("_"),
-            PatKind::Ascription { pat, ty: _ } => pat.kind.pretty(allocator),
-            PatKind::Or { sub_pats: _ } => print_todo!(allocator),
-            PatKind::Array { args: _ } => print_todo!(allocator),
-            PatKind::Deref { sub_pat: _ } => print_todo!(allocator),
-            PatKind::Constant { lit: _ } => print_todo!(allocator),
-            PatKind::Binding {
-                mutable,
-                var,
-                mode,
-                sub_pat,
-            } => match (mutable, mode, sub_pat) {
-                (false, BindingMode::ByValue, None) => var.pretty(allocator),
-                _ => panic!(),
-            },
-            PatKind::Construct {
-                constructor: _,
-                is_record: _,
-                is_struct: _,
-                fields: _,
-            } => print_todo!(allocator),
-            PatKind::Resugared(_resugared_pat_kind) => print_todo!(allocator),
-            PatKind::Error(_diagnostic) => print_todo!(allocator),
-        }
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Lhs {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        print_todo!(allocator)
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b ExprKind {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            ExprKind::If {
-                condition,
-                then,
-                else_,
-            } => match else_ {
-                Some(else_branch) => docs![
-                    allocator,
-                    allocator
-                        .text("if")
-                        .append(allocator.line())
-                        .append(condition)
-                        .group(),
-                    allocator.line(),
-                    allocator
-                        .text("then")
-                        .append(allocator.line())
-                        .append(then)
-                        .group()
-                        .nest(INDENT),
-                    allocator.line(),
-                    allocator
-                        .text("else")
-                        .append(allocator.line())
-                        .append(else_branch)
-                        .group()
-                        .nest(INDENT),
+                ExprKind::Let { lhs, rhs, body } => docs![
+                    "let ",
+                    lhs,
+                    " ←",
+                    softline!(),
+                    docs!["pure", line!(), rhs].group().nest(INDENT),
+                    ";",
+                    line!(),
+                    body,
+                ],
+                ExprKind::GlobalId(global_id) => docs![global_id],
+                ExprKind::LocalId(local_id) => docs![local_id],
+                ExprKind::Ascription { e, ty } => docs![
+                    // This insertion should be done by a monadic phase (or resugaring). See
+                    // https://github.com/cryspen/hax/issues/1620
+                    match *e.kind {
+                        ExprKind::Literal(_) | ExprKind::Construct { .. } => None,
+                        _ => Some("← "),
+                    },
+                    e,
+                    reflow!(" : "),
+                    ty
                 ]
+                .parens()
                 .group(),
-                None => print_todo!(allocator),
-            },
-            ExprKind::App {
-                head,
-                args,
-                generic_args: _,
-                bounds_impls: _,
-                trait_: _,
-            } if match &*head.kind {
-                ExprKind::GlobalId(name) => {
-                    *name == crate::names::rust_primitives::hax::machine_int::add()
-                }
-                _ => false,
-            } && args.len() == 2 =>
-            {
-                docs![
-                    allocator,
-                    "← ",
-                    args.get(0),
-                    allocator.reflow(" +? "),
-                    args.get(1),
+                ExprKind::Closure {
+                    params,
+                    body,
+                    captures: _,
+                } => docs![
+                    reflow!("fun "),
+                    intersperse!(params, softline!()).group(),
+                    reflow!(" => do "),
+                    body
                 ]
                 .parens()
                 .group()
+                .nest(INDENT),
+                _ => todo!(),
             }
-            ExprKind::App {
-                head,
-                args,
-                generic_args,
-                bounds_impls: _,
-                trait_: _,
-            } => {
-                let generic_args = (!generic_args.is_empty()).then_some(
-                    allocator
-                        .line()
-                        .append(
-                            allocator
-                                .intersperse(generic_args, allocator.line())
-                                .nest(INDENT),
-                        )
-                        .group(),
-                );
-                let args = if args.is_empty() {
-                    None
-                } else {
-                    Some(
-                        allocator
-                            .line()
-                            .append(allocator.intersperse(args, allocator.line()).nest(INDENT))
-                            .group(),
-                    )
-                };
-                docs![allocator, "← ", head, generic_args, args]
-                    .parens()
-                    .group()
-            }
-            ExprKind::Literal(literal) => literal.pretty(allocator),
-            ExprKind::Array(exprs) => docs![
-                allocator,
-                "#v[",
-                allocator
-                    .intersperse(exprs, allocator.text(",").append(allocator.line()))
-                    .nest(INDENT),
-                "]"
-            ]
-            .group(),
-            ExprKind::Construct {
-                constructor,
-                is_record: _,
-                is_struct: _,
-                fields,
-                base: _,
-            } => {
-                // Should be turned into a resugaring once https://github.com/cryspen/hax/pull/1528 have been merged
-                let record_args = (fields.len() > 0).then_some(
-                    allocator
-                        .line()
-                        .append(
-                            allocator
-                                .intersperse(
-                                    fields.iter().map(|field: &(GlobalId, Expr)| {
-                                        docs![
-                                            allocator,
-                                            &field.0,
-                                            allocator.reflow(" := "),
-                                            &field.1
-                                        ]
-                                        .parens()
-                                        .group()
-                                    }),
-                                    allocator.line(),
-                                )
-                                .group(),
-                        )
-                        .group(),
-                );
-                docs![allocator, "constr_", constructor, record_args]
-                    .parens()
-                    .group()
-                    .nest(INDENT)
-            }
-            ExprKind::Match {
-                scrutinee: _,
-                arms: _,
-            } => print_todo!(allocator),
-            ExprKind::Tuple(_exprs) => print_todo!(allocator),
-            ExprKind::Borrow {
-                mutable: _,
-                inner: _,
-            } => print_todo!(allocator),
-            ExprKind::AddressOf {
-                mutable: _,
-                inner: _,
-            } => print_todo!(allocator),
-            ExprKind::Deref(_expr) => print_todo!(allocator),
-            ExprKind::Let { lhs, rhs, body } => docs![
-                allocator,
-                "let ",
-                lhs,
-                " ←",
-                allocator.softline(),
-                docs![allocator, "pure", allocator.line(), rhs]
-                    .group()
-                    .nest(INDENT),
-                ";",
-                allocator.line(),
-                body,
-            ]
-            .group(),
-            ExprKind::GlobalId(global_id) => global_id.pretty(allocator),
-            ExprKind::LocalId(local_id) => local_id.pretty(allocator),
-            ExprKind::Ascription { e, ty } => {
-                let monadic_encoding = match *e.kind {
-                    ExprKind::Literal(_) | ExprKind::Construct { .. } => None,
-                    _ => Some("← "),
-                };
-                docs![allocator, monadic_encoding, e, allocator.reflow(" : "), ty]
-                    .parens()
-                    .group()
-            }
-            ExprKind::Assign { lhs: _, value: _ } => print_todo!(allocator),
-            ExprKind::Loop {
-                body: _,
-                kind: _,
-                state: _,
-                control_flow: _,
-                label: _,
-            } => print_todo!(allocator),
-            ExprKind::Break { value: _, label: _ } => print_todo!(allocator),
-            ExprKind::Return { value: _ } => print_todo!(allocator),
-            ExprKind::Continue { label: _ } => print_todo!(allocator),
-            ExprKind::Closure {
-                params,
-                body,
-                captures: _,
-            } => docs![
-                allocator,
-                allocator.reflow("fun "),
-                allocator.intersperse(params, allocator.softline()).group(),
-                allocator.reflow("=> do"),
-                allocator.line(),
-                body
-            ]
-            .parens()
-            .group()
-            .nest(INDENT),
-            ExprKind::Block {
-                body: _,
-                safety_mode: _,
-            } => print_todo!(allocator),
-            ExprKind::Quote { contents } => allocator.concat(&contents.0),
-            ExprKind::Resugared(_resugared_expr_kind) => print_todo!(allocator),
-            ExprKind::Error(_diagnostic) => print_todo!(allocator),
         }
-    }
-}
 
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Literal {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        docs![
-            allocator,
-            match self {
-                Literal::String(symbol) => format!("\"{}\"", symbol.to_string()),
-                Literal::Char(c) => format!("'{}'", c),
-                Literal::Bool(b) => format!("{}", b),
+        fn pat_kind(&'a self, pat_kind: &'b PatKind) -> DocBuilder<'a, Self, A> {
+            match pat_kind {
+                PatKind::Wild => docs!["_"],
+                PatKind::Ascription { pat, ty: _ } => docs![pat],
+                PatKind::Binding {
+                    mutable,
+                    var,
+                    mode,
+                    sub_pat,
+                } => match (mutable, mode, sub_pat) {
+                    (false, BindingMode::ByValue, None) => docs![var],
+                    _ => panic!(),
+                },
+                _ => todo!(),
+            }
+        }
+
+        fn ty(&'a self, ty: &'b Ty) -> DocBuilder<'a, Self, A> {
+            docs![ty.kind()]
+        }
+
+        fn ty_kind(&'a self, ty_kind: &'b TyKind) -> DocBuilder<'a, Self, A> {
+            match ty_kind {
+                TyKind::Primitive(primitive_ty) => docs![primitive_ty],
+                TyKind::Tuple(items) => intersperse!(items, reflow![" * "]).parens().group(),
+                TyKind::App { head, args } => {
+                    if args.is_empty() {
+                        docs![head]
+                    } else {
+                        docs![head, softline!(), intersperse!(args, softline!())]
+                            .parens()
+                            .group()
+                    }
+                }
+                TyKind::Arrow { inputs, output } => docs![
+                    concat![inputs.iter().map(|input| docs![input, reflow!(" -> ")])],
+                    "Result ",
+                    output
+                ],
+                TyKind::Param(local_id) => docs![local_id],
+                TyKind::Slice(ty) => docs!["RustSlice", line!(), ty].parens().group(),
+                TyKind::Array { ty, length } => {
+                    docs!["RustArray", line!(), ty, line!(), &(**length)]
+                        .parens()
+                        .group()
+                }
+                _ => todo!(),
+            }
+        }
+
+        fn literal(&'a self, literal: &'b Literal) -> DocBuilder<'a, Self, A> {
+            docs![match literal {
+                Literal::String(symbol) => format!("\"{symbol}\""),
+                Literal::Char(c) => format!("'{c}'"),
+                Literal::Bool(b) => format!("{b}"),
                 Literal::Int {
                     value,
-                    negative: _,
+                    negative,
                     kind: _,
-                } => format!("{}", value),
+                } => format!("{}{value}", if *negative { "-" } else { "" }),
                 Literal::Float {
                     value: _,
                     negative: _,
                     kind: _,
                 } => todo!(),
-            }
-        ]
-    }
-}
+            }]
+        }
 
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b IntKind {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        docs![
-            allocator,
-            match (&self.size, &self.signedness) {
-                (IntSize::S8, Signedness::Signed) => "i8",
-                (IntSize::S8, Signedness::Unsigned) => "u8",
-                (IntSize::S16, Signedness::Signed) => "i16",
-                (IntSize::S16, Signedness::Unsigned) => "u16",
-                (IntSize::S32, Signedness::Signed) => "i32",
-                (IntSize::S32, Signedness::Unsigned) => "u32",
-                (IntSize::S64, Signedness::Signed) => "i64",
-                (IntSize::S64, Signedness::Unsigned) => "u64",
-                (IntSize::S128, Signedness::Signed) => "i128",
-                (IntSize::S128, Signedness::Unsigned) => "u128",
-                (IntSize::SSize, Signedness::Signed) => "isize",
-                (IntSize::SSize, Signedness::Unsigned) => "usize",
-            }
-        ]
-    }
-}
+        fn local_id(&'a self, local_id: &'b LocalId) -> DocBuilder<'a, Self, A> {
+            docs![local_id.0.to_string()]
+        }
 
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b FloatKind {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            FloatKind::F16 => print_todo!(allocator),
-            FloatKind::F32 => allocator.text("Float32"),
-            FloatKind::F64 => allocator.text("Float"),
-            FloatKind::F128 => print_todo!(allocator),
+        fn spanned_ty(&'a self, spanned_ty: &'b SpannedTy) -> DocBuilder<'a, Self, A> {
+            docs![&spanned_ty.ty]
+        }
+
+        fn primitive_ty(&'a self, primitive_ty: &'b PrimitiveTy) -> DocBuilder<'a, Self, A> {
+            match primitive_ty {
+                PrimitiveTy::Bool => docs!["Bool"],
+                PrimitiveTy::Int(int_kind) => docs![int_kind],
+                PrimitiveTy::Float(_float_kind) => todo!(),
+                PrimitiveTy::Char => docs!["Char"],
+                PrimitiveTy::Str => docs!["String"],
+            }
+        }
+
+        fn int_kind(&'a self, int_kind: &'b IntKind) -> DocBuilder<'a, Self, A> {
+            docs![match (&int_kind.signedness, &int_kind.size) {
+                (Signedness::Signed, IntSize::S8) => "Int8",
+                (Signedness::Signed, IntSize::S16) => "Int16",
+                (Signedness::Signed, IntSize::S32) => "Int32",
+                (Signedness::Signed, IntSize::S64) => "Int64",
+                (Signedness::Signed, IntSize::S128) => todo!(),
+                (Signedness::Signed, IntSize::SSize) => "ISize",
+                (Signedness::Unsigned, IntSize::S8) => "UInt8",
+                (Signedness::Unsigned, IntSize::S16) => "UInt16",
+                (Signedness::Unsigned, IntSize::S32) => "UInt32",
+                (Signedness::Unsigned, IntSize::S64) => "UInt64",
+                (Signedness::Unsigned, IntSize::S128) => todo!(),
+                (Signedness::Unsigned, IntSize::SSize) => "USize",
+            }]
+        }
+
+        fn generic_value(&'a self, generic_value: &'b GenericValue) -> DocBuilder<'a, Self, A> {
+            match generic_value {
+                GenericValue::Ty(ty) => docs![ty],
+                GenericValue::Expr(expr) => docs![expr],
+                GenericValue::Lifetime => todo!(),
+            }
+        }
+
+        fn quote_content(&'a self, quote_content: &'b QuoteContent) -> DocBuilder<'a, Self, A> {
+            match quote_content {
+                QuoteContent::Verbatim(s) => {
+                    intersperse!(s.lines().map(|x| x.to_string()), hardline!())
+                }
+                QuoteContent::Expr(expr) => docs![expr],
+                QuoteContent::Pattern(pat) => docs![pat],
+                QuoteContent::Ty(ty) => docs![ty],
+            }
+        }
+
+        fn quote(&'a self, quote: &'b Quote) -> DocBuilder<'a, Self, A> {
+            concat![&quote.0]
+        }
+
+        fn param(&'a self, param: &'b Param) -> DocBuilder<'a, Self, A> {
+            docs![&param.pat]
+        }
+
+        fn generic_param(&'a self, generic_param: &'b GenericParam) -> DocBuilder<'a, Self, A> {
+            docs![&generic_param.ident]
+        }
+
+        fn item_kind(&'a self, item_kind: &'b ItemKind) -> DocBuilder<'a, Self, A> {
+            match item_kind {
+                ItemKind::Fn {
+                    name,
+                    generics,
+                    body,
+                    params,
+                    safety: _,
+                } => match &*body.kind {
+                    // Literal consts. This should be done by a resugaring, see
+                    // https://github.com/cryspen/hax/issues/1614
+                    ExprKind::Literal(l) if params.is_empty() => {
+                        docs!["def ", name, reflow!(" : "), &body.ty, reflow!(" := "), l].group()
+                    }
+                    _ => {
+                        let generics = (!generics.params.is_empty()).then_some(
+                            docs![
+                                line!(),
+                                intersperse!(&generics.params, softline!()).braces().group()
+                            ]
+                            .group(),
+                        );
+                        let args = (!params.is_empty())
+                            .then_some(docs![line!(), intersperse!(params, softline!())].group());
+                        docs![
+                            "def ",
+                            name,
+                            generics,
+                            args,
+                            docs![line!(), ": ", docs!["Result ", &body.ty].group()].group(),
+                            " := do",
+                            line!(),
+                            docs![&*body.kind].group()
+                        ]
+                        .group()
+                        .nest(INDENT)
+                        .append(hardline!())
+                    }
+                },
+                ItemKind::TyAlias {
+                    name,
+                    generics: _,
+                    ty,
+                } => docs!["abbrev ", name, reflow!(" := "), ty].group(),
+                ItemKind::Use {
+                    path: _,
+                    is_external: _,
+                    rename: _,
+                } => nil!(),
+                ItemKind::Quote { quote, origin: _ } => docs![quote],
+                ItemKind::NotImplementedYet => docs!["sorry /- unsupported by the Hax engine -/"],
+                _ => todo!(),
+            }
+        }
+
+        fn item(&'a self, item: &'b Item) -> DocBuilder<'a, Self, A> {
+            if LeanPrinter::printable_item(item) {
+                docs![item.kind()]
+            } else {
+                nil!()
+            }
         }
     }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b GenericValue {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            GenericValue::Ty(ty) => ty.pretty(allocator),
-            GenericValue::Expr(expr) => expr.pretty(allocator),
-            GenericValue::Lifetime => panic!(),
-        }
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b LocalId {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        allocator.text(self.to_string())
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b GlobalId {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        allocator.text(self.to_debug_string())
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Param {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        self.pat.pretty(allocator)
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b GenericParam {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        self.ident.pretty(allocator)
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b Quote {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        allocator.concat(&self.0)
-    }
-}
-
-impl<'a, 'b> Pretty<'a, Allocator<Lean>, Span> for &'b QuoteContent {
-    fn pretty(self, allocator: &'a Allocator<Lean>) -> DocBuilder<'a, Allocator<Lean>, Span> {
-        match self {
-            QuoteContent::Verbatim(s) => {
-                allocator.intersperse(s.lines().map(|x| x.to_string()), allocator.hardline())
-            }
-            QuoteContent::Expr(expr) => expr.pretty(allocator),
-            QuoteContent::Pattern(pat) => pat.pretty(allocator),
-            QuoteContent::Ty(ty) => ty.pretty(allocator),
-        }
-    }
-}
+};
