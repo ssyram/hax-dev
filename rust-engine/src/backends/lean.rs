@@ -24,7 +24,7 @@ const INDENT: isize = 2;
 /// The Lean backend
 pub struct LeanBackend;
 
-fn crate_name(items: &Vec<Item>) -> String {
+fn crate_name(items: &[Item]) -> String {
     // We should have a proper treatment of empty modules, see
     // https://github.com/cryspen/hax/issues/1617
     let head_item = items.first().unwrap();
