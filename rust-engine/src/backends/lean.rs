@@ -205,6 +205,8 @@ set_option linter.unusedVariables false
                 ExprKind::GlobalId(global_id) => docs![global_id],
                 ExprKind::LocalId(local_id) => docs![local_id],
                 ExprKind::Ascription { e, ty } => docs![
+                    // This insertion should be done by a monadic phase (or resugaring). See
+                    // https://github.com/cryspen/hax/issues/1620
                     match *e.kind {
                         ExprKind::Literal(_) | ExprKind::Construct { .. } => None,
                         _ => Some("← "),
