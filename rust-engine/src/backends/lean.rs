@@ -25,6 +25,8 @@ const INDENT: isize = 2;
 pub struct LeanBackend;
 
 fn crate_name(items: &Vec<Item>) -> String {
+    // We should have a proper treatment of empty modules, see
+    // https://github.com/cryspen/hax/issues/1617
     let head_item = items.get(0).unwrap();
     head_item.ident.krate()
 }
