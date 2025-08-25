@@ -217,7 +217,7 @@ macro_rules! mk {
             /// Note that using `install_pretty_helpers!` will produce macro
             /// that implicitely use `self` as allocator. Take a look at a
             /// printer in the [`backends`] module for an example.
-            pub trait PrettyAst<'a, 'b, A: 'a + Clone>: DocAllocator<'a, A> + Printer {
+            pub trait PrettyAst<'a, 'b, A: 'a + Clone>: DocAllocator<'a, A> + Sized {
                 /// Produce a non-panicking placeholder document. In general, prefer the use of the helper macro [`todo_document!`].
                 fn todo_document(&'a self, message: &str) -> DocBuilder<'a, Self, A> {
                     self.as_string(message)
@@ -235,7 +235,8 @@ macro_rules! mk {
                 }
                 $(
                     #[doc = "Define how the printer formats a value of this AST type."]
-                    #[doc = "⚠️ **Do not call this method directly**. Use [`pretty::Pretty::pretty`] instead, so annotations/spans are preserved correctly."]
+                    #[doc = "Do not call this method directly. Use [`pretty::Pretty::pretty`] instead, so annotations/spans are preserved correctly."]
+                    #[deprecated = "Do not call this method directly. Use [`pretty::Pretty::pretty`] instead, so annotations/spans are preserved correctly."]
                     fn [<$ty:snake>](&'a self, [<$ty:snake>]: &'b $ty) -> DocBuilder<'a, Self, A> {
                         mk!(@method_body $ty [<$ty:snake>] self [<$ty:snake>])
                     }
