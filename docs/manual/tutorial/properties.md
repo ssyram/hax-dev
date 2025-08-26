@@ -28,7 +28,7 @@ more interesting example: [Barrett reduction](https://en.wikipedia.org/wiki/Barr
 # Proving properties in Lean
 
 Let's try the same in Lean:
-```rust
+```{.rust .playable .lean-backend}
 #[hax_lib::lean::after("
 theorem square_spec (value: u8) :
   ⦃ __requires (value) = pure true ⦄

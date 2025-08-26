@@ -36,7 +36,7 @@ panic-free. Indeed, our encoding of Rust code in Lean wraps everything in a resu
 functions that panic return an error in this monad. To try to prove panic-freedom, we have to 
 specify that the result of `square` is expected not to be an error in this result type. A way
 to do that is the following:
-```rust
+```{.rust .playable .lean-backend}
 #[hax_lib::lean::after("
 theorem square_spec (value: u8) :
   ⦃ __requires (value) = pure true ⦄
@@ -147,7 +147,7 @@ that `square` is used correctly at every call site.
 ### Lean version of solution B
 Let's try to add the precondition to the Lean version of the `square` function.
 We can modify the Rust precondition:
-```rust
+```{.rust .playable .lean-backend}
 #[hax_lib::lean::after("
 theorem square_spec (value: u8) :
   ⦃ __requires (value) = pure true ⦄
