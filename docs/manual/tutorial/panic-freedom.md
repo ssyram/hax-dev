@@ -2,7 +2,7 @@
 weight: 0
 ---
 
-# Panic freedom with F\*
+# Panic freedom
 
 Let's start with a simple example: a function that squares a `u8`
 integer. To extract this function to F\* using hax, we simply need to
@@ -28,7 +28,7 @@ is just over `255`, the largest integer that fits `u8`. Rust does not
 ensure that functions are *total*: a function might panic at any
 point, or might never terminate.
 
-# Panic freedom with Lean
+## Panic freedom with Lean
 
 Let's take the same `square` function and extract it to Lean using `cargo hax into lean`.
 If we run `lake build` on the result, we get a success, but this doesn't mean that the function is 
