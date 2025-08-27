@@ -175,6 +175,27 @@ impl ConcreteId {
     pub fn view(&self) -> view::View {
         self.def_id.clone().into()
     }
+
+    /// Gets the closest mod-only parent.
+    pub fn mod_only_closest_parent(&self) -> Self {
+        let mut parents = self.def_id.parents().collect::<Vec<_>>();
+        parents.reverse();
+        let def_id = parents
+            .into_iter()
+            .take_while(|id| matches!(id.def_id.kind, DefKind::Mod))
+            .next()
+            .expect("Invariant broken: a DefId must always contain at least on `mod` segment (the crate)");
+        Self {
+            def_id,
+            moved: self.moved.clone(),
+            suffix: None,
+        }
+    }
+
+    /// Turns a ConcreteId into a GlobalId
+    pub fn into_concrete(self) -> GlobalId {
+        GlobalId::Concrete(self)
+    }
 }
 
 impl PartialEq<DefId> for GlobalId {

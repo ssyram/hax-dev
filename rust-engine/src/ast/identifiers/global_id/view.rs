@@ -731,10 +731,19 @@ impl View {
             .segments()
             .iter()
             .enumerate()
-            .find(|(_, chunk)| !matches!(chunk.kind(), AnyKind::Mod))
+            .find(|(_, seg)| !matches!(seg.kind(), AnyKind::Mod))
             .map(|(i, _)| i)
             .unwrap_or(self.segments().len());
         self.segments().split_at(position)
+    }
+
+    /// Get the first parent which is a proper module (all its parent are modules as well).
+    pub fn module(&self) -> &PathSegment {
+        self.0
+            .iter()
+            .take_while(|seg| !matches!(seg.kind(), AnyKind::Mod))
+            .last()
+            .expect("Broken invariant, a name has at least a crate")
     }
 }
 
