@@ -60,9 +60,6 @@ pub trait Backend {
     }
 
     /// Group a flat list of items into modules.
-    ///
-    /// By default, everything is packed into a single module, since we
-    /// don't yet support proper name rendering (see issue #1599).
     fn items_to_module(&self, items: Vec<Item>) -> Vec<Module> {
         let mut modules: HashMap<_, Vec<_>> = HashMap::new();
         for item in items {
