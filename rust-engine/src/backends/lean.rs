@@ -49,18 +49,14 @@ const INDENT: isize = 2;
 /// The Lean backend
 pub struct LeanBackend;
 
-fn crate_name(items: &[Item]) -> String {
-    // We should have a proper treatment of empty modules, see
-    // https://github.com/cryspen/hax/issues/1617
-    let head_item = items.first().unwrap();
-    head_item.ident.krate()
-}
-
 impl Backend for LeanBackend {
     type Printer = LeanPrinter;
 
     fn module_path(&self, module: &Module) -> camino::Utf8PathBuf {
-        camino::Utf8PathBuf::from(format!("{}.lean", crate_name(&module.items)))
+        let name = self
+            .printer()
+            .render_string(&module.ident.as_concrete().unwrap().view());
+        camino::Utf8PathBuf::from(format!("{name}.lean"))
     }
 }
 
