@@ -2,6 +2,8 @@
 use hax_frontend_exporter::{DefKind, DisambiguatedDefPathItem};
 use hax_rust_engine_macros::*;
 
+pub mod view;
+
 /// A Rust `DefId`: a lighter version of [`hax_frontend_exporter::DefId`].
 #[derive_group_for_ast]
 pub struct DefId {
@@ -165,6 +167,13 @@ impl GlobalId {
             GlobalId::Projector(concrete_id) => Some(concrete_id.clone()),
             _ => None,
         }
+    }
+}
+
+impl ConcreteId {
+    /// Renders a view of the concrete identifier.
+    pub fn view(&self) -> view::View {
+        self.def_id.clone().into()
     }
 }
 
