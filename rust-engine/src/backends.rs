@@ -120,10 +120,12 @@ mod prelude {
     //! Importing this prelude saves repetitive `use` lists in per-backend
     //! modules without forcing these names on downstream users.
     pub use super::Backend;
+    pub use crate::ast::identifiers::global_id::view::AnyKind;
     pub use crate::ast::identifiers::*;
     pub use crate::ast::literals::*;
     pub use crate::ast::resugared::*;
     pub use crate::ast::*;
+    pub use crate::printer::render_view::*;
     pub use crate::printer::*;
     pub use crate::symbol::Symbol;
     pub use hax_rust_engine_macros::prepend_associated_functions_with;
