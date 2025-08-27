@@ -17,6 +17,8 @@
 pub mod lean;
 pub mod rust;
 
+use std::collections::HashMap;
+
 use crate::{
     ast::{Item, Metadata, Module, span::Span},
     printer::{Print, Printer},
@@ -62,17 +64,24 @@ pub trait Backend {
     /// By default, everything is packed into a single module, since we
     /// don't yet support proper name rendering (see issue #1599).
     fn items_to_module(&self, items: Vec<Item>) -> Vec<Module> {
-        let Some(first) = items.first() else {
-            return vec![];
-        };
-        vec![Module {
-            ident: first.ident.clone(),
-            items,
-            meta: Metadata {
-                span: Span::dummy(),
-                attributes: vec![],
-            },
-        }]
+        let mut modules: HashMap<_, Vec<_>> = HashMap::new();
+        for item in items {
+            let concrete_ident = item.ident.as_concrete().unwrap();
+            let module_ident = concrete_ident.mod_only_closest_parent();
+
+            modules.entry(module_ident).or_default().push(item);
+        }
+        modules
+            .into_iter()
+            .map(|(ident, items)| Module {
+                ident: ident.clone().into_concrete(),
+                items,
+                meta: Metadata {
+                    span: Span::dummy(),
+                    attributes: vec![],
+                },
+            })
+            .collect()
     }
 
     /// Compute the relative filesystem path where a given module should be written.
