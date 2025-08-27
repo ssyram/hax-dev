@@ -11,6 +11,31 @@ use super::prelude::*;
 pub struct LeanPrinter;
 impl_doc_allocator_for!(LeanPrinter);
 
+impl RenderView for LeanPrinter {
+    fn separator(&self) -> &str {
+        "."
+    }
+    fn render_path_segment(&self, chunk: &global_id::view::PathSegment) -> Vec<String> {
+        fn uppercase_first(s: &str) -> String {
+            let mut c = s.chars();
+            match c.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().collect::<String>() + c.as_str(),
+            }
+        }
+        let mut chunks = default::render_path_segment(self, chunk);
+        if matches!(chunk.kind(), AnyKind::Mod) {
+            for chunk in &mut chunks {
+                *chunk = uppercase_first(&chunk);
+            }
+        }
+        if matches!(chunk.kind(), AnyKind::Constructor { .. }) {
+            chunks.push("mk".to_string());
+        }
+        chunks
+    }
+}
+
 impl Printer for LeanPrinter {
     fn resugaring_phases() -> Vec<Box<dyn Resugaring>> {
         vec![]
@@ -106,9 +131,7 @@ set_option linter.unusedVariables false
         }
 
         fn global_id(&'a self, global_id: &'b GlobalId) -> DocBuilder<'a, Self, A> {
-            // This a temporary fix before a proper treatment of identifiers,
-            // see https://github.com/cryspen/hax/issues/1599
-            docs![global_id.to_debug_string()]
+            docs![self.render_string(&global_id.as_concrete().unwrap().view())]
         }
 
         fn expr(&'a self, expr: &'b Expr) -> DocBuilder<'a, Self, A> {
@@ -187,7 +210,7 @@ set_option linter.unusedVariables false
                         ]
                         .group(),
                     );
-                    docs!["constr_", constructor, record_args]
+                    docs![constructor, record_args]
                         .parens()
                         .group()
                         .nest(INDENT)
