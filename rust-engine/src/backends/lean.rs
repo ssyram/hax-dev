@@ -53,10 +53,11 @@ impl Backend for LeanBackend {
     type Printer = LeanPrinter;
 
     fn module_path(&self, module: &Module) -> camino::Utf8PathBuf {
-        let name = self
-            .printer()
-            .render_string(&module.ident.as_concrete().unwrap().view());
-        camino::Utf8PathBuf::from(format!("{name}.lean"))
+        camino::Utf8PathBuf::from_iter(
+            self.printer()
+                .render_strings(&module.ident.as_concrete().unwrap().view()),
+        )
+        .with_extension("lean")
     }
 }
 

@@ -107,17 +107,20 @@ pub trait RenderView: Sized {
         "::"
     }
 
+    /// Lazy render a view as an iterator of strings.
+    ///
+    /// This chains `rendered.module` and `rendered.path` in order.
+    fn rendered_to_strings(&self, rendered: Rendered) -> impl Iterator<Item = String> {
+        rendered.module.into_iter().chain(rendered.path.into_iter())
+    }
+
     /// Joins the atoms contained in a [`Rendered`] into a single string using
     /// [`separator`](Self::separator).
     ///
     /// This concatenates `rendered.module` and `rendered.path` in order, inserting
     /// the separator between atoms.
     fn rendered_to_string(&self, rendered: Rendered) -> String {
-        rendered
-            .module
-            .iter()
-            .chain(rendered.path.iter())
-            .map(|s| s.as_str())
+        self.rendered_to_strings(rendered)
             .collect::<Vec<_>>()
             .join(self.separator())
     }
@@ -125,6 +128,11 @@ pub trait RenderView: Sized {
     /// Convenience: renders a [`View`] straight to a single `String`.
     fn render_string(&self, view: &View) -> String {
         self.rendered_to_string(self.render(view))
+    }
+
+    /// Convenience: renders a [`View`] straight to a iterator of `String`s.
+    fn render_strings(&self, view: &View) -> impl Iterator<Item = String> {
+        self.rendered_to_strings(self.render(view))
     }
 }
 
