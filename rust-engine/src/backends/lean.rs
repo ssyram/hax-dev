@@ -26,7 +26,7 @@ impl RenderView for LeanPrinter {
         let mut chunks = default::render_path_segment(self, chunk);
         if matches!(chunk.kind(), AnyKind::Mod) {
             for chunk in &mut chunks {
-                *chunk = uppercase_first(&chunk);
+                *chunk = uppercase_first(chunk);
             }
         }
         if matches!(chunk.kind(), AnyKind::Constructor { .. }) {

@@ -113,7 +113,7 @@ impl GlobalId {
     /// Tests if the raw output is reduced to "_". Should be used only for
     /// testing. See https://github.com/cryspen/hax/issues/1599
     pub fn is_empty(&self) -> bool {
-        self.to_debug_string() == "_".to_string()
+        self.to_debug_string() == "_"
     }
 
     /// Extract the raw `DefId` from a `GlobalId`.

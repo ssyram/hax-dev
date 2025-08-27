@@ -14,12 +14,13 @@ use crate::{
     symbol::Symbol,
 };
 
-/// A helper trait to render a [`View`] (a typed list of path segments) into strings.
+/// A helper trait to render a [`View`] (a typed list of path segments) into
+/// strings.
 ///
 /// Rendering is split into two parts:
 /// - module path: the crate + module prefix,
-/// - relative path: the remaining (non-module) segments,
-/// and both may contain hierarchical sub-segments (e.g. `Foo::MyVariant::field`).
+/// - relative path: the remaining (non-module) segments, and both may contain
+///   hierarchical sub-segments (e.g. `Foo::MyVariant::field`).
 ///
 /// Implementors can:
 /// - override how unnamed segments (e.g. `impl`, `anon const`) are displayed,
@@ -31,14 +32,15 @@ use crate::{
 ///
 /// A path segment can be:
 /// - named: carries a `Symbol` that can be printed as-is,
-/// - unnamed: carries an [`UnnamedPathSegmentPayload`] (like `Impl`, `Closure`, …),
-///   which must be turned into a `Symbol` first (see [`RenderView::render_unnamed_path_segment_payload`]).
+/// - unnamed: carries an [`UnnamedPathSegmentPayload`] (like `Impl`, `Closure`,
+///   …), which must be turned into a `Symbol` first (see
+///   [`RenderView::render_unnamed_path_segment_payload`]).
 ///
 /// # Hierarchical segments
 ///
 /// Some segments are actually small trees (e.g., field → constructor → type).
-/// [`RenderView::render_path_segment`] returns all display atoms for such a segment,
-/// so callers can flatten or join as needed.
+/// [`RenderView::render_path_segment`] returns all display atoms for such a
+/// segment, so callers can flatten or join as needed.
 pub trait RenderView: Sized {
     /// Converts an unnamed path segment payload into a printable [`Symbol`].
     ///
@@ -95,8 +97,8 @@ pub trait RenderView: Sized {
         let (module_path, relative_path) = view.split_at_module();
         let path_segment = |seg| self.render_path_segment(seg);
         Rendered {
-            module: module_path.iter().map(path_segment).flatten().collect(),
-            path: relative_path.iter().map(path_segment).flatten().collect(),
+            module: module_path.iter().flat_map(path_segment).collect(),
+            path: relative_path.iter().flat_map(path_segment).collect(),
         }
     }
 
@@ -111,7 +113,7 @@ pub trait RenderView: Sized {
     ///
     /// This chains `rendered.module` and `rendered.path` in order.
     fn rendered_to_strings(&self, rendered: Rendered) -> impl Iterator<Item = String> {
-        rendered.module.into_iter().chain(rendered.path.into_iter())
+        rendered.module.into_iter().chain(rendered.path)
     }
 
     /// Joins the atoms contained in a [`Rendered`] into a single string using

@@ -706,7 +706,7 @@ impl View {
 
     /// Returns the last (most specific) segment.
     pub fn last(&self) -> &PathSegment {
-        &self
+        self
             .0
             .last()
             .expect("Broken invariant: a view always contains at least one path path segments.")
@@ -714,7 +714,7 @@ impl View {
 
     /// Returns the first (outermost) segment.
     pub fn first(&self) -> &PathSegment {
-        &self
+        self
             .0
             .first()
             .expect("Broken invariant: a view always contains at least one path path segments.")
