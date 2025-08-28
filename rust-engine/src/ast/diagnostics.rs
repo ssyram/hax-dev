@@ -26,6 +26,20 @@ pub struct DiagnosticInfo {
     pub kind: DiagnosticInfoKind,
 }
 
+impl DiagnosticInfo {
+    /// Emits the diagnostic information.
+    pub fn emit(&self) {
+        crate::hax_io::write(&hax_types::engine_api::protocol::FromEngine::Diagnostic(
+            hax_types::diagnostics::Diagnostics {
+                kind: self.kind.clone(),
+                span: self.span.data.clone(),
+                context: format!("{:?}", self.context),
+                owner_id: None,
+            },
+        ))
+    }
+}
+
 impl Diagnostic {
     /// Get diagnostic information
     pub fn info(&self) -> &DiagnosticInfo {
@@ -38,9 +52,7 @@ impl Diagnostic {
     /// Report an error
     pub fn new(node: impl Into<Fragment>, info: DiagnosticInfo) -> Self {
         let node = node.into();
-        eprintln!("Todo, error reporting");
-        eprintln!("node={node:#?}");
-        eprintln!("info={info:#?}");
+        info.emit();
         Self {
             node: Box::new(node),
             info,
