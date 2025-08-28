@@ -17,6 +17,7 @@ fn main() {
             input: value.input,
             apply_phases: !matches!(&value.backend.backend, Backend::GenerateRustEngineNames),
         },
+        translation_options: value.backend.translation_options,
     };
 
     let Some(Response::ImportThir { output: items }) = query.execute() else {

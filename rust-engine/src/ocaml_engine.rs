@@ -23,6 +23,8 @@ pub struct Query {
     )>,
     /// The kind of query we want to send to the engine
     pub kind: QueryKind,
+    /// Translation options which contains include clauses (items filtering)
+    pub translation_options: hax_types::cli_options::TranslationOptions,
 }
 
 /// The payload of the query. [`Response`] below mirrors this enum to represent

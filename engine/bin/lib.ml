@@ -277,7 +277,9 @@ let driver_for_rust_engine () : unit =
        `ocaml_engine.rs`. This is a temporary flag that applies some phases while
        importing THIR. In the future (when #1550 is merged), we will be able to
        import THIR and then apply phases. *)
-      let imported_items = import_thir_items [] input in
+      let imported_items =
+        import_thir_items query.translation_options.include_namespaces input
+      in
       let rust_ast_items =
         if apply_phases then
           let imported_items = Lean_backend.apply_phases imported_items in
