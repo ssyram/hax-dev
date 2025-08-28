@@ -17,6 +17,7 @@ pub struct Diagnostic {
 
 /// Error description and location
 #[derive_group_for_ast]
+#[must_use]
 pub struct DiagnosticInfo {
     /// Diagnostic context
     pub context: Context,

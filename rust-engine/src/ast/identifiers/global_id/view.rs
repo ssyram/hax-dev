@@ -107,14 +107,9 @@
 //!
 
 use hax_frontend_exporter::{CtorOf, DefKind, DefPathItem, ImplInfos};
-use hax_types::diagnostics::Kind;
 
 use crate::{
-    ast::{
-        Span,
-        diagnostics::{Context, DiagnosticInfo},
-        identifiers::global_id::{DefId, ExplicitDefId},
-    },
+    ast::identifiers::global_id::{DefId, ExplicitDefId},
     symbol::Symbol,
 };
 
@@ -362,7 +357,8 @@ mod rustc_invariant_handling {
             context: Context::NameView,
             span: Span::dummy(),
             kind: Kind::AssertionFailure { details },
-        };
+        }
+        .emit();
         T::error_dummy_value(Permit(()))
     }
 }
@@ -576,7 +572,7 @@ impl PathSegment {
     fn assert_type_def(self) -> PathSegment<TypeDefKind> {
         self.map(|kind, did| match kind {
             AnyKind::TypeDef(inner) => inner,
-            _ => error_dummy_value(&format!("expected TypeDefKind, got {:#?}", kind), did),
+            _ => error_dummy_value(&format!("expected TypeDefKind, got {kind:#?}"), did),
         })
     }
 
@@ -585,7 +581,7 @@ impl PathSegment {
         self.map(|kind, did| match kind {
             AnyKind::AssocItemContainer(inner) => inner,
             _ => error_dummy_value(
-                &format!("expected AssocItemContainerKind, got {:#?}", kind),
+                &format!("expected AssocItemContainerKind, got {kind:#?}"),
                 did,
             ),
         })
@@ -595,7 +591,7 @@ impl PathSegment {
     fn assert_constructor(self) -> PathSegment<ConstructorKind> {
         self.map(|kind, did| match kind {
             AnyKind::Constructor(inner) => inner,
-            _ => error_dummy_value(&format!("expected ConstructorKind, got {:#?}", kind), did),
+            _ => error_dummy_value(&format!("expected ConstructorKind, got {kind:#?}"), did),
         })
     }
 
