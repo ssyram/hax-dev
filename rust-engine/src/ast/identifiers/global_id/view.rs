@@ -2,7 +2,7 @@
 //!
 //! This module encodes a number of rustc invariants about which items are named vs.
 //! unnamed and which items have parents. Those invariants are enforced at runtime and
-//! will `panic!` if violated.
+//! will emit diagnostic if the invariants are broken.
 //!
 //! # What is a path segment?
 //!
@@ -107,9 +107,14 @@
 //!
 
 use hax_frontend_exporter::{CtorOf, DefKind, DefPathItem, ImplInfos};
+use hax_types::diagnostics::Kind;
 
 use crate::{
-    ast::identifiers::global_id::{DefId, ExplicitDefId},
+    ast::{
+        Span,
+        diagnostics::{Context, DiagnosticInfo},
+        identifiers::global_id::{DefId, ExplicitDefId},
+    },
     symbol::Symbol,
 };
 
@@ -267,23 +272,105 @@ pub enum PathSegmentPayload {
     Unnamed(UnnamedPathSegmentPayload),
 }
 
-macro_rules! rustc_def_id_invariant_violated {
-    ($def_id:expr, $($tt:tt)*) => {
-        panic!(
-            "A rustc invariant about `DefId` was violated.\nContext: {}.\nDefId is:\n{:#?}",
-            format!($($tt)*),
-            $def_id
-        )
+mod rustc_invariant_handling {
+    //! This modules provides the function `error_dummy_value`, which emits errors.
+
+    use std::any::{Any, type_name};
+    use std::fmt::Debug;
+
+    use super::*;
+    use crate::{
+        ast::{
+            diagnostics::{Context, DiagnosticInfo},
+            span::Span,
+        },
+        names,
     };
+    use hax_types::diagnostics::Kind;
+
+    #[derive(Clone, Copy)]
+    /// Restrict [`ErrorDummyValue`] callers
+    pub struct Permit(());
+
+    pub trait ErrorDummyValue {
+        fn error_dummy_value(_: Permit) -> Self;
+    }
+
+    impl ErrorDummyValue for PathSegmentPayload {
+        fn error_dummy_value(_: Permit) -> Self {
+            Self::Named(Symbol::new("hax_engine_view_fatal_error"))
+        }
+    }
+
+    impl ErrorDummyValue for TypeDefKind {
+        fn error_dummy_value(_: Permit) -> Self {
+            TypeDefKind::Enum
+        }
+    }
+    impl ErrorDummyValue for ConstructorKind {
+        fn error_dummy_value(permit: Permit) -> Self {
+            ConstructorKind::Constructor {
+                ty: PathSegment::<TypeDefKind>::error_dummy_value(permit),
+            }
+        }
+    }
+
+    impl<K: ErrorDummyValue> ErrorDummyValue for PathSegment<K> {
+        fn error_dummy_value(permit: Permit) -> Self {
+            Self {
+                identifier: DefId::error_dummy_value(permit),
+                payload: PathSegmentPayload::error_dummy_value(permit),
+                disambiguator: 0,
+                kind: K::error_dummy_value(permit),
+            }
+        }
+    }
+
+    impl ErrorDummyValue for AnyKind {
+        fn error_dummy_value(_: Permit) -> Self {
+            Self::Fn
+        }
+    }
+
+    impl ErrorDummyValue for DefId {
+        fn error_dummy_value(_: Permit) -> Self {
+            names::rust_primitives::hax::failure()
+        }
+    }
+
+    impl ErrorDummyValue for AssocItemContainerKind {
+        fn error_dummy_value(_: Permit) -> Self {
+            AssocItemContainerKind::Trait { trait_alias: false }
+        }
+    }
+
+    impl ErrorDummyValue for bool {
+        fn error_dummy_value(_: Permit) -> Self {
+            true
+        }
+    }
+
+    pub(super) fn error_dummy_value<T: ErrorDummyValue, V: Debug + Any>(
+        message: &str,
+        value: &V,
+    ) -> T {
+        let details = format!(
+            "A rustc invariant about `DefId` was violated.\nContext: {message}.\nValue (type {}) is:\n{value:#?}",
+            type_name::<T>()
+        );
+        DiagnosticInfo {
+            context: Context::NameView,
+            span: Span::dummy(),
+            kind: Kind::AssertionFailure { details },
+        };
+        T::error_dummy_value(Permit(()))
+    }
 }
+use rustc_invariant_handling::error_dummy_value;
 
 impl PathSegmentPayload {
     /// Constructs a [`PathSegmentPayload`] from an [`ExplicitDefId`], assuming its last
     /// path segment is named.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the last path segment is not a named item.
     fn from_named(def_id: &ExplicitDefId) -> Self {
         Self::Named(match def_id.def_id.path.last() {
             Some(last) => match &last.data {
@@ -291,7 +378,7 @@ impl PathSegmentPayload {
                 | DefPathItem::ValueNs(s)
                 | DefPathItem::MacroNs(s)
                 | DefPathItem::LifetimeNs(s) => Symbol::new(s),
-                _ => rustc_def_id_invariant_violated!(def_id, "PathSegmentPayload::from_named"),
+                _ => return error_dummy_value("PathSegmentPayload::from_named", def_id),
             },
             None => Symbol::new(&def_id.def_id.krate),
         })
@@ -299,26 +386,21 @@ impl PathSegmentPayload {
 
     /// Constructs a [`PathSegmentPayload`] from an [`ExplicitDefId`], assuming its last
     /// path segment is unnamed.
-    fn from_unnamed(def_id: &ExplicitDefId) -> Self {
+    fn from_unnamed(def_id: &ExplicitDefId) -> Result<Self, &'static str> {
         match def_id.def_id.path.last() {
             Some(last) => match &last.data {
                 DefPathItem::TypeNs(_)
                 | DefPathItem::ValueNs(_)
                 | DefPathItem::MacroNs(_)
                 | DefPathItem::LifetimeNs(_) => {
-                    rustc_def_id_invariant_violated!(
-                        def_id,
-                        "PathSegmentPayload::from_unnamed, got name"
-                    )
+                    return Err("PathSegmentPayload::from_unnamed, got name");
                 }
+
                 _ => (),
             },
-            None => rustc_def_id_invariant_violated!(
-                def_id,
-                "PathSegmentPayload::from_unnamed, got a root crate"
-            ),
+            None => return Err("PathSegmentPayload::from_unnamed, got a root crate"),
         };
-        Self::Unnamed(match &def_id.def_id.kind {
+        Ok(Self::Unnamed(match &def_id.def_id.kind {
             DefKind::Use => UnnamedPathSegmentPayload::Use,
             DefKind::ForeignMod => UnnamedPathSegmentPayload::Foreign,
             DefKind::AnonConst => UnnamedPathSegmentPayload::AnonConst,
@@ -327,22 +409,14 @@ impl PathSegmentPayload {
             DefKind::GlobalAsm => UnnamedPathSegmentPayload::GlobalAsm,
             DefKind::Impl { .. } => UnnamedPathSegmentPayload::Impl,
             DefKind::Closure => UnnamedPathSegmentPayload::Closure,
-            _ => rustc_def_id_invariant_violated!(
-                def_id,
-                "PathSegmentPayload::from_unnamed, bad kind"
-            ),
-        })
+            _ => return Err("PathSegmentPayload::from_unnamed, bad kind"),
+        }))
     }
 
     /// Constructs a [`PathSegmentPayload`] from an [`ExplicitDefId`], dispatching to
     /// `from_named` or `from_unnamed` according to the item's [`DefKind`].
     ///
     /// This encodes rustc invariants about which kinds are name-bearing in paths.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the kind is not expected to appear here or violates the named/unnamed
-    /// convention.
     fn from_def_id(def_id: &ExplicitDefId) -> Self {
         match &def_id.def_id.kind {
             DefKind::Mod
@@ -372,11 +446,12 @@ impl PathSegmentPayload {
             | DefKind::OpaqueTy
             | DefKind::GlobalAsm
             | DefKind::Impl { .. }
-            | DefKind::Closure => Self::from_unnamed(def_id),
+            | DefKind::Closure => Self::from_unnamed(def_id)
+                .unwrap_or_else(|message| error_dummy_value(message, def_id)),
 
-            _ => rustc_def_id_invariant_violated!(
+            _ => error_dummy_value(
+                "PathSegmentPayload::from_def_id, kinds should never appear",
                 def_id,
-                "PathSegmentPayload::from_def_id, kinds should never appear"
             ),
         }
     }
@@ -477,77 +552,50 @@ impl PathSegment {
 
 impl<T> PathSegment<T> {
     /// Maps the segment's `kind` while preserving all other fields.
-    fn map<U>(self, f: impl Fn(T) -> U) -> PathSegment<U> {
-        self.map_opt(|x| Some(f(x))).unwrap()
-    }
-
-    /// Maps the segment's `kind` to an `Option`, dropping the segment if `None`.
-    fn map_opt<U>(self, f: impl Fn(T) -> Option<U>) -> Option<PathSegment<U>> {
+    fn map<U>(self, f: impl Fn(T, &DefId) -> U) -> PathSegment<U> {
         let Self {
             identifier,
             payload,
             disambiguator,
             kind,
         } = self;
-        let kind = f(kind)?;
-        Some(PathSegment {
+        let kind = f(kind, &identifier);
+        PathSegment {
             identifier,
             payload,
             disambiguator,
             kind,
-        })
+        }
     }
 }
 
 impl PathSegment {
     /// Asserts that this segment is a [`TypeDefKind`] and narrows the type.
     ///
-    /// # Panics
-    ///
-    /// Panics if the segment is not a type definition.
+    /// Emits a diagnostic if it doesn
     fn assert_type_def(self) -> PathSegment<TypeDefKind> {
-        let identifier = self.identifier.clone();
-        self.map(|kind| match kind {
+        self.map(|kind, did| match kind {
             AnyKind::TypeDef(inner) => inner,
-            _ => rustc_def_id_invariant_violated!(
-                identifier,
-                "expected TypeDefKind, got {:#?}",
-                kind
-            ),
+            _ => error_dummy_value(&format!("expected TypeDefKind, got {:#?}", kind), did),
         })
     }
 
     /// Asserts that this segment is an [`AssocItemContainerKind`] and narrows the type.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the segment is not an associated item container.
     fn assert_assoc_item_container(self) -> PathSegment<AssocItemContainerKind> {
-        let identifier = self.identifier.clone();
-        self.map(|kind| match kind {
+        self.map(|kind, did| match kind {
             AnyKind::AssocItemContainer(inner) => inner,
-            _ => rustc_def_id_invariant_violated!(
-                identifier,
-                "expected AssocItemContainerKind, got {:#?}",
-                kind
+            _ => error_dummy_value(
+                &format!("expected AssocItemContainerKind, got {:#?}", kind),
+                did,
             ),
         })
     }
 
     /// Asserts that this segment is a [`ConstructorKind`] and narrows the type.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the segment is not a constructor.
     fn assert_constructor(self) -> PathSegment<ConstructorKind> {
-        let identifier = self.identifier.clone();
-        self.map(|kind| match kind {
+        self.map(|kind, did| match kind {
             AnyKind::Constructor(inner) => inner,
-            _ => rustc_def_id_invariant_violated!(
-                identifier,
-                "expected ConstructorKind, got {:#?}",
-                kind
-            ),
+            _ => error_dummy_value(&format!("expected ConstructorKind, got {:#?}", kind), did),
         })
     }
 
@@ -557,18 +605,13 @@ impl PathSegment {
     /// (constructors, fields, associated items).
     ///
     /// Returns `None` when the iterator is exhausted.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required parent is missing or if a def kind appears in an
-    /// unexpected context.
     fn from_iterator(it: &mut impl Iterator<Item = ExplicitDefId>) -> Option<Self> {
         let def_id = it.next()?;
         let mut from_iterator = |context: &str| match Self::from_iterator(it) {
             Some(value) => value,
-            None => rustc_def_id_invariant_violated!(
-                def_id,
-                "PathSegment::from_iterator, expected parent for {context}."
+            None => error_dummy_value(
+                &format!("PathSegment::from_iterator, expected parent for {context}."),
+                &def_id,
             ),
         };
         let payload = PathSegmentPayload::from_def_id(&def_id);
@@ -582,9 +625,9 @@ impl PathSegment {
                 };
                 let parent = match Self::from_iterator(&mut std::iter::once(parent_def_id)) {
                     Some(value) => value,
-                    None => rustc_def_id_invariant_violated!(
-                        def_id,
-                        "PathSegment::from_iterator, expected parent for Struct/Ctor."
+                    None => error_dummy_value(
+                        "PathSegment::from_iterator, expected parent for Struct/Ctor.",
+                        &def_id,
                     ),
                 };
                 AnyKind::Constructor(ConstructorKind::Constructor {
@@ -634,10 +677,7 @@ impl PathSegment {
                         str::parse::<usize>(symbol.as_ref()).is_ok()
                     }
                     PathSegmentPayload::Unnamed(_) => {
-                        rustc_def_id_invariant_violated!(
-                            def_id,
-                            "Field should carry a ValueNs payload."
-                        )
+                        error_dummy_value("Field should carry a ValueNs payload.", &def_id)
                     }
                 },
             },
@@ -656,7 +696,7 @@ impl PathSegment {
                 kind: AssocItemKind::Const,
             },
 
-            _ => rustc_def_id_invariant_violated!(def_id, "PathSegment::from_iterator_opt"),
+            _ => error_dummy_value("PathSegment::from_iterator_opt", &def_id),
         };
         let identifier = def_id.def_id;
         let disambiguator = identifier.path.last().map(|d| d.disambiguator).unwrap_or(0);
@@ -680,9 +720,13 @@ impl PathSegment {
     /// All other kinds return `None`.
     pub fn parent(&self) -> Option<PathSegment> {
         Some(match self.kind.clone() {
-            AnyKind::Constructor(ConstructorKind::Constructor { ty }) => ty.map(AnyKind::TypeDef),
-            AnyKind::AssocItem { container, .. } => container.map(AnyKind::AssocItemContainer),
-            AnyKind::Field { parent, .. } => parent.map(AnyKind::Constructor),
+            AnyKind::Constructor(ConstructorKind::Constructor { ty }) => {
+                ty.map(|kind, _| AnyKind::TypeDef(kind))
+            }
+            AnyKind::AssocItem { container, .. } => {
+                container.map(|kind, _| AnyKind::AssocItemContainer(kind))
+            }
+            AnyKind::Field { parent, .. } => parent.map(|kind, _| AnyKind::Constructor(kind)),
             _ => return None,
         })
     }
@@ -694,66 +738,71 @@ impl PathSegment {
     }
 }
 
-/// A view for an [`ExplicitDefId`], materialized as a list of typed
-/// [`PathSegment`]s ordered from the crate root/module towards the item.
-pub struct View(Vec<PathSegment>);
+mod view_encapsulation {
+    //! Encapsulation module to scope [`View`]'s invariants
+    use super::*;
+    /// A view for an [`ExplicitDefId`], materialized as a list of typed
+    /// [`PathSegment`]s ordered from the crate root/module towards the item.
+    pub struct View(Vec<PathSegment>);
 
-impl View {
-    /// Returns the full list of segments (non-empty).
-    pub fn segments(&self) -> &[PathSegment] {
-        &self.0
+    impl View {
+        /// Returns the full list of segments (non-empty).
+        pub fn segments(&self) -> &[PathSegment] {
+            &self.0
+        }
+
+        /// Returns the last (most specific) segment.
+        pub fn last(&self) -> &PathSegment {
+            self.0
+                .last()
+                .expect("Broken invariant: a view always contains at least one path path segments.")
+        }
+
+        /// Returns the first (outermost) segment.
+        pub fn first(&self) -> &PathSegment {
+            self.0
+                .first()
+                .expect("Broken invariant: a view always contains at least one path path segments.")
+        }
+
+        /// Splits the view at the boundary between (Rust) modules and the first non-module
+        /// segment.
+        ///
+        /// Returns `(modules, rest)`, where `modules` is the (non empty) prefix of
+        /// `mod` segments (e.g., the crate/module path), and `rest` is the remaining
+        /// segments starting at the first non-`mod`.
+        pub fn split_at_module(&self) -> (&[PathSegment], &[PathSegment]) {
+            let position = self
+                .segments()
+                .iter()
+                .enumerate()
+                .find(|(_, seg)| !matches!(seg.kind(), AnyKind::Mod))
+                .map(|(i, _)| i)
+                .unwrap_or(self.segments().len());
+            self.segments().split_at(position)
+        }
+
+        /// Get the first parent which is a proper module (all its parent are modules as well).
+        pub fn module(&self) -> &PathSegment {
+            self.0
+                .iter()
+                .take_while(|seg| !matches!(seg.kind(), AnyKind::Mod))
+                .last()
+                .expect("Broken invariant, a name has at least a crate")
+        }
     }
 
-    /// Returns the last (most specific) segment.
-    pub fn last(&self) -> &PathSegment {
-        self.0
-            .last()
-            .expect("Broken invariant: a view always contains at least one path path segments.")
-    }
-
-    /// Returns the first (outermost) segment.
-    pub fn first(&self) -> &PathSegment {
-        self.0
-            .first()
-            .expect("Broken invariant: a view always contains at least one path path segments.")
-    }
-
-    /// Splits the view at the boundary between (Rust) modules and the first non-module
-    /// segment.
-    ///
-    /// Returns `(modules, rest)`, where `modules` is the (non empty) prefix of
-    /// `mod` segments (e.g., the crate/module path), and `rest` is the remaining
-    /// segments starting at the first non-`mod`.
-    pub fn split_at_module(&self) -> (&[PathSegment], &[PathSegment]) {
-        let position = self
-            .segments()
-            .iter()
-            .enumerate()
-            .find(|(_, seg)| !matches!(seg.kind(), AnyKind::Mod))
-            .map(|(i, _)| i)
-            .unwrap_or(self.segments().len());
-        self.segments().split_at(position)
-    }
-
-    /// Get the first parent which is a proper module (all its parent are modules as well).
-    pub fn module(&self) -> &PathSegment {
-        self.0
-            .iter()
-            .take_while(|seg| !matches!(seg.kind(), AnyKind::Mod))
-            .last()
-            .expect("Broken invariant, a name has at least a crate")
+    impl From<ExplicitDefId> for View {
+        /// Builds a [`View`] from an [`ExplicitDefId`], reconstructing segments by walking
+        /// up the parent chain and then reversing to obtain the canonical outer→inner order.
+        fn from(value: ExplicitDefId) -> Self {
+            let mut it = value.parents();
+            let mut inner =
+                std::iter::from_fn(|| PathSegment::from_iterator(&mut it)).collect::<Vec<_>>();
+            inner.reverse();
+            debug_assert!(!inner.is_empty()); // invariant: non-empty
+            Self(inner)
+        }
     }
 }
-
-impl From<ExplicitDefId> for View {
-    /// Builds a [`View`] from an [`ExplicitDefId`], reconstructing segments by walking
-    /// up the parent chain and then reversing to obtain the canonical outer→inner order.
-    fn from(value: ExplicitDefId) -> Self {
-        let mut it = value.parents();
-        let mut inner =
-            std::iter::from_fn(|| PathSegment::from_iterator(&mut it)).collect::<Vec<_>>();
-        inner.reverse();
-        debug_assert!(!inner.is_empty()); // invariant: non-empty
-        Self(inner)
-    }
-}
+pub use view_encapsulation::View;

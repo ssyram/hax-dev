@@ -65,4 +65,6 @@ impl Diagnostic {
 pub enum Context {
     /// Error during import from THIR
     Import,
+    /// Error during the projection from idenitfiers to views
+    NameView,
 }
