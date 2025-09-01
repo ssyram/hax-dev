@@ -23,8 +23,6 @@ pub struct Query {
     )>,
     /// The kind of query we want to send to the engine
     pub kind: QueryKind,
-    /// Translation options which contains include clauses (items filtering)
-    pub translation_options: hax_types::cli_options::TranslationOptions,
 }
 
 /// The payload of the query. [`Response`] below mirrors this enum to represent
@@ -37,6 +35,8 @@ pub enum QueryKind {
         input: Vec<hax_frontend_exporter::Item<ThirBody>>,
         /// Temporary option to enable a set of default phases
         apply_phases: bool,
+        /// Translation options which contains include clauses (items filtering)
+        translation_options: hax_types::cli_options::TranslationOptions,
     },
 }
 
