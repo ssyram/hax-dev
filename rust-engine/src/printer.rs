@@ -18,6 +18,8 @@ use pretty::Pretty;
 pub mod pretty_ast;
 pub use pretty_ast::PrettyAst;
 
+pub mod render_view;
+
 /// Implements `pretty::DocAllocator<'a, A>` for a local types
 /// that already implement `HasAllocator<'a, A>`.
 ///

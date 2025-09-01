@@ -35,6 +35,8 @@ pub enum QueryKind {
         input: Vec<hax_frontend_exporter::Item<ThirBody>>,
         /// Temporary option to enable a set of default phases
         apply_phases: bool,
+        /// Translation options which contains include clauses (items filtering)
+        translation_options: hax_types::cli_options::TranslationOptions,
     },
 }
 
