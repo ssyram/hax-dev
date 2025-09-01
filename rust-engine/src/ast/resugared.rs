@@ -13,7 +13,6 @@
 
 use hax_rust_engine_macros::*;
 
-use super::identifiers::GlobalId;
 use super::*;
 
 /// Resugared variants for items. This represent extra printing-only items, see [`super::ItemKind::Resugared`].
