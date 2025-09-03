@@ -20,6 +20,9 @@
    using `apt` or `homebrew` and the `setup.sh` script;
  - [`engine-js-build`](./.github/workflows/engine_js_build.yml): tests
    the build the JS version of the engine.
+ - [`charon`](./.github/workflows/charon.yml): tests integration with
+   the Charon project by updating Charon's dependencies to use this
+   version of hax and running `make test` to ensure all tests pass.
  
 ## Merge queue
 Additional actions are triggered on pull requests in the merge queue. They are
