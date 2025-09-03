@@ -909,6 +909,7 @@ pub struct Item<Body: IsBody> {
     pub vis_span: Span,
     pub kind: ItemKind<Body>,
     pub attributes: ItemAttributes,
+    pub visibility: Visibility<DefId>,
 }
 
 #[cfg(feature = "rustc")]
@@ -933,6 +934,7 @@ impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, Item<Body>> for hir::Item<
             | TraitAlias(i, ..) => i.name.to_ident_string(),
             Use(..) | ForeignMod { .. } | GlobalAsm { .. } | Impl { .. } => String::new(),
         };
+        let tcx = s.base().tcx;
         let s = &with_owner_id(s.base(), (), (), self.owner_id.to_def_id());
         let owner_id: DefId = self.owner_id.sinto(s);
         let def_id = Path::from(owner_id.clone())
@@ -945,6 +947,7 @@ impl<'tcx, S: BaseState<'tcx>, Body: IsBody> SInto<S, Item<Body>> for hir::Item<
             vis_span: self.span.sinto(s),
             kind: self.kind.sinto(s),
             attributes: ItemAttributes::from_owner_id(s, self.owner_id),
+            visibility: tcx.visibility(self.owner_id).sinto(s),
         }
     }
 }
