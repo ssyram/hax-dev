@@ -652,6 +652,7 @@ impl PathSegment {
             DefKind::Mod => AnyKind::Mod,
             DefKind::Fn => AnyKind::Fn,
             DefKind::Const => AnyKind::Const,
+            DefKind::Static { .. } => AnyKind::Static,
             DefKind::Use => AnyKind::Use,
             DefKind::TyAlias => AnyKind::TyAlias,
             DefKind::TraitAlias => AnyKind::TraitAlias,
