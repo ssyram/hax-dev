@@ -15,20 +15,21 @@ jobs:
     steps:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
-        
+
       - name: Checkout Charon repository
         uses: actions/checkout@v4
         with:
           repository: AeneasVerif/charon
-          
+
       - name: Update Charon dependencies to use this hax version
         run: |
           cd charon
           cargo update -p hax-frontend-exporter --precise ${{ github.sha }}
-          cargo update -p hax-frontend-exporter-options --precise ${{ github.sha }}
-          
+          cargo update \
+            -p hax-frontend-exporter-options --precise ${{ github.sha }}
+
       - name: Build Charon
         run: nix build -L
-        
+
       - name: Run Charon tests
         run: make test
