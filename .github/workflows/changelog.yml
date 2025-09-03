@@ -3,9 +3,11 @@ name: Check Changelog Update
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+    if: github.actor != 'github-merge-queue[bot]'
 
 jobs:
   check-changelog:
+    if: github.actor != 'github-merge-queue[bot]'
     runs-on: ubuntu-latest
 
     steps:
