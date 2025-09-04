@@ -389,8 +389,15 @@ pub fn dyn_self_ty<'tcx>(
             ty::Binder::dummy(ty::ExistentialPredicate::Projection(proj))
         });
 
-    let preds =
-        tcx.mk_poly_existential_predicates_from_iter([main_pred].into_iter().chain(ty_constraints));
+    let preds = {
+      // Stable sort predicates to prevent platform-specific ordering issues
+      let mut preds: Vec<_> = [main_pred].into_iter().chain(ty_constraints).collect();
+      preds.sort_by(|a, b| {
+        use crate::rustc_middle::ty::ExistentialPredicateStableCmpExt;
+        a.skip_binder().stable_cmp(tcx, &b.skip_binder())
+      });
+      tcx.mk_poly_existential_predicates(&preds)
+    };
     let ty = tcx.mk_ty_from_kind(ty::Dynamic(preds, re_erased, ty::DynKind::Dyn));
     let ty = normalize(tcx, typing_env, ty);
     Some(ty)
