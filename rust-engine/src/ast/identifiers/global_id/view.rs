@@ -445,7 +445,11 @@ impl PathSegmentPayload {
             | DefKind::Closure => Self::from_unnamed(def_id)
                 .unwrap_or_else(|message| error_dummy_value(message, def_id)),
 
-            _ => error_dummy_value(
+            DefKind::TyParam
+            | DefKind::ConstParam
+            | DefKind::PromotedConst
+            | DefKind::LifetimeParam
+            | DefKind::SyntheticCoroutineBody => error_dummy_value(
                 "PathSegmentPayload::from_def_id, kinds should never appear",
                 def_id,
             ),
@@ -652,6 +656,7 @@ impl PathSegment {
             DefKind::Mod => AnyKind::Mod,
             DefKind::Fn => AnyKind::Fn,
             DefKind::Const => AnyKind::Const,
+            DefKind::Static { .. } => AnyKind::Static,
             DefKind::Use => AnyKind::Use,
             DefKind::TyAlias => AnyKind::TyAlias,
             DefKind::TraitAlias => AnyKind::TraitAlias,
