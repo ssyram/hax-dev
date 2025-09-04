@@ -6,6 +6,8 @@
 use crate::ast::*;
 use hax_rust_engine_macros::*;
 
+pub use hax_types::diagnostics::Kind as DiagnosticInfoKind;
+
 /// Error diagnostic
 #[derive_group_for_ast]
 pub struct Diagnostic {
@@ -15,6 +17,7 @@ pub struct Diagnostic {
 
 /// Error description and location
 #[derive_group_for_ast]
+#[must_use]
 pub struct DiagnosticInfo {
     /// Diagnostic context
     pub context: Context,
@@ -24,13 +27,18 @@ pub struct DiagnosticInfo {
     pub kind: DiagnosticInfoKind,
 }
 
-/// Description of the error
-#[derive_group_for_ast]
-pub enum DiagnosticInfoKind {
-    /// Custom error
-    Custom(String),
-    /// Import of a parameter without pattern
-    ImportParamWithoutPattern,
+impl DiagnosticInfo {
+    /// Emits the diagnostic information.
+    pub fn emit(&self) {
+        crate::hax_io::write(&hax_types::engine_api::protocol::FromEngine::Diagnostic(
+            hax_types::diagnostics::Diagnostics {
+                kind: self.kind.clone(),
+                span: self.span.data.clone(),
+                context: format!("{:?}", self.context),
+                owner_id: None,
+            },
+        ))
+    }
 }
 
 impl Diagnostic {
@@ -43,10 +51,9 @@ impl Diagnostic {
         &self.node
     }
     /// Report an error
-    pub fn new(node: Fragment, info: DiagnosticInfo) -> Self {
-        eprintln!("Todo, error reporting");
-        eprintln!("node={node:#?}");
-        eprintln!("info={info:#?}");
+    pub fn new(node: impl Into<Fragment>, info: DiagnosticInfo) -> Self {
+        let node = node.into();
+        info.emit();
         Self {
             node: Box::new(node),
             info,
@@ -59,4 +66,6 @@ impl Diagnostic {
 pub enum Context {
     /// Error during import from THIR
     Import,
+    /// Error during the projection from idenitfiers to views
+    NameView,
 }

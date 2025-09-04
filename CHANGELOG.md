@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 0.3.4
+
+The release of `0.3.3` got troubles because of the new Rust Engine crates.
+This release is mostly empty.
+
+## 0.3.3
+
+Changes to the frontend:
+ - A field `visibility` was added to HIR items (#1643)
+
+Rust Engine:
+ - A Lean backend was introduced (#1593, #1591, #1590, #1607)
+ - The Rust engine was improved (#1624, #1603, #1600, #1585)
+ - The F* backend has been improved (#1587, #1585)
+
 ## 0.3.2
 
 Changes to the frontend:

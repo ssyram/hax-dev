@@ -28,30 +28,53 @@ diagnostics = []
 
 [stdout.files]
 "lean_tests.lean" = '''
+
 -- Experimental lean backend for Hax
--- Comment the following line to not import the prelude (requires the Lib.lean file) : 
-import Lib
+-- The Hax prelude library can be found in hax/proof-libs/lean
+import Hax
+import Std.Tactic.Do
+import Std.Do.Triple
+import Std.Tactic.Do.Syntax
+open Std.Do
+open Std.Tactic
+
+set_option mvcgen.warning false
+set_option linter.unusedVariables false
 
 
 
--- unimplemented yet
+def FORTYTWO : USize := 42
+def MINUS_FORTYTWO : ISize := -42
+def returns42 (_ : hax_Tuple0) : Result USize := do FORTYTWO
 
-def FORTYTWO  : usize := 42
+def add_two_numbers (x : USize) (y : USize) : Result USize := do (← x +? y)
 
-def returns42 (_ : hax_Tuple0) : usize := FORTYTWO
+def letBinding (x : USize) (y : USize) : Result USize := do
+  let (useless : hax_Tuple0) ← pure (constr_hax_Tuple0);
+  let (result1 : USize) ← pure (← x +? y);
+  let (result2 : USize) ← pure (← result1 +? 2);
+  (← result2 +? 1)
 
-def add_two_numbers (x : usize) (y : usize) : usize := (hax_machine_int_add x y)
+def closure (_ : hax_Tuple0) : Result Int32 := do
+  let (x : Int32) ← pure 41;
+  let (f1 : Int32 -> Result Int32) ← pure (fun (y : Int32) => do (← y +? x));
+  let (f2 : Int32 -> Int32 -> Result Int32) ← pure
+    (fun (y : Int32) (z : Int32) => do (← (← y +? x) +? z));
+  (← (← ops_function_Fn_call f1 (constr_hax_Tuple1 (hax_Tuple1_Tuple0 := 1))) +?
+  (← ops_function_Fn_call
+  f2
+    (constr_hax_Tuple2 (hax_Tuple2_Tuple0 := 2) (hax_Tuple2_Tuple1 := 3))))
 
-def letBinding (x : usize) (y : usize) : usize :=
-  let useless := (.constr_hax_Tuple0 : hax_Tuple0);
-  let result1 := (hax_machine_int_add x y);
-  let result2 := (hax_machine_int_add result1 2);
-  (hax_machine_int_add result2 1)
 
-def closure (_ : hax_Tuple0) : i32 :=
-  let x := 41;
-  let f := (fun y => (hax_machine_int_add y x));
-  (ops_function_Fn_call f
-    (.constr_hax_Tuple1 {hax_Tuple1_Tuple0 := 1} : (hax_Tuple1 i32)))
+@[spec]
+def test_before_verbatime_single_line (x : UInt8) : Result UInt8 := do 42
 
-abbrev UsizeAlias := usize'''
+
+
+def multiline : Unit := ()
+
+def test_before_verbatim_multi_line (x : UInt8) : Result UInt8 := do 32
+
+def binop_resugarings (x : UInt32) : Result UInt32 := do
+  (← (← (← x +? 1) -? (← (← (← 2 *? 3) %? 4) /? 5)) >>>? 1)
+'''
