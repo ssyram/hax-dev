@@ -17,7 +17,19 @@ use super::*;
 
 /// Resugared variants for items. This represent extra printing-only items, see [`super::ItemKind::Resugared`].
 #[derive_group_for_ast]
-pub enum ResugaredItemKind {}
+pub enum ResugaredItemKind {
+    /// A `const` item, for example `const NAME: T = body;`.
+    /// The type of the constant is `body.ty`.
+    Constant {
+        /// The identifier of the constant, for example `krate::module::NAME`.
+        name: GlobalId,
+        /// The body of the constant, for example `body`.
+        body: Expr,
+        /// The generic arguments and constraints of the constant.
+        /// Note: constant supporting generics is a nightly feature (generic_const_items).
+        generics: Generics,
+    },
+}
 
 /// Resugared variants for expressions. This represent extra printing-only expressions, see [`super::ExprKind::Resugared`].
 #[derive_group_for_ast]
