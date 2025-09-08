@@ -28,7 +28,7 @@ Rust into formal languages such as [F\*](https://www.fstar-lang.org/) or [Rocq](
     <td align="center" colspan="3">
       General purpose proof assistants
     </td>
-    <td align="center" colspan="3">
+    <td align="center" colspan="2">
       Cryptography & protocols
     </td>
   </tr>
@@ -75,11 +75,6 @@ Rust into formal languages such as [F\*](https://www.fstar-lang.org/) or [Rocq](
         <b>ProVerif</b>
       </a>
     </td>
-    <td align="center">
-      <a href="https://www.easycrypt.info/">
-        <b>EasyCrypt</b>
-      </a>
-    </td>
   </tr>
   <tr>
     <!-- 🟢🟡🟠🔴 -->
@@ -88,7 +83,6 @@ Rust into formal languages such as [F\*](https://www.fstar-lang.org/) or [Rocq](
     <td align="center"><sub>🚀 active dev.</sub></td>
     <td align="center"><sub>🟡 partial</sub></td>
     <td align="center"><sub>🟠 PoC</sub></td>
-    <td align="center"><sub>🔴</sub></td>
   </tr>
 </table>
 
