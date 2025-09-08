@@ -97,6 +97,8 @@ Here are some resources for learning more about hax:
    a set of examples that show what hax can do for you.
  - Other [specifications](https://github.com/hacspec/specs) of cryptographic protocols.
 
+Questions? Join us on [Zulip](https://hacspec.zulipchat.com/) or open a [GitHub Discussion](https://github.com/cryspen/hax/discussions). For bugs, file an [Issue](https://github.com/cryspen/hax/issues).
+
 ## Usage
 Hax is a cargo subcommand. 
 The command `cargo hax` accepts the following subcommands:
