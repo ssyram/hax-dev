@@ -21,7 +21,7 @@ mod binops {
 
 /// The Lean printer
 #[derive(Default)]
-pub struct LeanPrinter {}
+pub struct LeanPrinter;
 impl_doc_allocator_for!(LeanPrinter);
 
 const INDENT: isize = 2;
@@ -159,7 +159,7 @@ impl LeanPrinter {
     }
 
     /// Render a global id using the Rendering strategy of the Lean printer. Works for both concrete
-    /// and projector ids
+    /// and projector ids. TODO: https://github.com/cryspen/hax/issues/1660
     pub fn render_id(&self, id: &GlobalId) -> String {
         match id {
             GlobalId::Concrete(concrete_id) | GlobalId::Projector(concrete_id) => {
@@ -168,7 +168,9 @@ impl LeanPrinter {
         }
     }
 
-    /// Escapes local identifiers (prefixing reserved keywords with an underscore)
+    /// Escapes local identifiers (prefixing reserved keywords with an underscore).
+    /// TODO: This should be treated directly in the name rendering engine, see
+    /// https://github.com/cryspen/hax/issues/1630
     pub fn escape(&self, id: String) -> String {
         if id.is_empty() {
             "_ERROR_EMPTY_ID_".to_string()
@@ -184,11 +186,15 @@ impl LeanPrinter {
         let id = self
             .render(
                 &id.as_concrete()
+                    // TODO: Should be ensured by the rendering engine; see
+                    // https://github.com/cryspen/hax/issues/1660
                     .expect("Rendering a projector as a constructor")
                     .view(),
             )
             .path
             .last()
+            // TODO: Should be ensured by the rendering engine; see
+            // https://github.com/cryspen/hax/issues/1660
             .expect("Segments should always be non-empty")
             .clone();
         self.escape(id)
@@ -356,6 +362,8 @@ set_option linter.unusedVariables false
                     else_,
                 } => {
                     if let Some(else_branch) = else_ {
+                        // TODO: have a proper monadic resugaring, see
+                        // https://github.com/cryspen/hax/issues/1620
                         docs![
                             docs!["if", line!(), condition, reflow!(" then")].group(),
                             docs![line!(), "do", line!(), then].nest(INDENT),
@@ -376,6 +384,7 @@ set_option linter.unusedVariables false
                     bounds_impls: _,
                     trait_: _,
                 } => {
+                    // TODO: have a proper monadic resugaring, see https://github.com/cryspen/hax/issues/1620
                     let monadic_lift = if let ExprKind::GlobalId(head_id) = head.kind()
                         && (head_id.is_constructor() || head_id.is_projector())
                     {
@@ -433,6 +442,8 @@ set_option linter.unusedVariables false
                             docs![
                                 "let",
                                 line!(),
+                                // TODO: Remove this pattern-matching. See
+                                // https://github.com/cryspen/hax/issues/1620
                                 match *lhs.kind.clone() {
                                     PatKind::Binding {
                                         mutable: false,
@@ -458,7 +469,7 @@ set_option linter.unusedVariables false
                 ExprKind::GlobalId(global_id) => docs![global_id],
                 ExprKind::LocalId(local_id) => docs![local_id],
                 ExprKind::Ascription { e, ty } => docs![
-                    // This insertion should be done by a monadic phase (or resugaring). See
+                    // TODO: This insertion should be done by a monadic phase (or resugaring). See
                     // https://github.com/cryspen/hax/issues/1620
                     match *e.kind {
                         ExprKind::Literal(_) | ExprKind::Construct { .. } => None,
@@ -477,7 +488,8 @@ set_option linter.unusedVariables false
                 } => docs![
                     reflow!("fun "),
                     intersperse!(params, line!()).group(),
-                    reflow!(" =>"),
+                    reflow!(" => "),
+                    // TODO: have a proper monadic resugaring, see https://github.com/cryspen/hax/issues/1620
                     docs!["do", line!(), self.expr_typed_result(body)]
                         .nest(INDENT)
                         .parens()
@@ -514,7 +526,7 @@ set_option linter.unusedVariables false
                         } else {
                             unreachable!()
                         };
-                        // This monad lifting should be handled by a phase/resugaring, see
+                        // TODO: This monad lifting should be handled by a phase/resugaring, see
                         // https://github.com/cryspen/hax/issues/1620
                         docs!["← ", lhs, softline!(), symbol, softline!(), rhs]
                             .group()
@@ -667,6 +679,7 @@ set_option linter.unusedVariables false
         }
 
         fn local_id(&'a self, local_id: &'b LocalId) -> DocBuilder<'a, Self, A> {
+            // TODO: should be done by name rendering, see https://github.com/cryspen/hax/issues/1630
             docs![self.escape(local_id.0.to_string())]
         }
 
@@ -741,25 +754,32 @@ set_option linter.unusedVariables false
                     params,
                     safety: _,
                 } => match &*body.kind {
-                    // Literal consts. This should be done by a resugaring, see
+                    // TODO: Literal consts. This should be done by a resugaring, see
                     // https://github.com/cryspen/hax/issues/1614
-                    ExprKind::Literal(l) if params.is_empty() => {
-                        docs!["def ", name, reflow!(" : "), &body.ty, reflow!(" := "), l].group()
-                    }
+                    ExprKind::Literal(l) if params.is_empty() => docs![
+                        reflow!("def "),
+                        name,
+                        reflow!(" : "),
+                        &body.ty,
+                        reflow!(" := "),
+                        l
+                    ]
+                    .group(),
                     _ => {
                         let generics = (!generics.params.is_empty()).then_some(
                             docs![intersperse!(&generics.params, line!()).braces().group()].group(),
                         );
                         docs![
                             docs![
-                                "def ",
+                                reflow!("def "),
                                 name,
                                 softline!(),
                                 generics,
                                 softline!(),
                                 docs![intersperse!(params, line!())].group(),
                                 line!(),
-                                ": Result ",
+                                ": Result",
+                                softline!(),
                                 &body.ty,
                                 line!(),
                                 ":= do",
@@ -792,6 +812,7 @@ set_option linter.unusedVariables false
                     variants,
                     is_struct,
                 } => {
+                    // TODO: use a resugaring, see https://github.com/cryspen/hax/issues/1668
                     if *is_struct {
                         // Structures
                         let Some(variant) = variants.first() else {

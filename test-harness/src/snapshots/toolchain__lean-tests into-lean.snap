@@ -308,9 +308,9 @@ def Lean_tests.letBinding  (x : usize) (y : usize) : Result usize := do
 def Lean_tests.closure  (_ : Rust_primitives.Hax.Tuple0) : Result i32 := do
   let x : i32 ← (pure (41 : i32));
   let f1 : i32 -> Result i32 ←
-    (pure (fun (y : i32) =>(do (← y +? x) : Result i32)));
+    (pure (fun (y : i32) => (do (← y +? x) : Result i32)));
   let f2 : i32 -> i32 -> Result i32 ←
-    (pure (fun (y : i32) (z : i32) =>(do (← (← y +? x) +? z) : Result i32)));
+    (pure (fun (y : i32) (z : i32) => (do (← (← y +? x) +? z) : Result i32)));
   let res1 : i32 ←
     (pure
     (← Core.Ops.Function.Fn.call f1 (Rust_primitives.Hax.Tuple1.mk (1 : i32))));
