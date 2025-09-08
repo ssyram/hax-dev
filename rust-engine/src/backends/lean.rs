@@ -220,59 +220,6 @@ impl LeanPrinter {
     }
 }
 
-// Methods for handling arguments of variants (or struct constructor)
-#[prepend_associated_functions_with(install_pretty_helpers!(self: Self))]
-impl LeanPrinter {
-    /// Prints arguments a variant or constructor of struct, using named or unamed arguments based
-    /// on the `is_record` flag. Used for both expressions and patterns
-    pub fn arguments<'a, 'b, A: 'a + Clone, D>(
-        &'a self,
-        fields: &'b [(GlobalId, D)],
-        is_record: &bool,
-    ) -> DocBuilder<'a, Self, A>
-    where
-        &'b D: Pretty<'a, Self, A>,
-    {
-        if *is_record {
-            self.named_arguments(fields)
-        } else {
-            self.positional_arguments(fields)
-        }
-    }
-
-    /// Prints named arguments (record) of a variant or constructor of struct
-    fn named_arguments<'a, 'b, A: 'a + Clone, D>(
-        &'a self,
-        fields: &'b [(GlobalId, D)],
-    ) -> DocBuilder<'a, Self, A>
-    where
-        &'b D: Pretty<'a, Self, A>,
-    {
-        macro_rules! line {($($tt:tt)*) => {disambiguated_line!($($tt)*)};}
-        docs![intersperse!(
-            fields.iter().map(|(id, e)| {
-                docs![self.render_last(id), reflow!(" := "), e]
-                    .parens()
-                    .group()
-            }),
-            line!()
-        )]
-        .group()
-    }
-
-    /// Prints positional arguments (tuple) of a variant or constructor of struct
-    fn positional_arguments<'a, 'b, A: 'a + Clone, D>(
-        &'a self,
-        fields: &'b [(GlobalId, D)],
-    ) -> DocBuilder<'a, Self, A>
-    where
-        &'b D: Pretty<'a, Self, A>,
-    {
-        macro_rules! line {($($tt:tt)*) => {disambiguated_line!($($tt)*)};}
-        docs![intersperse!(fields.iter().map(|(_, e)| e), line!())].group()
-    }
-}
-
 #[prepend_associated_functions_with(install_pretty_helpers!(self: Self))]
 const _: () = {
     // Boilerplate: define local macros to disambiguate otherwise `std` macros.
@@ -282,6 +229,58 @@ const _: () = {
     macro_rules! line {($($tt:tt)*) => {disambiguated_line!($($tt)*)};}
     #[allow(unused)]
     macro_rules! concat {($($tt:tt)*) => {disambiguated_concat!($($tt)*)};}
+
+    // Methods for handling arguments of variants (or struct constructor)
+    impl LeanPrinter {
+        /// Prints arguments a variant or constructor of struct, using named or unamed arguments based
+        /// on the `is_record` flag. Used for both expressions and patterns
+        pub fn arguments<'a, 'b, A: 'a + Clone, D>(
+            &'a self,
+            fields: &'b [(GlobalId, D)],
+            is_record: &bool,
+        ) -> DocBuilder<'a, Self, A>
+        where
+            &'b D: Pretty<'a, Self, A>,
+        {
+            if *is_record {
+                self.named_arguments(fields)
+            } else {
+                self.positional_arguments(fields)
+            }
+        }
+
+        /// Prints named arguments (record) of a variant or constructor of struct
+        fn named_arguments<'a, 'b, A: 'a + Clone, D>(
+            &'a self,
+            fields: &'b [(GlobalId, D)],
+        ) -> DocBuilder<'a, Self, A>
+        where
+            &'b D: Pretty<'a, Self, A>,
+        {
+            macro_rules! line {($($tt:tt)*) => {disambiguated_line!($($tt)*)};}
+            docs![intersperse!(
+                fields.iter().map(|(id, e)| {
+                    docs![self.render_last(id), reflow!(" := "), e]
+                        .parens()
+                        .group()
+                }),
+                line!()
+            )]
+            .group()
+        }
+
+        /// Prints positional arguments (tuple) of a variant or constructor of struct
+        fn positional_arguments<'a, 'b, A: 'a + Clone, D>(
+            &'a self,
+            fields: &'b [(GlobalId, D)],
+        ) -> DocBuilder<'a, Self, A>
+        where
+            &'b D: Pretty<'a, Self, A>,
+        {
+            macro_rules! line {($($tt:tt)*) => {disambiguated_line!($($tt)*)};}
+            docs![intersperse!(fields.iter().map(|(_, e)| e), line!())].group()
+        }
+    }
 
     impl<'a, 'b, A: 'a + Clone> PrettyAst<'a, 'b, A> for LeanPrinter {
         fn module(&'a self, module: &'b Module) -> DocBuilder<'a, Self, A> {
