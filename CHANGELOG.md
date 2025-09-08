@@ -7,10 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Changes to the Lean backend
- - Add support for enums and structs (type definitions, expressions,
-   pattern-matching) (#1623)
- - Update name rendering infrastructure (#1623, #1624)
+Rust Engine:
+ - Add support for enums and structs to the Lean backend (type definitions,
+   expressions, pattern-matching) (#1623)
+ - Update name rendering infrastructure in the Lean backend (#1623, #1624)
+
+## 0.3.4
+
+The release of `0.3.3` got troubles because of the new Rust Engine crates.
+This release is mostly empty.
+
+## 0.3.3
+
+Changes to the frontend:
+ - A field `visibility` was added to HIR items (#1643)
+
+Rust Engine:
+ - A Lean backend was introduced (#1593, #1591, #1590, #1607)
+ - The Rust engine was improved (#1624, #1603, #1600, #1585)
+ - The F* backend has been improved (#1587, #1585)
 
 ## 0.3.2
 
