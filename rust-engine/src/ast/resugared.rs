@@ -25,6 +25,9 @@ pub enum ResugaredItemKind {
         name: GlobalId,
         /// The body of the constant, for example `body`.
         body: Expr,
+        /// The generic arguments and constraints of the constant.
+        /// Note: constant supporting generics is a nightly feature (generic_const_items).
+        generics: Generics,
     },
 }
 

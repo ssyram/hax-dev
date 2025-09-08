@@ -29,12 +29,13 @@ impl AstVisitorMut for FunctionsToConstants {
         else {
             return;
         };
-        if !(params.is_empty() && generics.constraints.is_empty() && generics.params.is_empty()) {
+        if !params.is_empty() {
             return;
         }
         *item_kind = ItemKind::Resugared(ResugaredItemKind::Constant {
             name: name.clone(),
             body: body.clone(),
+            generics: generics.clone(),
         });
     }
 }
