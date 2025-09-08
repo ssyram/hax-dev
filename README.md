@@ -36,40 +36,57 @@ These specifications can be translated into formal languages with hax.
 
 <table align="center">
   <tr>
-    <td align="center" style="vertical-align: center;" colspan="3">
+    <td align="center" colspan="3">
       General purpose proof assistants
     </td>
-    <td align="center" style="vertical-align: center;" colspan="3">
+    <td align="center" colspan="3">
       Cryptography & protocols
     </td>
   </tr>
   <tr>
-    <td align="center" style="vertical-align: center;">
+    <td align="center">
       <a href="https://www.fstar-lang.org/">
-        <img src="https://fstar-lang.org/i/fstar-new.png" alt="F*" height="30"/>
+        F*
+        <!-- <picture>
+          <source srcset=".github/assets/fstar-dark.png" media="(prefers-color-scheme: dark)">
+          <source srcset=".github/assets/fstar-light.png" media="(prefers-color-scheme: light)">
+          <img src=".github/assets/fstar-light.png" height="40" alt="F*">
+        </picture> -->
       </a>
     </td>
-    <td align="center" style="vertical-align: center;">
+    <td align="center">
       <a href="https://rocq-prover.org/">
-        <img src="https://rocq-prover.org/_/Njk3Njg5NzliYmU5OWFhNWFhNmFiY2Q1YTVmZmEwNzY/logos/logo-rocq-blue_orange.svg" alt="Rocq" height="18"/><br/>
+        <picture>
+          <source srcset=".github/assets/rocq-dark.svg" media="(prefers-color-scheme: dark)">
+          <source srcset=".github/assets/rocq-light.svg" media="(prefers-color-scheme: light)">
+          <img src=".github/assets/rocq-light.svg" height="18" alt="Rocq">
+        </picture>
       </a>
     </td>
     <td align="center" style="vertical-align: center; ">
       <a href="https://lean-lang.org/">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/d/dc/Lean_logo2.svg" alt="Lean" height="30"/><br/>
+        <picture>
+          <source srcset=".github/assets/lean-dark.svg" media="(prefers-color-scheme: dark)">
+          <source srcset=".github/assets/lean-light.svg" media="(prefers-color-scheme: light)">
+          <img src=".github/assets/lean-light.svg" height="18" alt="Lean">
+        </picture>
       </a>
     </td>
-    <td align="center" style="vertical-align: center;">
+    <td align="center">
       <a href="https://github.com/SSProve/ssprove">
-        <img src="https://user-images.githubusercontent.com/5850655/111436014-c6811f00-8701-11eb-9363-3f2a1b9e9da1.png" alt="SSProve" height="20"/><br/>
+        <picture>
+          <source srcset=".github/assets/ssprove-dark.svg" media="(prefers-color-scheme: dark)">
+          <source srcset=".github/assets/ssprove-light.svg" media="(prefers-color-scheme: light)">
+          <img src=".github/assets/ssprove-light.svg" height="18" alt="SSProve">
+        </picture>
       </a>
     </td>
-    <td align="center" style="vertical-align: center;">
+    <td align="center">
       <a href="https://proverif.inria.fr/">
         <b>ProVerif</b>
       </a>
     </td>
-    <td align="center" style="vertical-align: center;">
+    <td align="center">
       <a href="https://www.easycrypt.info/">
         <b>EasyCrypt</b>
       </a>
