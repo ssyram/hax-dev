@@ -15,6 +15,7 @@
 hax is a tool for high assurance translations of a large subset of
 Rust into formal languages such as [F\*](https://www.fstar-lang.org/) or [Rocq](https://rocq-prover.org/).
 
+
 <details>
 <summary> So what is hacspec now?</summary>
 
@@ -30,9 +31,65 @@ These specifications can be translated into formal languages with hax.
     </a>
 </p>
 
+
+### Supported Backends
+
+<table align="center">
+  <tr>
+    <td align="center" style="vertical-align: center;">
+      <a href="https://www.fstar-lang.org/">
+        <img src="https://fstar-lang.org/i/fstar-new.png" alt="F*" height="30"/>
+      </a>
+    </td>
+    <td align="center" style="vertical-align: center;">
+      <a href="https://rocq-prover.org/">
+        <img src="https://rocq-prover.org/_/Njk3Njg5NzliYmU5OWFhNWFhNmFiY2Q1YTVmZmEwNzY/logos/logo-rocq-blue_orange.svg" alt="Rocq" height="18"/><br/>
+      </a>
+    </td>
+    <td align="center" style="vertical-align: center; ">
+      <a href="https://lean-lang.org/">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/d/dc/Lean_logo2.svg" alt="Lean" height="30"/><br/>
+      </a>
+    </td>
+    <td align="center" style="vertical-align: center;">
+      <a href="https://github.com/SSProve/ssprove">
+        <img src="https://user-images.githubusercontent.com/5850655/111436014-c6811f00-8701-11eb-9363-3f2a1b9e9da1.png" alt="SSProve" height="20"/><br/>
+      </a>
+    </td>
+    <td align="center" style="vertical-align: center;">
+      <a href="https://proverif.inria.fr/">
+        <b>ProVerif</b>
+      </a>
+    </td>
+    <td align="center" style="vertical-align: center;">
+      <a href="https://www.easycrypt.info/">
+        <b>EasyCrypt</b>
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <!-- 🟢🟡🟠🔴 -->
+    <td align="center"><sub>🟢 stable</sub></td>
+    <td align="center"><sub>🟡 partial</sub></td>
+    <td align="center"><sub>🚀 active dev.</sub></td>
+    <td align="center"><sub>🟡 partial</sub></td>
+    <td align="center"><sub>🟠 PoC</sub></td>
+    <td align="center"><sub>🔴</sub></td>
+  </tr>
+  <tr>
+    <td align="center" style="vertical-align: center;" colspan="3">
+      General purpose proof assistants
+    </td>
+    <td align="center" style="vertical-align: center;" colspan="3">
+      Cryptography & protocols
+    </td>
+  </tr>
+</table>
+
 ## Learn more
 
 Here are some resources for learning more about hax:
+
  - [Manual](https://hax.cryspen.com/manual/index.html) (work in progress)
     + [Quick start](https://hax.cryspen.com/manual/quick_start/index.html)
     + [Tutorial](https://hax.cryspen.com/manual/tutorial/index.html)
