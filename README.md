@@ -194,8 +194,10 @@ You can also just use [direnv](https://github.com/nix-community/nix-direnv), wit
 - `rust-frontend/`: Rust library that hooks in the rust compiler and
   extract its internal typed abstract syntax tree
   [**THIR**](https://rustc-dev-guide.rust-lang.org/thir.html) as JSON.
-- `engine/`: the simplification and elaboration engine that translates
-  programs from the Rust language to various backends (see `engine/backends/`).
+- `engine/`: the simplification and elaboration engine that translates programs
+  from the Rust language to various backends (see `engine/backends/`). Written
+  in OCaml.
+- `rust-engine/`: an on-going rewrite of our engine from OCaml to Rust.
 - `cli/`: the `hax` subcommand for Cargo.
 
 ### Compiling, formatting, and more
