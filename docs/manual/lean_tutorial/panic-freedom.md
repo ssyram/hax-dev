@@ -82,25 +82,7 @@ Semantically, this is not what one would expect from `square`.
 Our problem is that our function `square` is well-defined only when
 its input is within `0` and `15`.
 
-### Solution A: reflect the partialness of the function in Rust
-A first solution is to make `square` return an `Option<u8>` instead of a `u8`:
-``` {.rust .playable .lean-backend}
-fn square_option(x: u8) -> Option<u8> {
-    if x >= 16 {
-        None
-    } else {
-        Some(x * x)
-    }
-}
-```
-
-Here, F\* is able to prove panic-freedom: calling `square` with any
-input is safe. Though, one may argue that `square`'s input being small
-enough should really be an assumption. Having to deal with the
-possible integer overflowing whenever squaring is a huge burden. Can
-we do better?
-
-### Solution B: add a precondition
+### Solution: add a precondition
 
 We already added a pre-condition to specify panic-freedom but we can turn it into a more interesting pre-condition to restrict the inputs and stay in the domain where the multiplication fits in a `u8`. We only need to modify the Rust condition that is passed to the `hax_lib::requires` macro: 
 
