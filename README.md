@@ -15,22 +15,11 @@
 hax is a tool for high assurance translations of a large subset of
 Rust into formal languages such as [F\*](https://www.fstar-lang.org/) or [Rocq](https://rocq-prover.org/).
 
-
-<details>
-<summary> So what is hacspec now?</summary>
-
-hacspec is the functional subset of Rust that can be used, together with a hacspec
-standard library, to write succinct, executable, and verifiable specifications in
-Rust.
-These specifications can be translated into formal languages with hax.
-</details>
-
 <p align="center">
     <a href="https://hax-playground.cryspen.com/#fstar+tc/latest-main/gist=5252f86237adbca7fdeb7a8fea0b1648">
     Try out hax online now!
     </a>
 </p>
-
 
 ### Supported Backends
 
