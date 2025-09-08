@@ -36,6 +36,14 @@ These specifications can be translated into formal languages with hax.
 
 <table align="center">
   <tr>
+    <td align="center" style="vertical-align: center;" colspan="3">
+      General purpose proof assistants
+    </td>
+    <td align="center" style="vertical-align: center;" colspan="3">
+      Cryptography & protocols
+    </td>
+  </tr>
+  <tr>
     <td align="center" style="vertical-align: center;">
       <a href="https://www.fstar-lang.org/">
         <img src="https://fstar-lang.org/i/fstar-new.png" alt="F*" height="30"/>
@@ -75,14 +83,6 @@ These specifications can be translated into formal languages with hax.
     <td align="center"><sub>🟡 partial</sub></td>
     <td align="center"><sub>🟠 PoC</sub></td>
     <td align="center"><sub>🔴</sub></td>
-  </tr>
-  <tr>
-    <td align="center" style="vertical-align: center;" colspan="3">
-      General purpose proof assistants
-    </td>
-    <td align="center" style="vertical-align: center;" colspan="3">
-      Cryptography & protocols
-    </td>
   </tr>
 </table>
 
