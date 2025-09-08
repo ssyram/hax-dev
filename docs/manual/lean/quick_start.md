@@ -60,7 +60,7 @@ extract nothing but `my_function`:
 cargo hax into -i '-** +your_crate::some_module::my_function' lean
 ```
 
-This command will remove all items from extraction (`-**`) and add back `my_function`, along with all its dependencies (other function, type definitions, etc.) from your crate. If you don't want the dependencies, you can use `+!` instead of `+`. See [the the FAQ](../faq/include-flags.md) or `cargo hax into --help` for more options for partial extraction.
+This command will remove all items from extraction (`-**`) and add back `my_function`, along with all its dependencies (other functions, type definitions, etc.) from your crate. If you don't want the dependencies, you can use `+!` instead of `+`. See [the the FAQ](../faq/include-flags.md) or `cargo hax into --help` for more options for partial extraction.
 
 **Unsupported Rust code.**  
 hax [doesn't support every Rust
@@ -68,13 +68,13 @@ constructs](https://github.com/hacspec/hax?tab=readme-ov-file#supported-subset-o
 `unsafe` code, or complicated mutation scheme. That is another reason
 for extracting only a part of your crate. When running hax, if an item
 of your crate, say a function `my_crate::f`, is not handled by hax,
-you can have remove it from the extraction target by adding  `-my_crate::f` as an option to the `-i` flag. 
+you can remove it from the extraction target by adding  `-my_crate::f` as an option to the `-i` flag. 
 
 ## Start Lean verification
 After extracting your Rust code to Lean, the result is in the `proofs/lean/extraction` folder. The
 `lakefile.toml` allows you to run Lean on this folder by running `lake build` (or directly in the IDE 
 using the LSP). Contrarily to F\*, successfully building the code doesn't prove panic freedom, this
-happens only if the specifications states that the code is panic-free. 
+happens only if the specification states that the code is panic-free. 
 
 ### Current limitations
-The Lean backend of Hax is under active development, and extraction can *fail* even on supported Rust. This can come from a missing Rust feature (i.e. supported by the Hax engine but not yet by the Lean backend). Testing the same extraction target on the *F\** backend can be an easy way to check. If all the Rust features are supported, then the extracted code can fail to build if it uses definitions from Rust `core` and `std` librairies that are missing in our Lean model (in `hax-lib/proof-libs/lean`). We're actively extending it to support idiomatic code, but feel free to report it on [zulip](https://hacspec.zulipchat.com/) or [github](https://github.com/cryspen/hax/issues)
+The Lean backend of Hax is under active development, and extraction can *fail* even on supported Rust. This can come from a missing Rust feature (i.e. supported by the Hax engine but not yet by the Lean backend). Testing the same extraction target on the *F\** backend can be an easy way to check. If all the Rust features are supported, then the extracted code can fail to build if it uses definitions from Rust `core` and `std` libraries that are missing in our Lean model (in `hax-lib/proof-libs/lean`). We're actively extending it to support idiomatic code, but feel free to report it on [zulip](https://hacspec.zulipchat.com/) or [github](https://github.com/cryspen/hax/issues)
