@@ -16,4 +16,4 @@ languages. Others are specialized tools:
 dedicated to proving properties about protocols.
 
 This tutorial focuses on proving properties with
-[F\*](https://fstar-lang.org/) or [Lean](https://lean-lang.org/).
+[F\*](https://fstar-lang.org/).
