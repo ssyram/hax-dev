@@ -77,18 +77,18 @@ impl RenderView for LeanPrinter {
                 ConstructorKind::Constructor { ty }
                     if matches!(&ty.kind(), TypeDefKind::Struct) =>
                 {
-                    if let Some(parent) = chunk.parent() {
-                        Some(vec![
-                            self.render_path_segment_payload(parent.payload())
-                                .to_string(),
+                    chunk.parent().map(|parent| {
+                        vec![
+                            self.escape(
+                                self.render_path_segment_payload(parent.payload())
+                                    .to_string(),
+                            ),
                             self.escape(
                                 self.render_path_segment_payload(chunk.payload())
                                     .to_string(),
                             ),
-                        ])
-                    } else {
-                        None
-                    }
+                        ]
+                    })
                 }
                 _ => None,
             },
