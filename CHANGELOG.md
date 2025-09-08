@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Changes to the Lean backend
+ - Add support for enums and structs (type definitions, expressions,
+   pattern-matching) (#1623)
+ - Update name rendering infrastructure (#1623, #1624)
+
 ## 0.3.2
 
 Changes to the frontend:
