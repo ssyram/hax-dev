@@ -539,7 +539,7 @@ set_option linter.unusedVariables false
                 todo!()
             } else {
                 docs![
-                    "| ",
+                    reflow!("| "),
                     &*arm.pat.kind,
                     line!(),
                     docs!["=> do", line!(), &arm.body].nest(INDENT).group()
