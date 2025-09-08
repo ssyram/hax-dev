@@ -279,6 +279,9 @@ set_option linter.unusedVariables false
                             .group()
                             .parens()
                     }
+                    ResugaredExprKind::Tuple { .. } => {
+                        unreachable!("This printer doesn't use the tuple resugaring")
+                    }
                 },
                 _ => todo!(),
             }
