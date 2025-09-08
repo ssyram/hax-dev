@@ -102,11 +102,11 @@ Questions? Join us on [Zulip](https://hacspec.zulipchat.com/) or open a [GitHub 
 ## Usage
 Hax is a cargo subcommand. 
 The command `cargo hax` accepts the following subcommands:
- * **`into`** (`cargo hax into BACKEND`): translate a Rust crate to the backend `BACKEND` (e.g. `fstar`, `coq`).
+ * **`into`** (`cargo hax into BACKEND`): translate a Rust crate to the backend `BACKEND` (e.g. `fstar`, `coq`, `lean`).
  * **`json`** (`cargo hax json`): extract the typed AST of your crate as a JSON file.
  
 Note:
- * `BACKEND` can be `fstar`, `coq`, `easycrypt` or `pro-verif`. `cargo hax into --help`
+ * `BACKEND` can be `fstar`, `lean`, `coq`, `easycrypt` or `pro-verif`. `cargo hax into --help`
    gives the full list of supported backends.
  * The subcommands `cargo hax`, `cargo hax into` and `cargo hax into
    <BACKEND>` takes options. For instance, you can `cargo hax into
@@ -147,7 +147,7 @@ manager</a> <i>(with <a href="https://nixos.wiki/wiki/Flakes">flakes</a> enabled
 
 </details>
 
-+ **Run hax on a crate directly** to get F\*/Coq/... (assuming you are in the crate's folder):
++ **Run hax on a crate directly** to get F\*/Coq/Lean/... (assuming you are in the crate's folder):
    - `nix run github:hacspec/hax -- into fstar` extracts F*.
 
 + **Install hax**:  `nix profile install github:hacspec/hax`, then run `cargo hax --help` anywhere
