@@ -2,7 +2,7 @@
 weight: 100
 ---
 
-# Quick start with hax and Lean
+# Quick start
 
 ## Setup the tools
 

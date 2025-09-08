@@ -2,7 +2,7 @@
 weight: 0
 ---
 
-# Quick start with hax and F\*
+# Quick start
 
 Do you want to try hax out on a Rust crate of yours? This chapter is
 what you are looking for!
