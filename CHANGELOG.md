@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- A lean tutorial has been added to the hax website.
+Change to the Rust Engine:
+ - Add a resugaring `FunctionsToConstants` (#1559)
+ - Drop the tuple nodes of the AST, add resugaring node for tuples (#1662)
+
+Miscellaneous:
+ - A lean tutorial has been added to the hax website.
 
 ## 0.3.4
 
