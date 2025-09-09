@@ -199,6 +199,8 @@
             pkgs.toml2json
             rustfmt
             utils
+
+            pkgs.go-grip
           ];
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
           DYLD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.libz rustc ];
