@@ -11,6 +11,9 @@ Change to the Rust Engine:
  - Add a resugaring `FunctionsToConstants` (#1559)
  - Drop the tuple nodes of the AST, add resugaring node for tuples (#1662)
 
+Miscellaneous:
+ - A lean tutorial has been added to the hax website.
+
 ## 0.3.4
 
 The release of `0.3.3` got troubles because of the new Rust Engine crates.
