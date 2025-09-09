@@ -8,6 +8,9 @@ use std::sync::Arc;
 #[cfg(feature = "rustc")]
 use rustc_middle::ty;
 
+#[cfg(feature = "rustc")]
+use crate::traits::normalize;
+
 /// Generic container for decorating items with a type, a span,
 /// attributes and other meta-data.
 #[derive_group(Serializers)]
@@ -462,6 +465,10 @@ pub struct ItemRefContents {
     /// If we're referring to a trait associated item, this gives the trait clause/impl we're
     /// referring to.
     pub in_trait: Option<ImplExpr>,
+    /// Assignments/constraints for associated types. This is essential for vtable monomorphisation
+    /// where we need to know not only the generic parameters but also the specific assignments
+    /// to associated types. Each tuple contains (associated_type_def_id, assigned_type).
+    pub associated_type_assignments: Vec<(DefId, Ty)>,
     /// Whether this contains any reference to a type/lifetime/const parameter.
     pub has_param: bool,
 }
@@ -561,11 +568,36 @@ impl ItemRef {
             impl_exprs.drain(0..num_trait_trait_clauses + 1);
         }
 
+        // Compute associated type assignments for trait references
+        let associated_type_assignments = {
+            use rustc_hir::def::DefKind;
+            let tcx = s.base().tcx;
+            let def_kind = tcx.def_kind(def_id);
+            
+            if matches!(def_kind, DefKind::Trait | DefKind::TraitAlias) {
+                // This is a trait reference, compute associated type assignments
+                let typing_env = s.typing_env();
+                let tref = ty::TraitRef::new(tcx, def_id, generics);
+                rustc_utils::assoc_tys_for_trait(tcx, typing_env, tref)
+                    .into_iter()
+                    .map(|alias_ty| {
+                        let assoc_def_id = alias_ty.def_id.sinto(s);
+                        let ty = ty::Ty::new_alias(tcx, ty::Projection, alias_ty);
+                        let ty = normalize(tcx, typing_env, ty);
+                        (assoc_def_id, ty.sinto(s))
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        };
+
         let content = ItemRefContents {
             def_id: def_id.sinto(s),
             generic_args: hax_generics,
             impl_exprs,
             in_trait: trait_info,
+            associated_type_assignments,
             has_param: generics.has_param()
                 || generics.has_escaping_bound_vars()
                 || generics.has_free_regions(),
@@ -588,6 +620,7 @@ impl ItemRef {
             generic_args: Default::default(),
             impl_exprs: Default::default(),
             in_trait: Default::default(),
+            associated_type_assignments: Default::default(),
             has_param: false,
         };
         let item = content.intern(s);
@@ -606,6 +639,13 @@ impl ItemRef {
         if !matches!(self.def_id.kind, DefKind::Trait | DefKind::TraitAlias) {
             panic!("`ItemRef::trait_associated_types` expected a trait")
         }
+        
+        // If we have cached associated type assignments, use them
+        if !self.associated_type_assignments.is_empty() {
+            return self.associated_type_assignments.iter().map(|(_, ty)| ty.clone()).collect();
+        }
+        
+        // Fall back to computing them dynamically
         let tcx = s.base().tcx;
         let typing_env = s.typing_env();
         let def_id = self.def_id.as_rust_def_id().unwrap();
