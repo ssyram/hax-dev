@@ -176,6 +176,23 @@ impl GlobalId {
         }
     }
 
+    /// Returns true if the underlying identifier is a constructor
+    pub fn is_constructor(&self) -> bool {
+        match self {
+            GlobalId::Concrete(concrete_id) | GlobalId::Projector(concrete_id) => {
+                concrete_id.def_id.is_constructor
+            }
+        }
+    }
+
+    /// Returns true if the underlying identifier is a projector
+    pub fn is_projector(&self) -> bool {
+        match self {
+            GlobalId::Projector(_) => true,
+            GlobalId::Concrete(_) => false,
+        }
+    }
+
     /// Returns `true` if self is a tuple constructor or a tuple type.
     // TODO: this is a hack, see issue https://github.com/cryspen/hax/issues/1671.
     pub fn is_tuple(&self) -> bool {
@@ -233,6 +250,7 @@ impl PartialEq<ExplicitDefId> for GlobalId {
         self == &other.def_id
     }
 }
+
 impl PartialEq<GlobalId> for ExplicitDefId {
     fn eq(&self, other: &GlobalId) -> bool {
         other == &self.def_id

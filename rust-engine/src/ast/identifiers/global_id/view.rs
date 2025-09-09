@@ -19,8 +19,8 @@
 //! }
 //! ```
 //!
-//! The function `hello` has the full path `my_crate::a::b::hello`.  
-//! This path is made up of segments: `my_crate`, `a`, `b`, and `hello`.  
+//! The function `hello` has the full path `my_crate::a::b::hello`.
+//! This path is made up of segments: `my_crate`, `a`, `b`, and `hello`.
 //!
 //! This module represents those segments as typed values, enriched with extra
 //! information such as:
@@ -42,7 +42,7 @@
 //!
 //! The field `bar` is represented as a `Field` segment. It knows its parent is
 //! the constructor of `Foo`, which knows its parent is the type definition `Foo`,
-//! which in turn belongs to the crate `my_crate`.  
+//! which in turn belongs to the crate `my_crate`.
 //!
 //! The hierarchy looks like this:
 //!
@@ -503,19 +503,19 @@ impl PathSegmentPayload {
 /// way up to the crate root.
 ///
 /// This parenthood is important:
-/// - a field segment always has a constructor parent  
-///   (e.g. `my_field → MyVariant`).  
-/// - an associated item always has a trait/impl container parent  
-///   (e.g. `f → Foo`).  
-/// - everything ultimately has a **crate** as its top parent.  
+/// - a field segment always has a constructor parent
+///   (e.g. `my_field → MyVariant`).
+/// - an associated item always has a trait/impl container parent
+///   (e.g. `f → Foo`).
+/// - everything ultimately has a **crate** as its top parent.
 ///
 /// # Why does this matter?
 ///
 /// This strong typing of segments lets tools:
 /// - disambiguate names across contexts (e.g. two types with the same
-///   constructor name),  
-/// - generate unique, human-readable names in other languages/backends,  
-/// - walk up the chain of parents to reconstruct full paths.  
+///   constructor name),
+/// - generate unique, human-readable names in other languages/backends,
+/// - walk up the chain of parents to reconstruct full paths.
 ///
 /// For example, with the F\* backend, constructors are not namespaced under the
 /// name of their type, but live directly at top-level. Thus, they need to be
@@ -544,7 +544,7 @@ impl<K> PathSegment<K> {
         self.disambiguator
     }
 
-    /// Returns the kind of this segment as an [`AnyKind`].
+    /// Returns the kind of this segment as an [`K`].
     pub fn kind(&self) -> &K {
         &self.kind
     }
