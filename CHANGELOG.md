@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Change to the Rust Engine:
  - Add a resugaring `FunctionsToConstants` (#1559)
+ - Drop the tuple nodes of the AST, add resugaring node for tuples (#1662)
 
 ## 0.3.4
 

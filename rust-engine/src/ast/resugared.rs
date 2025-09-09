@@ -33,6 +33,8 @@ pub enum ResugaredItemKind {
 
 /// Resugared variants for expressions. This represent extra printing-only expressions, see [`super::ExprKind::Resugared`].
 #[derive_group_for_ast]
+// TODO: drop `clippy::large_enum_variant` when https://github.com/cryspen/hax/issues/1666 is addressed.
+#[allow(clippy::large_enum_variant)]
 pub enum ResugaredExprKind {
     /// Binary operations (identified by resugaring) of the form `f(e1, e2)`
     BinOp {
@@ -50,6 +52,11 @@ pub enum ResugaredExprKind {
         /// If we apply an associated function, contains the impl. expr used.
         trait_: Option<(ImplExpr, Vec<GenericValue>)>,
     },
+    /// A tuple constructor.
+    ///
+    /// # Example:
+    /// `(a, b)`
+    Tuple(Vec<Expr>),
 }
 
 /// Resugared variants for patterns. This represent extra printing-only patterns, see [`super::PatKind::Resugared`].
@@ -58,7 +65,13 @@ pub enum ResugaredPatKind {}
 
 /// Resugared variants for types. This represent extra printing-only types, see [`super::TyKind::Resugared`].
 #[derive_group_for_ast]
-pub enum ResugaredTyKind {}
+pub enum ResugaredTyKind {
+    /// A tuple tupe.
+    ///
+    /// # Example:
+    /// `(i32, bool)`
+    Tuple(Vec<Ty>),
+}
 
 /// Resugared variants for impl. items. This represent extra printing-only impl. items, see [`super::ImplItemKind::Resugared`].
 #[derive_group_for_ast]

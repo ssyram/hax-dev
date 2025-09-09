@@ -279,6 +279,9 @@ set_option linter.unusedVariables false
                             .group()
                             .parens()
                     }
+                    ResugaredExprKind::Tuple { .. } => {
+                        unreachable!("This printer doesn't use the tuple resugaring")
+                    }
                 },
                 _ => todo!(),
             }
@@ -308,7 +311,6 @@ set_option linter.unusedVariables false
         fn ty_kind(&'a self, ty_kind: &'b TyKind) -> DocBuilder<'a, Self, A> {
             match ty_kind {
                 TyKind::Primitive(primitive_ty) => docs![primitive_ty],
-                TyKind::Tuple(items) => intersperse!(items, reflow![" * "]).parens().group(),
                 TyKind::App { head, args } => {
                     if args.is_empty() {
                         docs![head]
