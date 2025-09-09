@@ -15,6 +15,17 @@ Changes to the Rust Engine:
    expressions, pattern-matching) (#1623)
  - Update name rendering infrastructure in the Lean backend (#1623, #1624)
 
+Changes to the frontend:
+- Add an explicit `Self: Trait` clause to trait methods and consts (#1559)
+- Fix `ImplExpr::Builtin` that had some type errors (#1559)
+- Improve the translation of `Drop` information (#1559)
+- Add variance information to type parameters (#1559)
+- Cleanup the `State` infrastructure a little bit (#1559)
+- Add information about the metadata to use in unsize coercions (#1559)
+- Resolve `dyn Trait` predicates (#1559)
+- Many improvements to `FullDef` (#1559)
+- Add infrastructure to get a monomorphized `FullDef`; this is used in charon to monomorphize a crate graph (#1559)
+
 Miscellaneous:
  - A lean tutorial has been added to the hax website.
 
