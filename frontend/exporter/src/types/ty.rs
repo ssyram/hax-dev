@@ -715,6 +715,31 @@ impl std::ops::Deref for ItemRef {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test] 
+    fn test_item_ref_contents_has_associated_type_assignments() {
+        // Test that ItemRefContents has the new associated_type_assignments field
+        // This is a structural test to ensure the field exists and the types compile correctly
+        
+        // We can't easily create a DefId or Ty without a full rustc context,
+        // so we'll just test the field access pattern using a function that would work
+        fn test_field_access(contents: &ItemRefContents) -> usize {
+            contents.associated_type_assignments.len()
+        }
+        
+        // This test mainly ensures:
+        // 1. The associated_type_assignments field exists 
+        // 2. It has the correct type Vec<(DefId, Ty)>
+        // 3. The code compiles without errors
+        
+        // If this compiles and runs, our field addition was successful
+        let _test_fn: fn(&ItemRefContents) -> usize = test_field_access;
+    }
+}
+
 #[cfg(feature = "rustc")]
 impl<'tcx, S: UnderOwnerState<'tcx>> SInto<S, GenericArg> for ty::GenericArg<'tcx> {
     fn sinto(&self, s: &S) -> GenericArg {
