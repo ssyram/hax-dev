@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Change to the Rust Engine:
+Changes to the Rust Engine:
+ - The module `names` now produces `ExplicitDefId`s instead of `DefId`s (#1648)
  - Add a resugaring `FunctionsToConstants` (#1559)
  - Drop the tuple nodes of the AST, add resugaring node for tuples (#1662)
+ - Add support for enums and structs to the Lean backend (type definitions,
+   expressions, pattern-matching) (#1623)
+ - Update name rendering infrastructure in the Lean backend (#1623, #1624)
 
 Changes to the frontend:
 - Add an explicit `Self: Trait` clause to trait methods and consts (#1559)
