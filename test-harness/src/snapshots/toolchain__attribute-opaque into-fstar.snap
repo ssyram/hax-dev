@@ -140,7 +140,7 @@ class t_TrGeneric (v_Self: Type0) (v_U: Type0) = {
 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let _ = fun (v_Self:Type0) (v_U:Type0) {|i: t_TrGeneric v_Self v_U|} -> i._super_17240578109911634293
+let _ = fun (v_Self:Type0) (v_U:Type0) {|i: t_TrGeneric v_Self v_U|} -> i._super_12400030861545157532
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 val impl_2 (#v_U: Type0) {| i0: Core.Clone.t_Clone v_U |} : t_TrGeneric i32 v_U

@@ -39,7 +39,7 @@ class t_ParBlocksSizeUser (v_Self: Type0) = {
 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let _ = fun (v_Self:Type0) {|i: t_ParBlocksSizeUser v_Self|} -> i._super_5884559561557426095
+let _ = fun (v_Self:Type0) {|i: t_ParBlocksSizeUser v_Self|} -> i._super_6049459820240371831
 
 class t_BlockBackend (v_Self: Type0) = {
   [@@@ FStar.Tactics.Typeclasses.no_method]_super_4483031398080819618:t_ParBlocksSizeUser v_Self;
@@ -50,7 +50,7 @@ class t_BlockBackend (v_Self: Type0) = {
 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let _ = fun (v_Self:Type0) {|i: t_BlockBackend v_Self|} -> i._super_17422710415653782164
+let _ = fun (v_Self:Type0) {|i: t_BlockBackend v_Self|} -> i._super_4483031398080819618
 '''
 "Traits.Default_traits_parameters.fst" = '''
 module Traits.Default_traits_parameters
@@ -66,7 +66,7 @@ class t_Foo (v_Self: Type0) = {
 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let _ = fun (v_Self:Type0) {|i: t_Foo v_Self|} -> i._super_7275791365833186636
+let _ = fun (v_Self:Type0) {|i: t_Foo v_Self|} -> i._super_6177652678586986918
 '''
 "Traits.For_clauses.Issue_495_.Minimized_3_.fst" = '''
 module Traits.For_clauses.Issue_495_.Minimized_3_
@@ -442,7 +442,7 @@ class t_SubTrait (v_Self: Type0) (v_TypeArg: Type0) (v_ConstArg: usize) = {
 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let _ = fun (v_Self:Type0) (v_TypeArg:Type0) (v_ConstArg:usize) {|i: t_SubTrait v_Self v_TypeArg v_ConstArg|} -> i._super_15145771689388873921
+let _ = fun (v_Self:Type0) (v_TypeArg:Type0) (v_ConstArg:usize) {|i: t_SubTrait v_Self v_TypeArg v_ConstArg|} -> i._super_18031117442777819101
 '''
 "Traits.Interlaced_consts_types.fst" = '''
 module Traits.Interlaced_consts_types
@@ -527,7 +527,7 @@ class t_Trait2 (v_Self: Type0) = {
 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let _ = fun (v_Self:Type0) {|i: t_Trait2 v_Self|} -> i._super_3259985701465885527
+let _ = fun (v_Self:Type0) {|i: t_Trait2 v_Self|} -> i._super_6380933412563503442
 '''
 "Traits.Type_alias_bounds_issue_707_.fst" = '''
 module Traits.Type_alias_bounds_issue_707_
@@ -647,7 +647,7 @@ class t_SuperTrait (v_Self: Type0) = {
 }
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
-let _ = fun (v_Self:Type0) {|i: t_SuperTrait v_Self|} -> i._super_15837849249852401974
+let _ = fun (v_Self:Type0) {|i: t_SuperTrait v_Self|} -> i._super_14156401398203956914
 
 [@@ FStar.Tactics.Typeclasses.tcinstance]
 let impl: t_SuperTrait i32 =
@@ -738,18 +738,9 @@ class t_Foo (v_Self: Type0) = {
   f_method_f_post:v_Self -> Prims.unit -> Type0;
   f_method_f:x0: v_Self
     -> Prims.Pure Prims.unit (f_method_f_pre x0) (fun result -> f_method_f_post x0 result);
-  f_assoc_type_pre:
-      {| i1: Core.Marker.t_Copy v_16903484722429324329.f_AssocType |} ->
-      v_16903484722429324329.f_AssocType
-    -> Type0;
-  f_assoc_type_post:
-      {| i1: Core.Marker.t_Copy v_16903484722429324329.f_AssocType |} ->
-      v_16903484722429324329.f_AssocType ->
-      Prims.unit
-    -> Type0;
-  f_assoc_type:
-      {| i1: Core.Marker.t_Copy v_16903484722429324329.f_AssocType |} ->
-      x0: v_16903484722429324329.f_AssocType
+  f_assoc_type_pre:{| i1: Core.Marker.t_Copy f_AssocType |} -> f_AssocType -> Type0;
+  f_assoc_type_post:{| i1: Core.Marker.t_Copy f_AssocType |} -> f_AssocType -> Prims.unit -> Type0;
+  f_assoc_type:{| i1: Core.Marker.t_Copy f_AssocType |} -> x0: f_AssocType
     -> Prims.Pure Prims.unit
         (f_assoc_type_pre #i1 x0)
         (fun result -> f_assoc_type_post #i1 x0 result)
@@ -758,11 +749,9 @@ class t_Foo (v_Self: Type0) = {
 class t_Lang (v_Self: Type0) = {
   f_Var:Type0;
   f_s_pre:v_Self -> i32 -> Type0;
-  f_s_post:v_Self -> i32 -> (v_Self & v_2438024169610850509.f_Var) -> Type0;
+  f_s_post:v_Self -> i32 -> (v_Self & f_Var) -> Type0;
   f_s:x0: v_Self -> x1: i32
-    -> Prims.Pure (v_Self & v_2438024169610850509.f_Var)
-        (f_s_pre x0 x1)
-        (fun result -> f_s_post x0 x1 result)
+    -> Prims.Pure (v_Self & f_Var) (f_s_pre x0 x1) (fun result -> f_s_post x0 x1 result)
 }
 
 let f (#v_T: Type0) (#[FStar.Tactics.Typeclasses.tcresolve ()] i0: t_Foo v_T) (x: v_T) : Prims.unit =
