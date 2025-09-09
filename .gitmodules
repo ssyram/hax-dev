@@ -1,0 +1,4 @@
+[submodule "charon"]
+	path = charon
+	url = https://github.com/ssyram/charon.git
+	branch = hax-dev
