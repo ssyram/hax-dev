@@ -1,9 +1,9 @@
-name = "coverage"
+name = "Coverage"
 version = "0.1.0"
-defaultTargets = ["coverage"]
+defaultTargets = ["Coverage"]
 
 [[lean_lib]]
-name = "coverage"
+name = "Coverage"
 
 [[require]]
 name = "Hax"
