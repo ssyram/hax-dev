@@ -136,6 +136,7 @@ tests:
     - json
     - coq
     - fstar
+    - lean
   if_:
     - json
     - coq
@@ -258,6 +259,7 @@ tests:
     - fstar
     - coq
     - fstar-lax
+    - lean
 
   simple_loop:
     - json
