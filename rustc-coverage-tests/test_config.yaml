@@ -247,6 +247,7 @@ tests:
     - json
     - fstar
     - fstar-lax
+    - lean
 
   panic_unwind:
     - json
