@@ -15,6 +15,11 @@ The encoding of Rust in Lean has three main components:
 While mostly separated, the Backend make some assumption on the Prelude,
 typically when it inserts notations for some symbol (i.e. `+?` for addition).
 
+[!Disclaimer] : The lean backend is still experimental. See the list of [open
+issues](https://github.com/cryspen/hax/issues?q=is%3Aissue%20state%3Aopen%20label%3Alean)
+for known problems and workaround. See also the [Hax
+Zulip](https://hacspec.zulipchat.com/) for technical support.
+
 ## Backend
 
 ### Monadic encoding
