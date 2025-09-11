@@ -528,3 +528,8 @@ class T2 (Self : Type) where
 
 /// html | div[style='clear: both;']
 ///
+
+
+## Prelude
+
+See the [Hax Lean library](https://github.com/cryspen/hax/tree/main/hax-lib/proof-libs/lean)
