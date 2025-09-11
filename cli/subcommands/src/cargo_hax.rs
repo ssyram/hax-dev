@@ -264,13 +264,13 @@ fn run_engine(
         input: haxmeta.items,
         impl_infos: haxmeta.impl_infos,
     };
-    let mut hax_engine_command = if let Backend::Lean { .. }
-    | Backend::GenerateRustEngineNames { .. } =
-        &engine_options.backend.backend
-    {
-        find_rust_hax_engine(message_format)
-    } else {
-        find_hax_engine(message_format)
+    let mut hax_engine_command = match &engine_options.backend.backend {
+        Backend::Fstar(_)
+        | Backend::Coq
+        | Backend::Ssprove
+        | Backend::Easycrypt
+        | Backend::ProVerif(_) => find_hax_engine(message_format),
+        _ => find_rust_hax_engine(message_format),
     };
     let mut engine_subprocess = hax_engine_command
         .stdin(std::process::Stdio::piped())
@@ -617,8 +617,8 @@ fn run_command(options: &Options, haxmeta_files: Vec<EmitHaxMetaMessage>) -> boo
             false
         }
         Command::Backend(backend) => {
-            use hax_frontend_exporter::ThirBody as Body;
             use Backend;
+            use hax_frontend_exporter::ThirBody as Body;
 
             if matches!(backend.backend, Backend::Easycrypt | Backend::ProVerif(..)) {
                 HaxMessage::WarnExperimentalBackend {

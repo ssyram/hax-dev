@@ -26,54 +26,6 @@
 //! }
 //! ```
 
-/// Helper module that provides serialization and deserialization of DefId to
-/// compact representations. This is solely for conciseness purposes of the
-/// generated code.
-///
-/// Concretely, this module defines `Repr` a (JSON-compact) representation of `DefId`s without parents.
-/// It provides a bijection from the fields `krate`, `path`, and `kind` of `DefId` and `Repr`.
-/// The choice of `Repr` itself is irrelevant. Anything that produces compact JSON is good.
-pub(self) mod serialization_helpers {
-    use hax_frontend_exporter::{DefKind, DefPathItem, DisambiguatedDefPathItem};
-
-    use crate::ast::identifiers::global_id::DefId;
-    /// The compact reperesentation: a tuple (krate name, path, defkind)
-    /// The path is a vector of tuples (DefPathItem, disambiguator).
-    type Repr = (String, Vec<(DefPathItem, u32)>, DefKind);
-    //// `BorrowedRepr` is the borrowed variant of `Repr`. Useful for serialization.
-    type BorrowedRepr<'a> = (&'a String, Vec<(&'a DefPathItem, &'a u32)>, &'a DefKind);
-
-    pub fn serialize(did: &DefId) -> String {
-        let path = did
-            .path
-            .iter()
-            .map(
-                |DisambiguatedDefPathItem {
-                     data,
-                     disambiguator,
-                 }| (data, disambiguator),
-            )
-            .collect::<Vec<_>>();
-        let data: BorrowedRepr<'_> = (&did.krate, path, &did.kind);
-        serde_json::to_string(&data).unwrap()
-    }
-    pub fn deserialize(s: &str, parent: Option<DefId>) -> DefId {
-        let (krate, path, kind): Repr = serde_json::from_str(s).unwrap();
-        DefId {
-            parent: parent.map(Box::new),
-            krate,
-            path: path
-                .into_iter()
-                .map(|(data, disambiguator)| DisambiguatedDefPathItem {
-                    data,
-                    disambiguator,
-                })
-                .collect(),
-            kind,
-        }
-    }
-}
-
 /// We allow:
 ///  - `unused`: we don't use all the names present in the `engine/names` crate.
 ///    Filtering which `DefId` should be exposed would be complicated, and
@@ -90,24 +42,32 @@ pub(self) mod serialization_helpers {
 ///    to private items, to re-exported items or to items that are not in the
 ///    dependency closure of the engine: in such cases, `rustdoc` cannot link
 ///    properly.
-#[allow(unused, non_snake_case, rustdoc::broken_intra_doc_links, missing_docs)]
-pub mod root {
+#[allow(
+    unused,
+    non_snake_case,
+    rustdoc::broken_intra_doc_links,
+    missing_docs,
+    clippy::module_inception,
+    unused_qualifications
+)]
+mod root {
     macro_rules! mk {
         ($name: ident, $doc: literal, $data: literal, $parent: expr) => {
             #[doc = $doc]
-            pub fn $name() -> crate::ast::identifiers::global_id::DefId {
-                use crate::ast::identifiers::global_id::DefId;
+            pub fn $name() -> crate::ast::identifiers::global_id::ExplicitDefId {
+                use crate::ast::identifiers::global_id::ExplicitDefId;
                 use std::sync::LazyLock;
-                static DEF_ID: LazyLock<DefId> =
-                    LazyLock::new(|| root::serialization_helpers::deserialize($data, $parent));
+                static DEF_ID: LazyLock<ExplicitDefId> =
+                    LazyLock::new(|| root::compact_serialization::deserialize($data, $parent));
                 (&*DEF_ID).clone()
             }
         };
     }
-    pub(self) use super::serialization_helpers;
-    pub(self) use mk;
+    use crate::ast::identifiers::global_id::compact_serialization;
+    use mk;
     include!("names/generated.rs");
 }
+#[allow(unused)]
 pub use root::*;
 
 /// Global identifiers are built around `DefId` that comes out of the hax
@@ -119,93 +79,118 @@ pub mod codegen {
     use std::iter;
 
     use crate::ast::Item;
-    use crate::{ast::identifiers::global_id::DefId, names::serialization_helpers};
+    use crate::ast::identifiers::{
+        GlobalId,
+        global_id::{ExplicitDefId, compact_serialization},
+    };
     use hax_frontend_exporter::DefKind;
 
-    use serde::de::DeserializeOwned;
-    use serde_json::Value;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
+
+    /// Replace the crate name `"hax_engine_names"` with `"rust_primitives"` in the given `DefId`.
+    fn rename_krate(def_id: &mut ExplicitDefId) {
+        let mut current = Some(&mut def_id.def_id);
+        while let Some(def_id) = current {
+            if def_id.krate == "hax_engine_names" {
+                def_id.krate = "rust_primitives".into();
+            }
+            current = def_id.parent.as_deref_mut();
+        }
+    }
 
     /// Visit items and collect all the `DefId`s
-    fn collect_def_ids(items: Vec<Item>) -> Vec<DefId> {
-        /// Recursively traverses a JSON tree and tries to parse any subnodes as type `T`.
-        fn find<T: DeserializeOwned>(value: &Value) -> Vec<T> {
-            let subvalues: Vec<_> = match &value {
-                Value::Array(arr) => arr.iter().collect(),
-                Value::Object(map) => map.iter().map(|(_, value)| value).collect(),
-                _ => vec![],
-            };
-
-            subvalues
-                .into_iter()
-                .flat_map(find)
-                .chain(serde_json::from_value(value.clone()).into_iter())
-                .collect()
+    fn collect_def_ids(items: Vec<Item>) -> Vec<ExplicitDefId> {
+        #[derive(Default)]
+        struct DefIdCollector(HashSet<ExplicitDefId>);
+        use crate::ast::visitors::*;
+        impl AstVisitor for DefIdCollector {
+            fn visit_global_id(&mut self, x: &GlobalId) {
+                let mut current = Some(x.explicit_def_id());
+                while let Some(def_id) = current {
+                    self.0.insert(def_id.clone());
+                    current = def_id.parent();
+                }
+            }
         }
 
-        // TODO: we don't have visitor yet. For now, we use a hack: we just browse
-        // the JSON, trying to parse every possible node as a DefId.
-        // See https://github.com/cryspen/hax/issues/1539.
-        let mut def_ids = find(&serde_json::to_value(items).unwrap());
+        // Collect names
+        let mut names: Vec<_> = DefIdCollector::default()
+            .visit_by_val(&items)
+            .0
+            .into_iter()
+            .collect();
 
-        def_ids.sort();
-        def_ids.dedup();
+        // In the OCaml engine, `hax_engine_names` is renamed to `rust_primitives`.
+        names.iter_mut().for_each(rename_krate);
 
-        def_ids
+        // We consume names after import by the OCaml engine. Thus, the OCaml
+        // engine may have introduced already some hax-specific Rust names,
+        // directly in `rust_primitives`. After renaming from `hax_engine_names`
+        // to `rust_primitives`, such names may be duplicated. For instance,
+        // that's the case of `unsize`: the crate `hax_engine_names` contains
+        // expression with implicit unsize operations, thus the OCaml engine
+        // inserts `rust_primitives::unsize`. In the same time,
+        // `hax_engine_names::unsize` exists and was renamed to
+        // `rust_primitives::unsize`. Whence the need to dedup here.
+        names.sort();
+        names.dedup();
+        names
     }
 
     /// Crafts a docstring for a `DefId`, hopefully (rustdoc) linking it back to
     /// its origin.
-    fn docstring(id: &DefId) -> String {
-        let path = path_of_def_id(id);
+    fn docstring(explicit_id: &ExplicitDefId) -> String {
+        let id = &explicit_id.def_id;
+        let path = path_of_def_id(explicit_id);
         let (parent_path, def) = match &path[..] {
             [init @ .., last] => (init, last.clone()),
             _ => (&[] as &[_], id.krate.to_string()),
         };
         let parent_path_str = format!("::{}", parent_path.join("::"));
-        let path_str = format!("::{}", path_of_def_id(id).join("::"));
+        let path_str = format!("::{}", path_of_def_id(explicit_id).join("::"));
         let subject = match &id.kind {
-            DefKind::Mod => format!("module [`{}`]", path_str),
-            DefKind::Struct => format!("struct [`{}`]", path_str),
-            DefKind::Union => format!("union [`{}`]", path_str),
-            DefKind::Enum => format!("enum [`{}`]", path_str),
-            DefKind::Variant => format!("variant [`{}`]", path_str),
-            DefKind::Trait => format!("trait [`{}`]", path_str),
-            DefKind::TyAlias => format!("type alias [`{}`]", path_str),
-            DefKind::ForeignTy => format!("foreign type [`{}`]", path_str),
-            DefKind::TraitAlias => format!("trait alias [`{}`]", path_str),
-            DefKind::AssocTy => format!("associated type [`{}`]", path_str),
-            DefKind::TyParam => format!("type parameter from [`{}`]", parent_path_str),
-            DefKind::Fn => format!("function [`{}`]", path_str),
-            DefKind::Const => format!("const [`{}`]", path_str),
-            DefKind::ConstParam => format!("const parameter from [`{}`]", parent_path_str),
-            DefKind::Static { .. } => format!("static [`{}`]", path_str),
-            DefKind::Ctor { .. } => format!("constructor for [`{}`]", parent_path_str),
-            DefKind::AssocFn => format!("associated function [`{}`]", path_str),
-            DefKind::AssocConst => format!("associated constant [`{}`]", path_str),
-            DefKind::Macro { .. } => format!("macro [`{}`]", path_str),
-            DefKind::ExternCrate => format!("extern crate [`{}`]", path_str),
-            DefKind::Use => format!("use item [`{}`]", path_str),
-            DefKind::ForeignMod => format!("foreign module [`{}`]", path_str),
-            DefKind::AnonConst => return format!("This is an anonymous constant."),
+            DefKind::Mod => format!("module [`{path_str}`]"),
+            DefKind::Struct => format!("struct [`{path_str}`]"),
+            DefKind::Union => format!("union [`{path_str}`]"),
+            DefKind::Enum => format!("enum [`{path_str}`]"),
+            DefKind::Variant => format!("variant [`{path_str}`]"),
+            DefKind::Trait => format!("trait [`{path_str}`]"),
+            DefKind::TyAlias => format!("type alias [`{path_str}`]"),
+            DefKind::ForeignTy => format!("foreign type [`{path_str}`]"),
+            DefKind::TraitAlias => format!("trait alias [`{path_str}`]"),
+            DefKind::AssocTy => format!("associated type [`{path_str}`]"),
+            DefKind::TyParam => format!("type parameter from [`{parent_path_str}`]"),
+            DefKind::Fn => format!("function [`{path_str}`]"),
+            DefKind::Const => format!("const [`{path_str}`]"),
+            DefKind::ConstParam => format!("const parameter from [`{parent_path_str}`]"),
+            DefKind::Static { .. } => format!("static [`{path_str}`]"),
+            DefKind::Ctor { .. } => format!("constructor for [`{parent_path_str}`]"),
+            DefKind::AssocFn => format!("associated function [`{path_str}`]"),
+            DefKind::AssocConst => format!("associated constant [`{path_str}`]"),
+            DefKind::Macro { .. } => format!("macro [`{path_str}`]"),
+            DefKind::ExternCrate => format!("extern crate [`{path_str}`]"),
+            DefKind::Use => format!("use item [`{path_str}`]"),
+            DefKind::ForeignMod => format!("foreign module [`{path_str}`]"),
+            DefKind::AnonConst => return "This is an anonymous constant.".to_string(),
             DefKind::PromotedConst | DefKind::InlineConst => {
-                format!("This is an inline const from [`{}`]", parent_path_str)
+                format!("This is an inline const from [`{parent_path_str}`]")
             }
             DefKind::OpaqueTy => {
-                return format!("This is an opaque type for [`{}`]", parent_path_str)
+                return format!("This is an opaque type for [`{parent_path_str}`]");
             }
-            DefKind::Field => format!("field [`{}`] from {}", def, parent_path_str),
-            DefKind::LifetimeParam => return format!("This is a lifetime parameter."),
-            DefKind::GlobalAsm => return format!("This is a global ASM block."),
-            DefKind::Impl { .. } => return format!("This is an impl block."),
-            DefKind::Closure => return format!("This is a closure."),
-            DefKind::SyntheticCoroutineBody => return format!("This is a coroutine body."),
+            DefKind::Field => format!("field [`{def}`] from {parent_path_str}"),
+            DefKind::LifetimeParam => return "This is a lifetime parameter.".to_string(),
+            DefKind::GlobalAsm => return "This is a global ASM block.".to_string(),
+            DefKind::Impl { .. } => return "This is an impl block.".to_string(),
+            DefKind::Closure => return "This is a closure.".to_string(),
+            DefKind::SyntheticCoroutineBody => return "This is a coroutine body.".to_string(),
         };
         format!("This is the {subject}.")
     }
 
     /// Computes a string path for a `DefId`.
-    fn path_of_def_id(id: &DefId) -> Vec<String> {
+    fn path_of_def_id(explicit_id: &ExplicitDefId) -> Vec<String> {
+        let id = &explicit_id.def_id;
         fn name_to_string(mut s: String) -> String {
             if s == "_" {
                 s = "_anonymous".into();
@@ -223,7 +208,7 @@ pub mod codegen {
                     | hax_frontend_exporter::DefPathItem::ValueNs(s)
                     | hax_frontend_exporter::DefPathItem::MacroNs(s)
                     | hax_frontend_exporter::DefPathItem::LifetimeNs(s) => s,
-                    data => format!("{:?}", data),
+                    data => format!("{data:?}"),
                 };
                 if item.disambiguator == 0 {
                     data
@@ -231,12 +216,18 @@ pub mod codegen {
                     format!("{data}__{}", item.disambiguator)
                 }
             }))
-            .chain(if matches!(&id.kind, DefKind::Ctor { .. }) {
+            .chain(if explicit_id.is_constructor {
+                Some("Constructor".to_string())
+            } else {
+                None
+            })
+            .chain(if matches!(id.kind, DefKind::Ctor(..)) {
+                // TODO: get rid of `ctor` #1657
                 Some("ctor".to_string())
             } else {
                 None
             })
-            .map(|s| name_to_string(s))
+            .map(name_to_string)
             .collect()
     }
 
@@ -251,16 +242,16 @@ pub mod codegen {
     ///    fn g() -> DefId {...}
     /// }
     /// ```
-    fn generate_names_hierachy(def_ids: Vec<DefId>) -> String {
+    fn generate_names_hierachy(def_ids: Vec<ExplicitDefId>) -> String {
         /// Helper struct: a graph of module and definitions.
         #[derive(Debug, Default)]
         struct Module {
-            attached_def_id: Option<DefId>,
+            attached_def_id: Option<ExplicitDefId>,
             submodules: HashMap<String, Module>,
-            definitions: Vec<(String, DefId)>,
+            definitions: Vec<(String, ExplicitDefId)>,
         }
         impl Module {
-            fn new(def_ids: Vec<DefId>) -> Self {
+            fn new(def_ids: Vec<ExplicitDefId>) -> Self {
                 let mut node = Self::default();
                 for def_id in &def_ids {
                     node.insert(def_id);
@@ -274,7 +265,7 @@ pub mod codegen {
                 node
             }
             /// Insert a `DefId` in our module tree
-            fn insert(&mut self, def_id: &DefId) {
+            fn insert(&mut self, def_id: &ExplicitDefId) {
                 let fullpath = path_of_def_id(def_id);
                 let [modpath @ .., def] = &fullpath[..] else {
                     return;
@@ -312,9 +303,9 @@ pub mod codegen {
                     .into_iter()
                     .sorted_by(|(a, _), (b, _)| a.cmp(b))
                     .map(|(name, def_id)| {
-                        let data = serialization_helpers::serialize(&def_id);
+                        let data = compact_serialization::serialize(&def_id);
                         let docstring = docstring(&def_id);
-                        let parent = if let Some(parent) = def_id.parent {
+                        let parent = if let Some(parent) = def_id.parent() {
                             let parent = path_of_def_id(&parent);
                             let root = if level > 0 { "root::" } else { "" };
                             format!(
@@ -331,14 +322,23 @@ pub mod codegen {
                     .map(docstring)
                     .map(|s| format!(r###"#![doc=r##"{s}"##]"###));
                 docstring
-                    .chain(iter::once("pub use super::root;".to_string()))
+                    .chain(iter::once("use super::root;".to_string()))
                     .chain(submodules)
                     .chain(definitions)
                     .collect::<Vec<_>>()
                     .join("\n")
             }
         }
-        Module::new(def_ids).render(0)
+        let contents = Module::new(def_ids).render(0);
+        format!(
+            r#"// This file was generated by `cargo hax into generate-rust-engine-names`.
+// To regenerate it, please use `just regenerate-names`. Under the hood, `cargo
+// hax into generate-rust-engine-names` runs the Rust engine, which in turn
+// calls `rust_engine::names::export_def_ids_to_mod`.
+
+{contents}
+"#
+        )
     }
 
     /// Finds all `DefId`s in `items`, and produce a Rust module exposing them.
