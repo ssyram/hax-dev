@@ -1264,11 +1264,17 @@ sinto_todo!(rustc_middle::ty, AdtFlags);
 /// Reflects [`ty::ReprOptions`]
 #[derive_group(Serializers)]
 #[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_abi::ReprOptions, state: S as _s)]
+#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_abi::ReprOptions, state: S as s)]
 pub struct ReprOptions {
     /// Whether an explicit integer representation was specified.
     #[value(self.int.is_some())]
     pub int_specified: bool,
+    /// The actual discriminant type resulting from the representation options.
+    #[value({
+        use crate::rustc_middle::ty::util::IntTypeExt;
+        self.discr_type().to_ty(s.base().tcx).sinto(s)
+    })]
+    pub typ: Ty,
     pub align: Option<Align>,
     pub pack: Option<Align>,
     #[value(ReprFlags { is_c: self.c(), is_transparent: self.transparent(), is_simd: self.simd() })]
