@@ -114,8 +114,11 @@ pub fn required_predicates<'tcx>(
         // `predicates_defined_on` ICEs on other def kinds.
         _ => Default::default(),
     };
-    // For associated items in trait definitions, we add an explicit `Self: Trait` clause.
-    if let Some(trait_def_id) = tcx.trait_of_item(def_id) {
+    // For methods and assoc consts in trait definitions, we add an explicit `Self: Trait` clause.
+    // Associated types get to use the implicit `Self: Trait` clause instead.
+    if !matches!(def_kind, AssocTy)
+        && let Some(trait_def_id) = tcx.trait_of_item(def_id)
+    {
         let self_clause = self_predicate(tcx, trait_def_id).upcast(tcx);
         predicates.to_mut().insert(0, (self_clause, DUMMY_SP));
     }
