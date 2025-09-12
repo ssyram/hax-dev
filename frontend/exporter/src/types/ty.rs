@@ -464,6 +464,8 @@ pub struct ItemRefContents {
     pub in_trait: Option<ImplExpr>,
     /// Whether this contains any reference to a type/lifetime/const parameter.
     pub has_param: bool,
+    /// Whether this contains any reference to a type/const parameter.
+    pub has_non_lt_param: bool,
 }
 
 /// Reference to an item, with generics. Basically any mention of an item (function, type, etc)
@@ -569,6 +571,7 @@ impl ItemRef {
             has_param: generics.has_param()
                 || generics.has_escaping_bound_vars()
                 || generics.has_free_regions(),
+            has_non_lt_param: generics.has_param(),
         };
         let item = content.intern(s);
         s.with_cache(|cache| {
@@ -589,6 +592,7 @@ impl ItemRef {
             impl_exprs: Default::default(),
             in_trait: Default::default(),
             has_param: false,
+            has_non_lt_param: false,
         };
         let item = content.intern(s);
         s.with_global_cache(|cache| {
