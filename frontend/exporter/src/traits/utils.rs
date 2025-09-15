@@ -26,11 +26,12 @@
 //! The current implementation considers all predicates on traits to be outputs, which has the
 //! benefit of reducing the size of signatures. Moreover, the rules on which bounds are required vs
 //! implied are subtle. We may change this if this proves to be a problem.
-use rustc_hir::def::DefKind;
+use hax_frontend_exporter_options::BoundsOptions;
 use rustc_hir::LangItem;
+use rustc_hir::def::DefKind;
 use rustc_middle::ty::*;
 use rustc_span::def_id::DefId;
-use rustc_span::{Span, DUMMY_SP};
+use rustc_span::{DUMMY_SP, Span};
 use std::borrow::Cow;
 
 pub type Predicates<'tcx> = Cow<'tcx, [(Clause<'tcx>, Span)]>;
@@ -90,7 +91,7 @@ fn add_drop_bounds<'tcx>(
 pub fn required_predicates<'tcx>(
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
-    add_drop: bool,
+    options: BoundsOptions,
 ) -> Predicates<'tcx> {
     use DefKind::*;
     let def_kind = tcx.def_kind(def_id);
@@ -118,10 +119,13 @@ pub fn required_predicates<'tcx>(
         let self_clause = self_predicate(tcx, trait_def_id).upcast(tcx);
         predicates.to_mut().insert(0, (self_clause, DUMMY_SP));
     }
-    if add_drop && !matches!(def_kind, Trait | TraitAlias) {
+    if options.resolve_drop && !matches!(def_kind, Trait | TraitAlias) {
         // Add a `T: Drop` bound for every generic. For traits we consider these predicates implied
         // instead of required.
         add_drop_bounds(tcx, def_id, predicates.to_mut());
+    }
+    if options.prune_sized {
+        prune_sized_predicates(tcx, &mut predicates);
     }
     predicates
 }
@@ -148,15 +152,15 @@ pub fn self_predicate<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> PolyTraitRef<'t
 pub fn implied_predicates<'tcx>(
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
-    add_drop: bool,
+    options: BoundsOptions,
 ) -> Predicates<'tcx> {
     use DefKind::*;
     let parent = tcx.opt_parent(def_id);
-    match tcx.def_kind(def_id) {
+    let mut predicates = match tcx.def_kind(def_id) {
         // We consider all predicates on traits to be outputs
         Trait | TraitAlias => {
             let mut predicates = predicates_defined_on(tcx, def_id);
-            if add_drop {
+            if options.resolve_drop {
                 // Add a `T: Drop` bound for every generic, unless the current trait is `Drop` itself, or a
                 // built-in marker trait that we know doesn't need the bound.
                 if !matches!(
@@ -179,7 +183,7 @@ pub fn implied_predicates<'tcx>(
         AssocTy if matches!(tcx.def_kind(parent.unwrap()), Trait) => {
             // `skip_binder` is for the GAT `EarlyBinder`
             let mut predicates = Cow::Borrowed(tcx.explicit_item_bounds(def_id).skip_binder());
-            if add_drop {
+            if options.resolve_drop {
                 // Add a `Drop` bound to the assoc item.
                 let drop_trait = tcx.lang_items().drop_trait().unwrap();
                 let ty =
@@ -190,7 +194,11 @@ pub fn implied_predicates<'tcx>(
             predicates
         }
         _ => Predicates::default(),
+    };
+    if options.prune_sized {
+        prune_sized_predicates(tcx, &mut predicates);
     }
+    predicates
 }
 
 /// Normalize a value.
@@ -281,6 +289,33 @@ where
     T: TypeFoldable<TyCtxt<'tcx>> + Copy,
 {
     Binder::dummy(erase_and_norm(tcx, typing_env, x.skip_binder()))
+}
+
+/// Returns true whenever `def_id` is `MetaSized`, `Sized` or `PointeeSized`.
+pub fn is_sized_related_trait<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> bool {
+    use rustc_hir::lang_items::LangItem;
+    let lang_item = tcx.as_lang_item(def_id);
+    matches!(
+        lang_item,
+        Some(LangItem::PointeeSized | LangItem::MetaSized | LangItem::Sized)
+    )
+}
+
+/// Given a `GenericPredicates`, prune every occurence of a sized-related clause.
+/// Prunes bounds of the shape `T: MetaSized`, `T: Sized` or `T: PointeeSized`.
+fn prune_sized_predicates<'tcx>(tcx: TyCtxt<'tcx>, generic_predicates: &mut Predicates<'tcx>) {
+    let predicates: Vec<(Clause<'tcx>, rustc_span::Span)> = generic_predicates
+        .iter()
+        .filter(|(clause, _)| {
+            clause.as_trait_clause().is_some_and(|trait_predicate| {
+                !is_sized_related_trait(tcx, trait_predicate.skip_binder().def_id())
+            })
+        })
+        .copied()
+        .collect();
+    if predicates.len() != generic_predicates.len() {
+        *generic_predicates.to_mut() = predicates;
+    }
 }
 
 pub trait ToPolyTraitRef<'tcx> {

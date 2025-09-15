@@ -18,7 +18,7 @@ pub struct OwnerId(usize);
 pub struct Span {
     /// A vector of spans as defined by the frontend.
     /// This is useful for supporting in a trivial way union of spans.
-    data: Vec<hax_frontend_exporter::Span>,
+    pub data: Vec<hax_frontend_exporter::Span>,
     /// A unique identifier. Since we store spans almost for every node of the
     /// AST, having a unique identifier for spans gives us a fine-grained way of
     /// refering to sub-nodes in debugging context. This id is indeed mostly
@@ -28,6 +28,24 @@ pub struct Span {
     /// used for debugging and profiling purposes, e.g. for `cargo hax into
     /// --stats backend`.
     owner_hint: Option<OwnerId>,
+}
+
+impl Span {
+    /// Creates a dummy span.
+    pub fn dummy() -> Self {
+        let lo: hax_frontend_exporter::Loc = hax_frontend_exporter::Loc { line: 0, col: 0 };
+        let hi = lo.clone();
+        Span {
+            data: vec![hax_frontend_exporter::Span {
+                lo,
+                hi,
+                filename: hax_frontend_exporter::FileName::Custom("dumny".into()),
+                rust_span_data: None,
+            }],
+            id: 0,
+            owner_hint: None,
+        }
+    }
 }
 
 impl From<hax_frontend_exporter::Span> for Span {

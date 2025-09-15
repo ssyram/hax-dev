@@ -9,4 +9,11 @@
 )]
 
 pub mod ast;
+pub mod backends;
+pub mod hax_io;
+pub mod names;
+pub mod ocaml_engine;
+pub mod phase;
+pub mod printer;
+pub mod resugarings;
 pub mod symbol;

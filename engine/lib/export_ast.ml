@@ -347,7 +347,7 @@ module Make (FA : Features.T) = struct
     | String s -> B.String (Newtypesymbol s)
     | Char c -> B.Char c
     | Int { value; negative; kind } ->
-        B.Int { value; negative; kind = dint_kind kind }
+        B.Int { value = Newtypesymbol value; negative; kind = dint_kind kind }
     | Float { value; negative; kind } ->
         B.Float
           { value = Newtypesymbol value; negative; kind = dfloat_kind kind }
@@ -571,12 +571,12 @@ module Make (FA : Features.T) = struct
     | A.Use { path; is_external; rename } -> B.Use { path; is_external; rename }
     | A.Quote { quote; origin } ->
         B.Quote { quote = dquote quote; origin = ditem_quote_origin origin }
-    | A.HaxError s ->
-        let node : Types.fragment = Unknown "HaxError" in
+    | A.HaxError details ->
+        let fragment : Types.fragment = Unknown "HaxError" in
         let info : B.diagnostic_info =
-          { context = Import; kind = Custom s; span }
+          { context = Import; kind = AssertionFailure { details }; span }
         in
-        Error { node; info }
+        Error { fragment; diagnostics = [ { node = fragment; info } ] }
     | A.NotImplementedYet -> B.NotImplementedYet
 
   let ditem (i : A.item) : B.item list =

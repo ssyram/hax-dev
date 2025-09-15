@@ -186,6 +186,22 @@ let cast_identity_lemma
 let add_mod (#t:inttype) (a:int_t t) (b:int_t t) =
     mk_int #t ((v a + v b) @%. t)
 
+let add_sat (#t:inttype) (a:int_t t) (b:int_t t) =
+    mk_int #t (if (v a + v b) <= minint t 
+              then minint t 
+              else 
+                if (v a + v b) >= maxint t 
+                then maxint t 
+                else  (v a + v b))
+
+let sub_sat (#t:inttype) (a:int_t t) (b:int_t t) =
+    mk_int #t (if (v a - v b) <= minint t 
+              then minint t 
+              else 
+                if (v a - v b) >= maxint t 
+                then maxint t 
+                else  v a - v b)
+    
 let add (#t:inttype) (a:int_t t)
         (b:int_t t{range (v a + v b) t}) =
     mk_int #t (v a + v b)
@@ -197,6 +213,9 @@ let mul_mod (#t:inttype) (a:int_t t)
             (b:int_t t) =
             mk_int #t (v a * v b @%. t)
 
+let mul_overflow (#t:inttype) (a:int_t t)
+                 (b:int_t t) =
+                 (mk_int #t (v a * v b @%. t), (v a * v b > maxint t || v a * v b < maxint t))
 let mul (#t:inttype) (a:int_t t)
         (b:int_t t{range (v a * v b) t}) =
         mk_int #t (v a * v b)
@@ -491,3 +510,9 @@ val get_bit_cast_extend #t #u
           (ensures get_bit (cast_mod #t #u x) nth == 0)
           [SMTPat (get_bit (cast_mod #t #u x) nth)]
 
+[@@ FStar.Tactics.Typeclasses.tcinstance]
+instance default_int #t: Core.Default.t_Default (int_t t) = {
+  f_default_pre = (fun () -> true);
+  f_default_post = (fun () (res: int_t t) -> res =. mk_int #t 0);
+  f_default = (fun () -> mk_int #t 0);
+}

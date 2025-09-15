@@ -25,6 +25,10 @@ expand *FLAGS:
     $([[ "$(cargo --version)" == *nightly* ]] || echo "+nigthly") \
     expand {{FLAGS}}
 
+# Show debug JSON emitted by the Rust engine
+@debug-json N: (_ensure_command_in_path "jless" "jless (https://jless.io/)") (_ensure_command_in_path "jq" "jq (https://jqlang.github.io/jq/)")
+  cat /tmp/hax-ast-debug.json | jq -s '.[{{N}}]' | jless
+
 # Show the generated module `concrete_ident_generated.ml`, that contains all the Rust names the engine knows about. Those names are declared in the `./engine/names` crate.
 @list-names:
   hax-engine-names-extract | sed '/include .val/,$d' | just _pager
@@ -45,6 +49,12 @@ expand *FLAGS:
     | ocamlformat --impl - \
     | just _pager
 
+# Regenerate names in the Rust engine. Writes to `rust-engine/src/names/generated.rs`.
+regenerate-names:
+  #!/usr/bin/env bash
+  OUTPUT_FILE=rust-engine/src/names/generated.rs
+  cargo hax -C --manifest-path engine/names/Cargo.toml \; into --output-dir $(dirname -- $OUTPUT_FILE) generate-rust-engine-names
+  rustfmt "$OUTPUT_FILE"
 
 # Format all the code
 fmt:

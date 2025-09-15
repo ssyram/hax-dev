@@ -182,16 +182,29 @@ pub enum Backend<E: Extension> {
     Easycrypt,
     /// Use the ProVerif backend (warning: work in progress!)
     ProVerif(ProVerifOptions),
+    /// Use the Lean backend (warning: work in progress!)
+    #[clap(hide = true)]
+    Lean,
+    /// Use the Rust backend (warning: work in progress!)
+    #[clap(hide = true)]
+    Rust,
+    /// Extract `DefId`s of the crate as a Rust module tree.
+    /// This is a command that regenerates code for the rust engine.
+    #[clap(hide = true)]
+    GenerateRustEngineNames,
 }
 
 impl fmt::Display for Backend<()> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Backend::Fstar(..) => write!(f, "fstar"),
-            Backend::Coq => write!(f, "coq"),
-            Backend::Ssprove => write!(f, "ssprove"),
-            Backend::Easycrypt => write!(f, "easycrypt"),
-            Backend::ProVerif(..) => write!(f, "proverif"),
+            Backend::Fstar { .. } => write!(f, "fstar"),
+            Backend::Coq { .. } => write!(f, "coq"),
+            Backend::Ssprove { .. } => write!(f, "ssprove"),
+            Backend::Easycrypt { .. } => write!(f, "easycrypt"),
+            Backend::ProVerif { .. } => write!(f, "proverif"),
+            Backend::Lean { .. } => write!(f, "lean"),
+            Backend::Rust { .. } => write!(f, "rust"),
+            Backend::GenerateRustEngineNames { .. } => write!(f, "generate_rust_engine_names"),
         }
     }
 }
@@ -536,7 +549,10 @@ impl From<Options> for hax_frontend_exporter_options::Options {
     fn from(_opts: Options) -> hax_frontend_exporter_options::Options {
         hax_frontend_exporter_options::Options {
             inline_anon_consts: true,
-            resolve_drop_bounds: false,
+            bounds_options: hax_frontend_exporter_options::BoundsOptions {
+                resolve_drop: false,
+                prune_sized: true,
+            },
         }
     }
 }

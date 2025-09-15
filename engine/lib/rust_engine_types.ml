@@ -1,7 +1,6 @@
-(** This module re-exports and renames a subset of `Types`.
-    `Types` contains both the modules from the frontend and from the Rust engine.
-    Thus, some types are deduplicated, and get renamed.
-*)
+(** This module re-exports and renames a subset of `Types`. `Types` contains
+    both the modules from the frontend and from the Rust engine. Thus, some
+    types are deduplicated, and get renamed. *)
 
 module Renamed = struct
   type arm = Types.arm2

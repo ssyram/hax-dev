@@ -1296,8 +1296,8 @@ pub struct ReprFlags {
 
 /// Reflects [`ty::Align`], but directly stores the number of bytes as a u64.
 #[derive_group(Serializers)]
-#[derive(AdtInto, Clone, Debug, JsonSchema)]
-#[args(<'tcx, S: UnderOwnerState<'tcx>>, from: rustc_abi::Align, state: S as _s)]
+#[derive(AdtInto, Clone, Debug, JsonSchema, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[args(<'tcx, S: BaseState<'tcx>>, from: rustc_abi::Align, state: S as _s)]
 pub struct Align {
     #[value({
         self.bytes()
@@ -1382,8 +1382,6 @@ impl PointerCoercion {
         }
     }
 }
-
-sinto_todo!(rustc_middle::ty, ScalarInt);
 
 /// Reflects [`ty::FnSig`]
 #[derive_group(Serializers)]
@@ -1530,6 +1528,7 @@ pub enum ClauseKind {
     WellFormed(Term),
     ConstEvaluatable(ConstantExpr),
     HostEffect(HostEffectPredicate),
+    UnstableFeature(Symbol),
 }
 
 sinto_todo!(rustc_middle::ty, HostEffectPredicate<'tcx>);

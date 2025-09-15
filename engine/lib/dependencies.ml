@@ -10,8 +10,8 @@ module Make (F : Features.T) = struct
   let ident_of (item : item) : Concrete_ident.t = item.ident
 
   (** Get all the identifiers declared under an item. This includes the
-    identifier of the item itself, but also of any sub-item: for instance,
-    associated items within an impl. *)
+      identifier of the item itself, but also of any sub-item: for instance,
+      associated items within an impl. *)
   let idents_of (item : item) : Concrete_ident.t list =
     let is_field_anonymous ident =
       match List.last (Concrete_ident.to_view ident).mod_path with
@@ -540,8 +540,6 @@ module Make (F : Features.T) = struct
                    (inspect_view_last from_id) ->
               None
           | Quote _ -> None
-          (* This is temporary: see https://github.com/cryspen/hax/issues/1285 *)
-          | Trait { name; _ } when [%equal: concrete_ident] name from_id -> None
           | _ -> Some { attrs; span = origin_item.span; ident = from_id; v })
     in
     let rename =

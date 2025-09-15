@@ -18,6 +18,8 @@ jobs:
       with:
         name: hax
         skipPush: true
+        extraPullNames: fstar-nix-versions, z3-nix-versions
+
     - name: Build
       run: nix build -L
 
@@ -26,7 +28,7 @@ jobs:
         nix profile install nixpkgs#yq
         nix profile install .#rustc
         nix profile install .
-        
+
     - name: Ensure readme coherency
       run: |
         nix build .#check-readme-coherency -L
@@ -34,10 +36,12 @@ jobs:
     - name: Test the toolchain
       run: |
         nix build .#check-toolchain -L
-        
+
     - name: Test the examples
       run: |
-        nix build .#check-examples -L
+        cd examples
+        nix develop ..#ci-examples --command make clean
+        nix develop ..#ci-examples --command make
 
     - name: Try to extract Rust By Examples
       run: |
@@ -57,4 +61,3 @@ jobs:
         nix build .# .#fstar --json \
           | jq -r '.[].outputs | to_entries[].value' \
           | cachix push hax
-

@@ -118,6 +118,10 @@ let c_attr (attr : Thir.attribute) : attr option =
       in
       let kind = DocComment { kind; body = comment } in
       Some { kind; span = Span.of_thir span }
+  | Parsed (AutomaticallyDerived span) ->
+      (* Restore behavior before PR #1534 *)
+      let kind = Tool { path = "automatically_derived"; tokens = "" } in
+      Some { kind; span = Span.of_thir span }
   | Unparsed { args = Eq { expr = { symbol; _ }; _ }; path = "doc"; span; _ } ->
       (* Looks for `#[doc = "something"]` *)
       let kind = DocComment { kind = DCKLine; body = symbol } in
@@ -141,7 +145,8 @@ let c_item_attrs (attrs : Thir.item_attributes) : attrs =
   let parent =
     c_attrs attrs.parent_attributes
     |> List.filter ~f:([%matches? ({ kind = DocComment _; _ } : attr)] >> not)
-    |> (* Repeating associateditem or uid is harmful, same for comments *)
+    |>
+    (* Repeating associateditem or uid is harmful, same for comments *)
     List.filter ~f:(fun payload ->
         match Attr_payloads.payloads [ payload ] with
         | [ ((Uid _ | AssociatedItem _), _) ] -> false
@@ -354,6 +359,30 @@ end) : EXPR = struct
               ^ [%show: ty] lhs.typ)
       else Concrete_ident.of_name ~value:true @@ overloaded_names_of_binop op
     in
+    let needs_borrow =
+      match op with Lt | Le | Ne | Ge | Gt | Eq -> true | _ -> false
+    in
+    let borrow_if_needed (e : expr) =
+      if needs_borrow then
+        match e.typ with
+        | TRef _ -> e
+        | _ ->
+            {
+              span = e.span;
+              e = Borrow { e; kind = Shared; witness = W.reference };
+              typ =
+                TRef
+                  {
+                    witness = W.reference;
+                    region = "unknown";
+                    typ = e.typ;
+                    mut = Immutable;
+                  };
+            }
+      else e
+    in
+    let lhs = borrow_if_needed lhs in
+    let rhs = borrow_if_needed rhs in
     U.call' (`Concrete name) [ lhs; rhs ] span typ
 
   let binop_of_assignop : Thir.assign_op -> Thir.bin_op = function
@@ -378,9 +407,9 @@ end) : EXPR = struct
       let span = Span.of_thir e.span in
       U.hax_failure_expr' span typ (ctx, kind) ""
 
-  (** Extracts an expression as the global name `dropped_body`: this
-      drops the computational part of the expression, but keeps a
-      correct type and span. *)
+  (** Extracts an expression as the global name `dropped_body`: this drops the
+      computational part of the expression, but keeps a correct type and span.
+  *)
   and c_expr_drop_body (e : Thir.decorated_for__expr_kind) : expr =
     let typ = c_ty e.span e.ty in
     let span = Span.of_thir e.span in
@@ -518,7 +547,8 @@ end) : EXPR = struct
               {
                 item =
                   {
-                    value = { def_id = id; generic_args; impl_exprs; in_trait };
+                    value =
+                      { def_id = id; generic_args; impl_exprs; in_trait; _ };
                     _;
                   };
                 _;
@@ -616,7 +646,7 @@ end) : EXPR = struct
           let projector =
             GlobalVar
               (`Projector
-                (`Concrete (Concrete_ident.of_def_id ~value:true field)))
+                 (`Concrete (Concrete_ident.of_def_id ~value:true field)))
           in
           let span = Span.of_thir e.span in
           App
@@ -629,7 +659,10 @@ end) : EXPR = struct
             }
       | TupleField { lhs; field } ->
           (* TODO: refactor *)
-          let tuple_len = 0 (* todo, lookup type *) in
+          let tuple_len =
+            0
+            (* todo, lookup type *)
+          in
           let lhs = c_expr lhs in
           let projector =
             GlobalVar
@@ -1347,9 +1380,8 @@ include struct
     c_clause
 end
 
-(** Instantiate the functor for translating expressions. The crate
-name can be configured (there are special handling related to `core`)
-*)
+(** Instantiate the functor for translating expressions. The crate name can be
+    configured (there are special handling related to `core`) *)
 let make ~krate : (module EXPR) =
   let is_core_item = String.(krate = "core" || krate = "core_hax_model") in
   let module M : EXPR = Make (struct
@@ -1375,7 +1407,7 @@ let is_automatically_derived (attrs : Thir.attribute list) =
     ~f:(function
       (* This will break once these attributes get properly parsed. It will
           then be very easy to parse them correctly *)
-      | Unparsed { path; _ } -> String.equal path "automatically_derived"
+      | Parsed (AutomaticallyDerived _) -> true
       | _ -> false)
     attrs
 
@@ -1383,8 +1415,8 @@ let should_skip (attrs : Thir.item_attributes) =
   let attrs = attrs.attributes @ attrs.parent_attributes in
   is_automatically_derived attrs
 
-(** Converts a generic parameter to a generic value. This assumes the
-parameter is bound. *)
+(** Converts a generic parameter to a generic value. This assumes the parameter
+    is bound. *)
 let generic_param_to_value ({ ident; kind; span; _ } : generic_param) :
     generic_value =
   match kind with
@@ -1641,7 +1673,7 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let variants = [ v ] in
       let name = Concrete_ident.of_def_id ~value:false def_id in
       mk @@ Type { name; generics; variants; is_struct }
-  | Trait (No, safety, _, generics, _bounds, items) ->
+  | Trait (NotConst, No, safety, _, generics, _bounds, items) ->
       let items =
         List.filter
           ~f:(fun { attributes; _ } -> not (should_skip attributes))
@@ -1652,7 +1684,10 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       in
       let { params; constraints } = c_generics generics in
       let self =
-        let id = Local_ident.mk_id Typ 0 (* todo *) in
+        let id =
+          Local_ident.mk_id Typ 0
+          (* todo *)
+        in
         let ident = Local_ident.{ name = "Self"; id } in
         { ident; span; attrs = []; kind = GPType }
       in
@@ -1661,8 +1696,10 @@ and c_item_unwrapped ~ident ~type_only (item : Thir.item) : item list =
       let items = List.map ~f:c_trait_item items in
       let safety = csafety safety in
       mk @@ Trait { name; generics; items; safety }
-  | Trait (Yes, _, _, _, _, _) ->
+  | Trait (_, Yes, _, _, _, _, _) ->
       unimplemented ~issue_id:930 [ item.span ] "Auto trait"
+  | Trait (Const, _, _, _, _, _, _) ->
+      unimplemented ~issue_id:930 [ item.span ] "Const trait"
   | Impl { of_trait = None; generics; items; _ } ->
       let items =
         List.filter

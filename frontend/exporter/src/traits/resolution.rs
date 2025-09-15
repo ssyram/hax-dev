@@ -2,8 +2,9 @@
 //! This module is independent from the rest of hax, in particular it doesn't use its
 //! state-tracking machinery.
 
+use hax_frontend_exporter_options::BoundsOptions;
 use itertools::Itertools;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
@@ -12,8 +13,8 @@ use rustc_middle::ty::{self, *};
 use rustc_trait_selection::traits::ImplSource;
 
 use super::utils::{
-    self, erase_and_norm, implied_predicates, normalize_bound_val, required_predicates,
-    self_predicate, ToPolyTraitRef,
+    self, ToPolyTraitRef, erase_and_norm, implied_predicates, normalize_bound_val,
+    required_predicates, self_predicate,
 };
 
 #[derive(Debug, Clone)]
@@ -163,12 +164,12 @@ fn initial_self_pred<'tcx>(
 fn local_bound_predicates<'tcx>(
     tcx: TyCtxt<'tcx>,
     def_id: rustc_span::def_id::DefId,
-    add_drop: bool,
+    options: BoundsOptions,
 ) -> Vec<PolyTraitPredicate<'tcx>> {
     fn acc_predicates<'tcx>(
         tcx: TyCtxt<'tcx>,
         def_id: rustc_span::def_id::DefId,
-        add_drop: bool,
+        options: BoundsOptions,
         predicates: &mut Vec<PolyTraitPredicate<'tcx>>,
     ) {
         use DefKind::*;
@@ -176,12 +177,12 @@ fn local_bound_predicates<'tcx>(
             // These inherit predicates from their parent.
             AssocTy | AssocFn | AssocConst | Closure | Ctor(..) | Variant => {
                 let parent = tcx.parent(def_id);
-                acc_predicates(tcx, parent, add_drop, predicates);
+                acc_predicates(tcx, parent, options, predicates);
             }
             _ => {}
         }
         predicates.extend(
-            required_predicates(tcx, def_id, add_drop)
+            required_predicates(tcx, def_id, options)
                 .iter()
                 .map(|(clause, _span)| *clause)
                 .filter_map(|clause| clause.as_trait_clause()),
@@ -189,7 +190,7 @@ fn local_bound_predicates<'tcx>(
     }
 
     let mut predicates = vec![];
-    acc_predicates(tcx, def_id, add_drop, &mut predicates);
+    acc_predicates(tcx, def_id, options, &mut predicates);
     predicates
 }
 
@@ -197,10 +198,10 @@ fn local_bound_predicates<'tcx>(
 fn parents_trait_predicates<'tcx>(
     tcx: TyCtxt<'tcx>,
     pred: PolyTraitPredicate<'tcx>,
-    add_drop: bool,
+    options: BoundsOptions,
 ) -> Vec<PolyTraitPredicate<'tcx>> {
     let self_trait_ref = pred.to_poly_trait_ref();
-    implied_predicates(tcx, pred.def_id(), add_drop)
+    implied_predicates(tcx, pred.def_id(), options)
         .iter()
         .map(|(clause, _span)| *clause)
         // Substitute with the `self` args so that the clause makes sense in the
@@ -243,14 +244,14 @@ pub struct PredicateSearcher<'tcx> {
     /// Local clauses available in the current context.
     candidates: HashMap<PolyTraitPredicate<'tcx>, Candidate<'tcx>>,
     /// Whether to add `T: Drop` bounds for every type generic and associated item.
-    add_drop: bool,
+    options: BoundsOptions,
     /// Count the number of bound clauses in scope; used to identify clauses uniquely.
     bound_clause_count: usize,
 }
 
 impl<'tcx> PredicateSearcher<'tcx> {
     /// Initialize the elaborator with the predicates accessible within this item.
-    pub fn new_for_owner(tcx: TyCtxt<'tcx>, owner_id: DefId, add_drop: bool) -> Self {
+    pub fn new_for_owner(tcx: TyCtxt<'tcx>, owner_id: DefId, options: BoundsOptions) -> Self {
         let mut out = Self {
             tcx,
             typing_env: TypingEnv {
@@ -258,7 +259,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
                 typing_mode: TypingMode::PostAnalysis,
             },
             candidates: Default::default(),
-            add_drop,
+            options,
             bound_clause_count: 0,
         };
         out.insert_predicates(
@@ -267,7 +268,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
                 clause,
             }),
         );
-        out.insert_bound_predicates(local_bound_predicates(tcx, owner_id, add_drop));
+        out.insert_bound_predicates(local_bound_predicates(tcx, owner_id, options));
         out
     }
 
@@ -335,9 +336,9 @@ impl<'tcx> PredicateSearcher<'tcx> {
         let tcx = self.tcx;
         // Then recursively add their parents. This way ensures a breadth-first order,
         // which means we select the shortest path when looking up predicates.
-        let add_drop = self.add_drop;
+        let options = self.options;
         self.insert_candidates(new_candidates.into_iter().flat_map(|candidate| {
-            parents_trait_predicates(tcx, candidate.pred, add_drop)
+            parents_trait_predicates(tcx, candidate.pred, options)
                 .into_iter()
                 .enumerate()
                 .map(move |(index, parent_pred)| {
@@ -376,7 +377,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
         };
 
         // The bounds that hold on the associated type.
-        let item_bounds = implied_predicates(tcx, alias_ty.def_id, self.add_drop);
+        let item_bounds = implied_predicates(tcx, alias_ty.def_id, self.options);
         let item_bounds = item_bounds
             .iter()
             .map(|(clause, _span)| *clause)
@@ -598,7 +599,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
                     // `Drop` in its list of traits.
                     ty::Dynamic(..) => Err(ImplExprAtom::Dyn),
                     ty::Param(..) | ty::Alias(..) | ty::Bound(..) => {
-                        if self.add_drop {
+                        if self.options.resolve_drop {
                             // We've added `Drop` impls on everything, we should be able to resolve
                             // it.
                             match self.resolve_local(erased_tref.upcast(self.tcx), warn)? {
@@ -664,7 +665,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
         let tcx = self.tcx;
         self.resolve_predicates(
             generics,
-            required_predicates(tcx, def_id, self.add_drop),
+            required_predicates(tcx, def_id, self.options),
             warn,
         )
     }
@@ -680,7 +681,7 @@ impl<'tcx> PredicateSearcher<'tcx> {
         let tcx = self.tcx;
         self.resolve_predicates(
             generics,
-            implied_predicates(tcx, def_id, self.add_drop),
+            implied_predicates(tcx, def_id, self.options),
             warn,
         )
     }
