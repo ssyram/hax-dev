@@ -149,9 +149,9 @@ fn initial_self_pred<'tcx>(
     use DefKind::*;
     let trait_def_id = match tcx.def_kind(def_id) {
         Trait | TraitAlias => def_id,
-        // Hack: we don't support GATs well so for now we let assoc types refer to the
-        // implicit trait `Self` clause. Other associated items get an explicit `Self:
-        // Trait` clause passed to them so they don't need that.
+        // Associated types can refer to the implicit `Self` clause. For methods and associated
+        // consts we pass an explicit `Self: Trait` clause to make the corresponding item
+        // reuseable.
         AssocTy => tcx.parent(def_id),
         _ => return None,
     };

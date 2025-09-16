@@ -530,6 +530,7 @@ impl ItemRef {
         if let Some(item) = s.with_cache(|cache| cache.item_refs.get(&key).cloned()) {
             return item;
         }
+        let hax_def_id = def_id.sinto(s);
 
         let mut impl_exprs = solve_item_required_traits(s, def_id, generics);
         let mut hax_generics = generics.sinto(s);
@@ -557,14 +558,17 @@ impl ItemRef {
             let trait_ref = tinfo.r#trait.hax_skip_binder_ref();
             let num_trait_generics = trait_ref.generic_args.len();
             hax_generics.drain(0..num_trait_generics);
-            let num_trait_trait_clauses = trait_ref.impl_exprs.len();
-            // Associated items take a `Self` clause as first clause, we skip that one too. Note: that
-            // clause is the same as `tinfo`.
-            impl_exprs.drain(0..num_trait_trait_clauses + 1);
+            let mut num_trait_trait_clauses = trait_ref.impl_exprs.len();
+            // Items other than associated types get an extra `Self: Trait` clause as the first
+            // clause, we skip that one too. Note: that clause is the same as `tinfo`.
+            if !matches!(hax_def_id.kind, DefKind::AssocTy) {
+                num_trait_trait_clauses += 1;
+            };
+            impl_exprs.drain(0..num_trait_trait_clauses);
         }
 
         let content = ItemRefContents {
-            def_id: def_id.sinto(s),
+            def_id: hax_def_id,
             generic_args: hax_generics,
             impl_exprs,
             in_trait: trait_info,
