@@ -14,6 +14,21 @@ pub trait Foo {
         Self::AssocType: Copy;
 }
 
+// Test case for vtable_receiver with associated types
+pub trait VtableTest {
+    type Output;
+    fn vtable_method(&self, input: Self::Output) -> Self::Output;
+}
+
+// Test case with more complex associated type constraints
+pub trait ComplexVtable {
+    type Input: Clone;
+    type Output: Clone + PartialEq;
+    
+    fn complex_method(&self, input: Self::Input) -> Self::Output;
+    fn method_using_both(&self, a: Self::Input, b: Self::Output) -> (Self::Input, Self::Output);
+}
+
 impl SuperTrait for i32 {
     fn function_of_super_trait(self) -> u32 {
         self.abs() as u32
@@ -32,6 +47,26 @@ impl Foo for () {
     fn assoc_type(_: Self::AssocType) -> () {}
 }
 
+impl VtableTest for i32 {
+    type Output = u64;
+    fn vtable_method(&self, input: Self::Output) -> Self::Output {
+        input + (*self as u64)
+    }
+}
+
+impl ComplexVtable for String {
+    type Input = i32;
+    type Output = String;
+    
+    fn complex_method(&self, input: Self::Input) -> Self::Output {
+        format!("{}{}", self, input)
+    }
+    
+    fn method_using_both(&self, a: Self::Input, b: Self::Output) -> (Self::Input, Self::Output) {
+        (a * 2, format!("{}{}", self, b))
+    }
+}
+
 fn f<T: Foo>(x: T) {
     T::assoc_f();
     x.method_f()
@@ -39,6 +74,17 @@ fn f<T: Foo>(x: T) {
 
 fn g<T: Foo>(x: T::AssocType) -> u32 {
     x.function_of_super_trait()
+}
+
+// Function that uses dynamic dispatch - should trigger vtable handling
+fn test_vtable_dynamic(obj: &dyn VtableTest<Output = u64>, input: u64) -> u64 {
+    obj.vtable_method(input)
+}
+
+// More complex dynamic dispatch test
+fn test_complex_vtable(obj: &dyn ComplexVtable<Input = i32, Output = String>) -> String {
+    let result = obj.complex_method(42);
+    obj.method_using_both(10, result).1
 }
 
 struct Struct;
