@@ -463,7 +463,8 @@ fn gen_vtable_receiver<'tcx>(
         },
     }?;
 
-    // Get the original trait method definition
+    // Get the original trait method definition - this is the key insight: 
+    // we need the signature from the *trait declaration*, not the implementation
     let origin_trait_method_id = match assoc_item.trait_item_def_id {
         Some(id) => id,
         // It is itself a trait method declaration
@@ -502,7 +503,9 @@ fn gen_vtable_receiver<'tcx>(
     let trait_sig = inst_binder(tcx, s.typing_env(), container_args, origin_trait_method_sig);
     let vtable_sig = trait_sig.fold_with(&mut replacer);
     
-    // Normalize associated types using constraints from dyn_self
+    // Normalize associated types using constraints from dyn_self.
+    // This handles cases like Self::Output being replaced with the concrete type
+    // specified in the dyn Trait<Output = T> constraint.
     use crate::traits::normalize;
     let normalized_vtable_sig = normalize(tcx, s.typing_env(), vtable_sig);
     
