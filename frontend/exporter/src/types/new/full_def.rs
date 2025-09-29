@@ -325,9 +325,10 @@ pub enum FullDefKind<Body> {
         associated_item: AssocItem,
         inline: InlineAttr,
         is_const: bool,
-        /// The receiver type when this method is used in a vtable. `None` if this method is not
-        /// vtable safe. `Some(dyn_self)` if it is vtable safe.
-        vtable_receiver: Option<Ty>,
+        /// The full vtable signature when this method is used in a vtable. `None` if this method is not
+        /// vtable safe. `Some(sig)` if it is vtable safe, where `sig` is the signature from the trait
+        /// declaration with `Self` substituted by `dyn_self` and associated types normalized.
+        vtable_receiver: Option<PolyFnSig>,
         sig: PolyFnSig,
         body: Option<Body>,
     },
@@ -429,7 +430,7 @@ fn gen_vtable_receiver<'tcx>(
     // The state that owns the method DefId
     assoc_method_s: &StateWithOwner<'tcx>,
     args: Option<ty::GenericArgsRef<'tcx>>,
-) -> Option<Ty>
+) -> Option<PolyFnSig>
 {
     let def_id = assoc_method_s.owner_id();
     let tcx = assoc_method_s.base().tcx;
@@ -462,21 +463,21 @@ fn gen_vtable_receiver<'tcx>(
         },
     }?;
 
-    // Next, try to find the receiver "template" from the trait method declaration.
-    // It would be convenient for us to simply substitute `Self` with `dyn_self` in the receiver.
+    // Get the original trait method definition
     let origin_trait_method_id = match assoc_item.trait_item_def_id {
         Some(id) => id,
         // It is itself a trait method declaration
         None => def_id,
     };
+    
+    // Get the signature from the trait definition
     let origin_trait_method_sig = tcx.fn_sig(origin_trait_method_id);
-    let base_receiver_ty = origin_trait_method_sig.skip_binder().inputs().skip_binder()[0];
 
     use ty::TypeFoldable;
 
-    struct ReceiverReplacer<'tcx>(ty::TyCtxt<'tcx>, ty::Ty<'tcx>);
+    struct SelfReplacer<'tcx>(ty::TyCtxt<'tcx>, ty::Ty<'tcx>);
 
-    impl<'tcx> ty::TypeFolder<ty::TyCtxt<'tcx>> for ReceiverReplacer<'tcx> {
+    impl<'tcx> ty::TypeFolder<ty::TyCtxt<'tcx>> for SelfReplacer<'tcx> {
         fn cx(&self) -> ty::TyCtxt<'tcx> {
             self.0
         }
@@ -495,9 +496,17 @@ fn gen_vtable_receiver<'tcx>(
         }
     }
 
-    let mut replacer = ReceiverReplacer(tcx, dyn_self);
+    let mut replacer = SelfReplacer(tcx, dyn_self);
 
-    Some(base_receiver_ty.fold_with(&mut replacer).sinto(s))
+    // Get the instantiated signature and then substitute Self with dyn_self
+    let trait_sig = inst_binder(tcx, s.typing_env(), container_args, origin_trait_method_sig);
+    let vtable_sig = trait_sig.fold_with(&mut replacer);
+    
+    // Normalize associated types using constraints from dyn_self
+    use crate::traits::normalize;
+    let normalized_vtable_sig = normalize(tcx, s.typing_env(), vtable_sig);
+    
+    Some(normalized_vtable_sig.sinto(s))
 }
 
 #[cfg(feature = "rustc")]
