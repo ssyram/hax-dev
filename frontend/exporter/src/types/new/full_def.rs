@@ -325,9 +325,10 @@ pub enum FullDefKind<Body> {
         associated_item: AssocItem,
         inline: InlineAttr,
         is_const: bool,
-        /// The receiver type when this method is used in a vtable. `None` if this method is not
-        /// vtable safe. `Some(dyn_self)` if it is vtable safe.
-        vtable_receiver: Option<Ty>,
+        /// The function signature when this method is used in a vtable. `None` if this method is not
+        /// vtable safe. `Some(sig)` if it is vtable safe, where `sig` is the trait method declaration's
+        /// signature with `Self` replaced by `dyn Trait` and associated types normalized.
+        dyn_sig: Option<PolyFnSig>,
         sig: PolyFnSig,
         body: Option<Body>,
     },
@@ -425,11 +426,11 @@ pub enum FullDefKind<Body> {
 }
 
 #[cfg(feature = "rustc")]
-fn gen_vtable_receiver<'tcx>(
+fn gen_dyn_sig<'tcx>(
     // The state that owns the method DefId
     assoc_method_s: &StateWithOwner<'tcx>,
     args: Option<ty::GenericArgsRef<'tcx>>,
-) -> Option<Ty>
+) -> Option<PolyFnSig>
 {
     let def_id = assoc_method_s.owner_id();
     let tcx = assoc_method_s.base().tcx;
@@ -462,42 +463,62 @@ fn gen_vtable_receiver<'tcx>(
         },
     }?;
 
-    // Next, try to find the receiver "template" from the trait method declaration.
-    // It would be convenient for us to simply substitute `Self` with `dyn_self` in the receiver.
+    // Get the original trait method declaration's signature
     let origin_trait_method_id = match assoc_item.trait_item_def_id {
         Some(id) => id,
         // It is itself a trait method declaration
         None => def_id,
     };
-    let origin_trait_method_sig = tcx.fn_sig(origin_trait_method_id);
-    let base_receiver_ty = origin_trait_method_sig.skip_binder().inputs().skip_binder()[0];
+    
+    // Check if the method has its own type or const generics - if so, it's not vtable safe
+    // because you can't specify those generics when calling through a trait object.
+    // Note: lifetime generics are allowed in vtable-safe methods.
+    let method_generics = tcx.generics_of(origin_trait_method_id);
+    
+    // Check if the method has its own type or const parameters (lifetimes are OK)
+    let has_own_type_or_const_params = method_generics.own_params.iter().any(|param| {
+        matches!(
+            param.kind,
+            ty::GenericParamDefKind::Type { .. } | ty::GenericParamDefKind::Const { .. }
+        )
+    });
+    
+    if has_own_type_or_const_params {
+        return None;
+    }
+    
+    let origin_trait_method_sig_binder = tcx.fn_sig(origin_trait_method_id);
+    
+    // Extract the trait reference from dyn_self
+    // dyn_self is of form `dyn Trait<Args...>`, we need to extract the trait args
+    match dyn_self.kind() {
+        ty::Dynamic(preds, _, _) => {
+            // Find the principal trait predicate
+            for pred in preds.iter() {
+                if let ty::ExistentialPredicate::Trait(trait_ref) = pred.skip_binder() {
+                    // Build full args: dyn_self + trait args
+                    // Note: trait_ref.args doesn't include Self (it's existential), so we prepend dyn_self
+                    let mut full_args = vec![ty::GenericArg::from(dyn_self)];
+                    full_args.extend(trait_ref.args.iter());
+                    
+                    let subst_args = tcx.mk_args(&full_args);
+                    
+                    // Instantiate the signature with the substitution args
+                    let origin_trait_method_sig = origin_trait_method_sig_binder.instantiate(tcx, subst_args);
+                    
+                    // Normalize the signature to resolve associated types
+                    let normalized_sig = normalize(tcx, s.typing_env(), origin_trait_method_sig);
 
-    use ty::TypeFoldable;
-
-    struct ReceiverReplacer<'tcx>(ty::TyCtxt<'tcx>, ty::Ty<'tcx>);
-
-    impl<'tcx> ty::TypeFolder<ty::TyCtxt<'tcx>> for ReceiverReplacer<'tcx> {
-        fn cx(&self) -> ty::TyCtxt<'tcx> {
-            self.0
-        }
-        fn fold_ty(&mut self, t: ty::Ty<'tcx>) -> ty::Ty<'tcx> {
-            use rustc_middle::ty::TypeSuperFoldable;
-            match t.kind() {
-                ty::Param(param) => {
-                    if param.name == rustc_span::symbol::kw::SelfUpper {
-                        assert!(param.index == 0);
-                        return self.1.clone();
-                    }
-                    return t.super_fold_with(self);
-                },
-                _ => t.super_fold_with(self)
+                    return Some(normalized_sig.sinto(s));
+                }
             }
+            None
+        }
+        _ => {
+            // If it's not a dyn trait, something went wrong
+            panic!("Unexpected dyn_self: {:?}", dyn_self);
         }
     }
-
-    let mut replacer = ReceiverReplacer(tcx, dyn_self);
-
-    Some(base_receiver_ty.fold_with(&mut replacer).sinto(s))
 }
 
 #[cfg(feature = "rustc")]
@@ -752,7 +773,7 @@ where
                 associated_item: AssocItem::sfrom_instantiated(s, &item, args),
                 inline: tcx.codegen_fn_attrs(def_id).inline.sinto(s),
                 is_const: tcx.constness(def_id) == rustc_hir::Constness::Const,
-                vtable_receiver: gen_vtable_receiver(s, args),
+                dyn_sig: gen_dyn_sig(s, args),
                 sig: get_method_sig(tcx, s.typing_env(), def_id, args).sinto(s),
                 body: get_body(s, args),
             }
