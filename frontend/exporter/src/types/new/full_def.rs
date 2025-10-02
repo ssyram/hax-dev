@@ -441,9 +441,7 @@ fn gen_dyn_sig<'tcx>(
     let container_args = {
         let container_def_id = assoc_item.container_id(tcx);
         let container_generics = tcx.generics_of(container_def_id);
-        args.map(|args| {
-            tcx.mk_args_from_iter(args.iter().take(container_generics.count()))
-        })
+        args.map(|args| args.truncate_to(tcx, container_generics))
     };
 
     let dyn_self: ty::Ty = match assoc_item.container {
