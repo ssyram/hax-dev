@@ -468,20 +468,8 @@ fn gen_dyn_sig<'tcx>(
         None => def_id,
     };
     
-    // Check if the method has its own type or const generics - if so, it's not vtable safe
-    // because you can't specify those generics when calling through a trait object.
-    // Note: lifetime generics are allowed in vtable-safe methods.
-    let method_generics = tcx.generics_of(origin_trait_method_id);
-    
-    // Check if the method has its own type or const parameters (lifetimes are OK)
-    let has_own_type_or_const_params = method_generics.own_params.iter().any(|param| {
-        matches!(
-            param.kind,
-            ty::GenericParamDefKind::Type { .. } | ty::GenericParamDefKind::Const { .. }
-        )
-    });
-    
-    if has_own_type_or_const_params {
+    let trait_id = tcx.trait_of_item(origin_trait_method_id).unwrap();
+    if !rustc_trait_selection::traits::is_vtable_safe_method(tcx, trait_id, assoc_item) {
         return None;
     }
     
