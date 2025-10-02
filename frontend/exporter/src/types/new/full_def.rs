@@ -500,7 +500,7 @@ fn gen_dyn_sig<'tcx>(
                     return Some(normalized_sig.sinto(s));
                 }
             }
-            None
+            panic!("No principal trait found in dyn_self: {:?}", dyn_self);
         }
         _ => {
             // If it's not a dyn trait, something went wrong
