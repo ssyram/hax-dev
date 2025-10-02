@@ -481,6 +481,8 @@ fn gen_dyn_sig<'tcx>(
         ty::Dynamic(preds, _, _) => {
             // Find the principal trait predicate
             for pred in preds.iter() {
+                // Safe to use `skip_binder` because we know the predicate we built in dyn_self_ty
+                // has no bound vars
                 if let ty::ExistentialPredicate::Trait(trait_ref) = pred.skip_binder() {
                     // Build full args: dyn_self + trait args
                     // Note: trait_ref.args doesn't include Self (it's existential), so we prepend dyn_self
